@@ -94,6 +94,42 @@ function validarCPF(cpf: string): boolean {
   return r === parseInt(d[10]);
 }
 
+/**
+ * Tenta extrair a data de vencimento de um certificado .pfx/.p12 (base64).
+ * Procura por sequências ASN.1 GeneralizedTime (YYYYMMDDHHMMSSZ) no binário.
+ * Retorna a data mais futura encontrada no formato YYYY-MM-DD, ou null.
+ */
+function extractPfxExpiry(base64: string): string | null {
+  try {
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    // Tag 0x18 = GeneralizedTime em ASN.1
+    const dates: Date[] = [];
+    for (let i = 0; i < bytes.length - 16; i++) {
+      if (bytes[i] === 0x18) {
+        const len = bytes[i + 1];
+        if (len >= 13 && len <= 17) {
+          let str = "";
+          for (let j = 0; j < len; j++) str += String.fromCharCode(bytes[i + 2 + j]);
+          // Formato: YYYYMMDDHHMMSSZ ou YYYYMMDDHHMMSS.sZ
+          const m = str.match(/^(\d{4})(\d{2})(\d{2})/);
+          if (m) {
+            const d = new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00Z`);
+            if (!isNaN(d.getTime()) && d.getFullYear() > 2000) dates.push(d);
+          }
+        }
+      }
+    }
+    if (dates.length === 0) return null;
+    // Retorna a data mais futura (data de vencimento)
+    const maxDate = dates.reduce((a, b) => (a > b ? a : b));
+    return maxDate.toISOString().slice(0, 10);
+  } catch {
+    return null;
+  }
+}
+
 function maskDoc(val: string, tipo: "F" | "J") {
   const d = val.replace(/\D/g, "");
   if (tipo === "F") {
@@ -157,14 +193,14 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
         descCidade: d.DESCCIDADE ? String(d.DESCCIDADE) : "",
         situacao: (d.SITUACAO as "A" | "I" | "B") ?? "A",
         segmento: Number(d.COSEGMENTO ?? 0),
-        dataImplantacao: d.DATAADMISSAO ? String(d.DATAADMISSAO).slice(0, 10) : "",
-        dataDemissao: d.DATADEMISSAO ? String(d.DATADEMISSAO).slice(0, 10) : "",
+        dataImplantacao: d.DATAADMISSAO ? new Date(d.DATAADMISSAO as string).toISOString().slice(0, 10) : "",
+        dataDemissao: d.DATADEMISSAO ? new Date(d.DATADEMISSAO as string).toISOString().slice(0, 10) : "",
         valorNegociado: Number(d.VALORNEGOCIADO ?? 0),
         valorSalario: Number(d.VALORSALARIO ?? 0),
         observacao: String(d.OBSERVACAO ?? ""),
         certificado: String(d.CERTIFICADO ?? ""),
         certificadoBase64: "",
-        dtCertificado: d.DTCERTIFICADO ? String(d.DTCERTIFICADO).slice(0, 10) : "",
+        dtCertificado: d.DTCERTIFICADO ? new Date(d.DTCERTIFICADO as string).toISOString().slice(0, 10) : "",
         codPin: String(d.CODPIN ?? ""),
         csc: String(d.CSC ?? ""),
         codCsc: String(d.CODCSC ?? ""),
@@ -651,6 +687,12 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
                               const base64 = (ev.target?.result as string).split(",")[1] ?? "";
                               set("certificado", file.name);
                               set("certificadoBase64", base64);
+                              // Tentar extrair data de vencimento automaticamente
+                              const expiry = extractPfxExpiry(base64);
+                              if (expiry) {
+                                set("dtCertificado", expiry);
+                                toast.info(`Vencimento do certificado: ${new Date(expiry + "T12:00:00").toLocaleDateString("pt-BR")}`);
+                              }
                             };
                             reader.readAsDataURL(file);
                           }}

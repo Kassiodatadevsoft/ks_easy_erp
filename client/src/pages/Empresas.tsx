@@ -9,7 +9,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Building2, Plus, Search, ChevronLeft, ChevronRight, Pencil, Loader2 } from "lucide-react";
 import EmpresaForm from "@/components/empresas/EmpresaForm";
 
@@ -175,7 +175,8 @@ export default function Empresas() {
 
       {/* Modal do formulário */}
       <Dialog open={modalAberto} onOpenChange={open => { if (!open) fecharModal(); }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] p-0 overflow-hidden">
+        <DialogContent className="w-[95vw] max-w-6xl h-[92vh] max-h-[92vh] p-0 overflow-hidden">
+          <DialogTitle className="sr-only">Cadastro de Empresa</DialogTitle>
           <EmpresaForm guidPessoa={guidSelecionado} isMaster={isMaster} onClose={fecharModal} />
         </DialogContent>
       </Dialog>
