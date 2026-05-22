@@ -6,6 +6,7 @@ import { ksAuthRouter } from "./routers/ksAuthRouter";
 import { entidadesRouter } from "./routers/entidadesRouter";
 import { syncRouter } from "./routers/syncRouter";
 import { clientesRouter } from "./routers/clientesRouter";
+import { fornecedoresRouter } from "./routers/fornecedoresRouter";
 
 export const appRouter = router({
   system: systemRouter,
@@ -28,6 +29,9 @@ export const appRouter = router({
 
   // Módulo de Clientes
   clientes: clientesRouter,
+
+  // Módulo de Fornecedores
+  fornecedores: fornecedoresRouter,
 
   // Sincronização com sistema legado Delphi
   sync: syncRouter,

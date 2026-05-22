@@ -51,23 +51,32 @@
 
 ## Módulo de Clientes
 
-- [ ] Backend: router tRPC para listar clientes (CADCLIENTE=1) filtrado por GUIDENTIDADE
-- [ ] Backend: busca por DOCUMENTO, FANTASIA, NOME, TELEFONE com paginação
-- [ ] Backend: buscar cidades da tabela KS0000.KS00005 por nome/código/IBGE
-- [ ] Backend: criar cliente (INSERT em KS0002.KS00001 com CADCLIENTE=1)
-- [ ] Backend: editar cliente (UPDATE em KS0002.KS00001)
-- [ ] Backend: validar duplicidade de DOCUMENTO antes de salvar
-- [ ] Backend: consulta CNPJ via API pública (ReceitaWS) para auto-preencher
-- [ ] Frontend: página de listagem de clientes com grid/tabela responsiva
-- [ ] Frontend: filtros por DOCUMENTO, FANTASIA, NOME, TELEFONE
-- [ ] Frontend: botão "Novo Cliente" abre formulário
-- [ ] Frontend: formulário de cadastro/edição com abas (Dados, Endereço, Financeiro)
-- [ ] Frontend: campo Tipo de Pessoa (Física/Jurídica) com máscara CPF/CNPJ
-- [ ] Frontend: campo Situação (Ativo/Inativo/Bloqueado)
-- [ ] Frontend: campo Indicador IE (Contribuinte/Isento/Não Contribuinte)
-- [ ] Frontend: busca de cidade com autocomplete (KS0000.KS00005)
-- [ ] Frontend: botão buscar CNPJ na Receita Federal (auto-preencher endereço)
-- [ ] Frontend: campos financeiros (limite de compra, dia vencimento, juros)
-- [ ] Frontend: checkboxes (Manter Promoções, Também é Usuário, Também é Fornecedor, Consta no SPC)
-- [ ] Frontend: validação de campos obrigatórios (Documento, Nome, CEP, Endereço, Número, Bairro, Cidade, Celular)
-- [ ] Frontend: rota e tabela de preço como campos opcionais (implementar depois)
+- [x] Backend: router tRPC para listar clientes (CADCLIENTE=1) filtrado por GUIDENTIDADE
+- [x] Backend: busca por DOCUMENTO, FANTASIA, NOME, TELEFONE com paginação
+- [x] Backend: buscar cidades da tabela KS0000.KS00005 por nome/código/IBGE
+- [x] Backend: criar cliente (INSERT em KS0002.KS00001 com CADCLIENTE=1)
+- [x] Backend: editar cliente (UPDATE em KS0002.KS00001)
+- [x] Backend: validar duplicidade de DOCUMENTO antes de salvar
+- [x] Backend: consulta CNPJ via BrasilAPI para auto-preencher
+- [x] Frontend: página de listagem de clientes com grid/tabela responsiva
+- [x] Frontend: filtros por DOCUMENTO, FANTASIA, NOME, TELEFONE
+- [x] Frontend: botão "Novo Cliente" abre formulário
+- [x] Frontend: formulário de cadastro/edição com abas (Dados, Endereço, Financeiro)
+- [x] Frontend: campo Tipo de Pessoa (Física/Jurídica) com máscara CPF/CNPJ
+- [x] Frontend: campo Situação (Ativo/Inativo/Bloqueado)
+- [x] Frontend: campo Indicador IE (Contribuinte/Isento/Não Contribuinte)
+- [x] Frontend: busca de cidade com autocomplete (KS0000.KS00005)
+- [x] Frontend: botão buscar CNPJ via BrasilAPI (auto-preencher endereço)
+- [x] Frontend: campos financeiros (limite de compra, dia vencimento)
+- [x] Frontend: checkboxes (Manter Promoções, Também é Usuário, Também é Fornecedor, Consta no SPC)
+- [x] Frontend: validação de campos obrigatórios (Documento, Nome, CEP, Endereço, Número, Bairro, Cidade, Celular)
+- [x] Frontend: rota e tabela de preço deixados para implementação posterior
+
+## Módulo de Fornecedores
+
+- [x] Backend: router tRPC para listar fornecedores (CADFORNECEDOR=1) filtrado por GUIDENTIDADE
+- [x] Backend: criar fornecedor com CADFORNECEDOR=1 fixo e CADCLIENTE como flag
+- [x] Backend: editar fornecedor com flag "Também é Cliente" (CADCLIENTE)
+- [x] Frontend: página de listagem de fornecedores com grid/tabela responsiva
+- [x] Frontend: formulário de cadastro/edição com checkbox "Também é Cliente"
+- [x] Frontend: mesmas validações e campos do módulo de clientes
