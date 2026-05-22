@@ -15,10 +15,10 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-// URLs das imagens no storage
-const LOGO_URL       = "/manus-storage/datadev-logo-clean_3b290173.png";
-const LOGO_FULL_URL  = "/manus-storage/datadev-logo-full-clean_4323d2b1.png";
-const ROBOT_URL      = "/manus-storage/datadev-robot-clean_7bc0c87c.png";
+// Logo original com fundo branco (fica perfeito sobre fundo branco)
+const LOGO_FULL_URL = "/manus-storage/datadev-logo-full_f2fd46f8.png";
+// Robô original com transparência
+const ROBOT_URL     = "/manus-storage/datadev-robot-clean_7bc0c87c.png";
 
 const loginSchema = z.object({
   usuario: z.string().min(1, "Informe o usuário"),
@@ -55,78 +55,66 @@ export default function Login() {
   const loading = isSubmitting || loginMutation.isPending;
 
   return (
-    <div className="min-h-screen flex bg-[#0f1623]">
+    <div className="min-h-screen flex">
 
-      {/* ── Painel esquerdo — branding DataDev ── */}
-      <div className="hidden md:flex md:w-[48%] lg:w-1/2 flex-col relative overflow-hidden bg-gradient-to-br from-[#1a2340] via-[#1e2d52] to-[#0f1623]">
+      {/* ── Painel esquerdo — branco com logo e robô ── */}
+      <div className="hidden md:flex md:w-[48%] lg:w-1/2 flex-col bg-white border-r border-slate-100 relative overflow-hidden">
 
-        {/* Grade decorativa */}
-        <div
-          className="absolute inset-0 opacity-[0.07]"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.15) 1px, transparent 1px)",
-            backgroundSize: "48px 48px",
-          }}
-        />
-
-        {/* Brilhos de fundo */}
-        <div className="absolute top-0 left-0 w-80 h-80 rounded-full bg-blue-700/20 blur-3xl -translate-x-1/2 -translate-y-1/2" />
-        <div className="absolute bottom-0 right-0 w-96 h-96 rounded-full bg-indigo-600/15 blur-3xl translate-x-1/3 translate-y-1/3" />
+        {/* Detalhe decorativo sutil no canto */}
+        <div className="absolute bottom-0 right-0 w-64 h-64 rounded-full bg-blue-50 blur-3xl opacity-60 translate-x-1/3 translate-y-1/3" />
+        <div className="absolute top-0 left-0 w-48 h-48 rounded-full bg-slate-50 blur-2xl opacity-80 -translate-x-1/3 -translate-y-1/3" />
 
         <div className="relative flex flex-col justify-between h-full p-10 lg:p-14 z-10">
 
-          {/* Logo topo */}
+          {/* Logo no topo */}
           <div>
             <img
               src={LOGO_FULL_URL}
-              alt="DataDev Logo"
-              className="h-12 object-contain"
-              onError={(e) => {
-                // fallback para logo pequeno
-                (e.target as HTMLImageElement).src = LOGO_URL;
-              }}
+              alt="DataDev"
+              className="h-14 object-contain object-left"
             />
           </div>
 
-          {/* Robô + texto central */}
+          {/* Robô centralizado + texto */}
           <div className="flex flex-col items-center gap-6">
             <img
               src={ROBOT_URL}
               alt="DataDev Robot"
-              className="w-52 lg:w-64 object-contain drop-shadow-2xl"
+              className="w-56 lg:w-72 object-contain drop-shadow-xl"
             />
             <div className="text-center">
-              <h1 className="text-2xl lg:text-3xl font-bold text-white leading-tight">
+              <h1 className="text-2xl lg:text-3xl font-bold text-slate-800 leading-tight">
                 Gestão empresarial
                 <br />
-                <span className="text-blue-400">simples e eficiente</span>
+                <span className="text-blue-700">simples e eficiente</span>
               </h1>
-              <p className="text-slate-400 text-sm mt-3 max-w-xs mx-auto leading-relaxed">
-                Controle financeiro, vendas, cadastros e emissão fiscal integrados
-                ao seu sistema legado Delphi.
+              <p className="text-slate-500 text-sm mt-3 max-w-xs mx-auto leading-relaxed">
+                Controle financeiro, vendas, cadastros e emissão fiscal
+                integrados ao seu sistema legado Delphi.
               </p>
             </div>
           </div>
 
           {/* Rodapé */}
           <div className="text-center">
-            <p className="text-slate-600 text-xs">
+            <p className="text-slate-400 text-xs">
               DataDev — Consultoria e Desenvolvimento de Software
             </p>
-            <p className="text-slate-700 text-xs mt-0.5">
+            <p className="text-slate-300 text-xs mt-0.5">
               © {new Date().getFullYear()} Todos os direitos reservados
             </p>
           </div>
         </div>
       </div>
 
-      {/* ── Painel direito — formulário ── */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
+      {/* ── Painel direito — formulário escuro ── */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 bg-[#0f1623]">
 
         {/* Logo mobile */}
         <div className="flex md:hidden flex-col items-center gap-3 mb-10">
-          <img src={LOGO_FULL_URL} alt="DataDev" className="h-10 object-contain" />
+          <div className="bg-white rounded-xl px-4 py-2">
+            <img src={LOGO_FULL_URL} alt="DataDev" className="h-10 object-contain" />
+          </div>
           <img src={ROBOT_URL} alt="Robô DataDev" className="w-24 object-contain" />
         </div>
 
