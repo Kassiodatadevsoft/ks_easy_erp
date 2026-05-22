@@ -1,0 +1,608 @@
+import { useState, useEffect, useCallback, useRef } from "react";
+import { trpc } from "@/lib/trpc";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
+import { Loader2, X, Search, Building2, AlertCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+
+interface Props {
+  guidPessoa: string | null;
+  isMaster: boolean;
+  onClose: (salvo?: boolean) => void;
+}
+
+interface FormData {
+  nome: string; fantasia: string; documento: string;
+  codTipoDocumento: "F" | "J";
+  telefone: string; celular: string; whatsapp: string; email: string;
+  ie: string; indIeDest: number;
+  crt: number; ambiente: number;
+  aliquotaPis: number; aliquotaCofins: number; juroMensal: number;
+  banco: number;
+  cep: string; endereco: string; numero: string;
+  complemento: string; bairro: string;
+  codCidade: number | null; descCidade: string;
+  situacao: "A" | "I" | "B";
+  // Contrato — visível só para master
+  segmento: number; dataImplantacao: string; dataDemissao: string;
+  valorNegociado: number; valorSalario: number;
+  observacao: string;
+}
+
+const INITIAL: FormData = {
+  nome: "", fantasia: "", documento: "", codTipoDocumento: "J",
+  telefone: "", celular: "", whatsapp: "", email: "",
+  ie: "", indIeDest: 9,
+  crt: 1, ambiente: 0,
+  aliquotaPis: 0, aliquotaCofins: 0, juroMensal: 0,
+  banco: 0,
+  cep: "", endereco: "", numero: "", complemento: "", bairro: "",
+  codCidade: null, descCidade: "",
+  situacao: "A",
+  segmento: 0, dataImplantacao: "", dataDemissao: "",
+  valorNegociado: 0, valorSalario: 0,
+  observacao: "",
+};
+
+function validarCNPJ(cnpj: string): boolean {
+  const d = cnpj.replace(/\D/g, "");
+  if (d.length !== 14 || /^(\d)\1+$/.test(d)) return false;
+  let sum = 0;
+  const w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  for (let i = 0; i < 12; i++) sum += parseInt(d[i]) * w1[i];
+  let r = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  if (r !== parseInt(d[12])) return false;
+  sum = 0;
+  const w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  for (let i = 0; i < 13; i++) sum += parseInt(d[i]) * w2[i];
+  r = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  return r === parseInt(d[13]);
+}
+
+function validarCPF(cpf: string): boolean {
+  const d = cpf.replace(/\D/g, "");
+  if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(d[i]) * (10 - i);
+  let r = (sum * 10) % 11;
+  if (r === 10 || r === 11) r = 0;
+  if (r !== parseInt(d[9])) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(d[i]) * (11 - i);
+  r = (sum * 10) % 11;
+  if (r === 10 || r === 11) r = 0;
+  return r === parseInt(d[10]);
+}
+
+function maskDoc(val: string, tipo: "F" | "J") {
+  const d = val.replace(/\D/g, "");
+  if (tipo === "F") {
+    return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4").slice(0, 14);
+  }
+  return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5").slice(0, 18);
+}
+
+export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
+  const isEdit = !!guidPessoa;
+  const [form, setForm] = useState<FormData>(INITIAL);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [activeTab, setActiveTab] = useState("dados");
+  const [cidadeQuery, setCidadeQuery] = useState("");
+  const [cidadeSugestoes, setCidadeSugestoes] = useState<{ CODCIDADE: number; DESCCIDADE: string }[]>([]);
+  const [showSugestoes, setShowSugestoes] = useState(false);
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false);
+  const cidadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const buscarPorGuid = trpc.empresas.buscarPorGuid.useQuery(
+    { guidPessoa: guidPessoa! },
+    { enabled: isEdit && !!guidPessoa }
+  );
+  const buscarCidades = trpc.empresas.buscarCidades.useQuery(
+    { nome: cidadeQuery },
+    { enabled: cidadeQuery.length >= 2 }
+  );
+  const validarDoc = trpc.empresas.validarDocumento.useQuery(
+    { documento: form.documento, guidPessoaExcluir: guidPessoa ?? undefined },
+    { enabled: form.documento.replace(/\D/g, "").length >= 11 }
+  );
+  const criarMutation = trpc.empresas.criar.useMutation();
+  const atualizarMutation = trpc.empresas.atualizar.useMutation();
+
+  useEffect(() => {
+    if (buscarPorGuid.data) {
+      const d = buscarPorGuid.data as Record<string, unknown>;
+      setForm({
+        nome: String(d.NOME ?? ""),
+        fantasia: String(d.FANTASIA ?? ""),
+        documento: String(d.DOCUMENTO ?? ""),
+        codTipoDocumento: (d.CODTIPODOCUMENTO as "F" | "J") ?? "J",
+        telefone: String(d.TELEFONE ?? ""),
+        celular: String(d.CELULAR ?? ""),
+        whatsapp: String(d.WHATSAPP ?? ""),
+        email: String(d.EMAIL ?? ""),
+        ie: String(d.IE ?? ""),
+        indIeDest: Number(d.INDIEDEST ?? 9),
+        crt: Number(d.CRT ?? 1),
+        ambiente: Number(d.AMBIENTE ?? 0),
+        aliquotaPis: Number(d.ALIQUOTAPIS ?? 0),
+        aliquotaCofins: Number(d.ALIQUOTACOFINS ?? 0),
+        juroMensal: Number(d.JUROMENSAL ?? 0),
+        banco: Number(d.BANCO ?? 0),
+        cep: String(d.CEP ?? ""),
+        endereco: String(d.ENDERECO ?? ""),
+        numero: String(d.NUMERO ?? ""),
+        complemento: String(d.COMPLEMENTO ?? ""),
+        bairro: String(d.BAIRRO ?? ""),
+        codCidade: Number(d.CODCIDADE ?? null) || null,
+        descCidade: d.DESCCIDADE ? String(d.DESCCIDADE) : "",
+        situacao: (d.SITUACAO as "A" | "I" | "B") ?? "A",
+        segmento: Number(d.COSEGMENTO ?? 0),
+        dataImplantacao: d.DATAADMISSAO ? String(d.DATAADMISSAO).slice(0, 10) : "",
+        dataDemissao: d.DATADEMISSAO ? String(d.DATADEMISSAO).slice(0, 10) : "",
+        valorNegociado: Number(d.VALORNEGOCIADO ?? 0),
+        valorSalario: Number(d.VALORSALARIO ?? 0),
+        observacao: String(d.OBSERVACAO ?? ""),
+      });
+      if (d.DESCCIDADE) setCidadeQuery(String(d.DESCCIDADE));
+    }
+  }, [buscarPorGuid.data]);
+
+  useEffect(() => {
+    if (buscarCidades.data) {
+      setCidadeSugestoes(buscarCidades.data as { CODCIDADE: number; DESCCIDADE: string }[]);
+      setShowSugestoes(true);
+    }
+  }, [buscarCidades.data]);
+
+  const set = (field: keyof FormData, value: unknown) => {
+    setForm(prev => ({ ...prev, [field]: value }));
+    setErrors(prev => { const e = { ...prev }; delete e[field]; return e; });
+  };
+
+  const handleCidadeInput = useCallback((val: string) => {
+    setCidadeQuery(val);
+    set("descCidade", val);
+    set("codCidade", null);
+    if (cidadeTimer.current) clearTimeout(cidadeTimer.current);
+    cidadeTimer.current = setTimeout(() => { /* query auto-dispara */ }, 300);
+  }, []);
+
+  const selecionarCidade = (cod: number, desc: string) => {
+    set("codCidade", cod);
+    set("descCidade", desc);
+    setCidadeQuery(desc);
+    setShowSugestoes(false);
+  };
+
+  const buscarCnpj = async () => {
+    const doc = form.documento.replace(/\D/g, "");
+    if (doc.length !== 14) { toast.error("Digite um CNPJ válido para buscar"); return; }
+    setBuscandoCnpj(true);
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${doc}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setForm(prev => ({
+        ...prev,
+        nome: data.razao_social ?? prev.nome,
+        fantasia: data.nome_fantasia || (data.razao_social?.slice(0, 15) ?? ""),
+        cep: data.cep?.replace(/\D/g, "") ?? prev.cep,
+        endereco: `${data.descricao_tipo_de_logradouro ?? ""} ${data.logradouro ?? ""}`.trim(),
+        numero: data.numero ?? prev.numero,
+        complemento: data.complemento ?? prev.complemento,
+        bairro: data.bairro ?? prev.bairro,
+        telefone: data.ddd_telefone_1 ?? prev.telefone,
+        ie: data.inscricao_estadual ?? prev.ie,
+        indIeDest: data.inscricao_estadual === "ISENTO" ? 2 : data.inscricao_estadual ? 1 : 9,
+      }));
+      toast.success("Dados do CNPJ carregados!");
+    } catch {
+      toast.error("CNPJ não encontrado na Receita Federal.");
+    } finally {
+      setBuscandoCnpj(false);
+    }
+  };
+
+  const validate = (): boolean => {
+    const e: Record<string, string> = {};
+    if (!form.nome.trim()) e.nome = "Nome é obrigatório";
+    const docLimpo = form.documento.replace(/\D/g, "");
+    if (!docLimpo) {
+      e.documento = "Documento é obrigatório";
+    } else if (form.codTipoDocumento === "J" && !validarCNPJ(form.documento)) {
+      e.documento = "CNPJ inválido";
+    } else if (form.codTipoDocumento === "F" && !validarCPF(form.documento)) {
+      e.documento = "CPF inválido";
+    } else if (docLimpo.length < 10) {
+      e.documento = "Documento muito curto";
+    }
+    if (validarDoc.data?.existe) e.documento = `Documento já cadastrado (Cód. ${validarDoc.data.codigo} - ${validarDoc.data.nome})`;
+    if (!form.celular.replace(/\D/g, "") || form.celular.replace(/\D/g, "").length < 11) e.celular = "Celular inválido (mínimo 11 dígitos)";
+    if (!form.cep.replace(/\D/g, "") || form.cep.replace(/\D/g, "").length < 8) e.cep = "CEP inválido";
+    if (!form.endereco.trim()) e.endereco = "Endereço é obrigatório";
+    if (!form.numero.trim()) e.numero = "Número é obrigatório";
+    if (!form.bairro.trim()) e.bairro = "Bairro é obrigatório";
+    if (!form.codCidade) e.codCidade = "Cidade é obrigatória";
+    if (isMaster) {
+      if (!form.dataImplantacao) e.dataImplantacao = "Data de implantação é obrigatória";
+      if (!form.valorNegociado) e.valorNegociado = "Valor negociado é obrigatório";
+      if (!form.valorSalario) e.valorSalario = "Valor salário é obrigatório";
+    }
+    setErrors(e);
+    if (Object.keys(e).length > 0) {
+      const dadosErros = ["nome","documento","codTipoDocumento","telefone","celular","whatsapp","email","ie","indIeDest"];
+      const enderecoErros = ["cep","endereco","numero","bairro","codCidade"];
+      const contratoErros = ["dataImplantacao","valorNegociado","valorSalario"];
+      const hasErrosDados = dadosErros.some(k => e[k]);
+      const hasErrosEndereco = enderecoErros.some(k => e[k]);
+      const hasErrosContrato = contratoErros.some(k => e[k]);
+      if (hasErrosDados) setActiveTab("dados");
+      else if (hasErrosEndereco) setActiveTab("endereco");
+      else if (hasErrosContrato) setActiveTab("contrato");
+    }
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSalvar = async () => {
+    if (!validate()) return;
+    const payload = {
+      nome: form.nome, fantasia: form.fantasia || undefined,
+      documento: form.documento, codTipoDocumento: form.codTipoDocumento,
+      telefone: form.telefone || undefined, celular: form.celular,
+      whatsapp: form.whatsapp || undefined, email: form.email || undefined,
+      ie: form.ie || undefined, indIeDest: form.indIeDest,
+      crt: form.crt, ambiente: form.ambiente,
+      aliquotaPis: form.aliquotaPis, aliquotaCofins: form.aliquotaCofins,
+      juroMensal: form.juroMensal, banco: form.banco,
+      cep: form.cep, endereco: form.endereco, numero: form.numero,
+      complemento: form.complemento || undefined, bairro: form.bairro,
+      codCidade: form.codCidade!,
+      situacao: form.situacao,
+      segmento: form.segmento || undefined,
+      dataImplantacao: form.dataImplantacao || undefined,
+      dataDemissao: form.dataDemissao || undefined,
+      valorNegociado: form.valorNegociado || undefined,
+      valorSalario: form.valorSalario || undefined,
+      observacao: form.observacao || undefined,
+    };
+    try {
+      if (isEdit) {
+        await atualizarMutation.mutateAsync({ guidPessoa: guidPessoa!, ...payload });
+        toast.success("Empresa atualizada com sucesso!");
+      } else {
+        const res = await criarMutation.mutateAsync(payload);
+        toast.success(`Empresa cadastrada! Código: ${res.codigo}`);
+      }
+      onClose(true);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro ao salvar empresa";
+      toast.error(msg);
+    }
+  };
+
+  const isLoading = buscarPorGuid.isLoading;
+  const isSaving = criarMutation.isPending || atualizarMutation.isPending;
+
+  const errCount = (fields: string[]) => fields.filter(f => errors[f]).length;
+  const dadosFields = ["nome","documento","celular","email","ie","indIeDest"];
+  const enderecoFields = ["cep","endereco","numero","bairro","codCidade"];
+  const fiscalFields = ["crt","ambiente","aliquotaPis","aliquotaCofins","juroMensal"];
+  const contratoFields = ["dataImplantacao","valorNegociado","valorSalario"];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b bg-white">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-purple-100">
+            <Building2 className="h-5 w-5 text-purple-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              {isEdit ? "Editar Empresa" : "Nova Empresa"}
+            </h2>
+            <p className="text-sm text-gray-500">CADEMPRESA</p>
+          </div>
+        </div>
+        <button onClick={() => onClose()} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex-1 overflow-auto px-6 py-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="mb-4 flex gap-1 bg-gray-100 p-1 rounded-lg w-full">
+            {[
+              { id: "dados", label: "Dados Gerais", fields: dadosFields },
+              { id: "endereco", label: "Endereço", fields: enderecoFields },
+              { id: "fiscal", label: "Fiscal / Financeiro", fields: fiscalFields },
+              ...(isMaster ? [{ id: "contrato", label: "Contrato", fields: contratoFields }] : []),
+            ].map(tab => {
+              const cnt = errCount(tab.fields);
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                    activeTab === tab.id ? "bg-white shadow text-gray-900" : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  {tab.label}
+                  {cnt > 0 && <Badge variant="destructive" className="h-5 w-5 p-0 text-xs flex items-center justify-center">{cnt}</Badge>}
+                </button>
+              );
+            })}
+          </TabsList>
+
+          {/* ABA DADOS GERAIS */}
+          <TabsContent value="dados" className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Tipo de Pessoa</Label>
+                <Select value={form.codTipoDocumento} onValueChange={v => { set("codTipoDocumento", v); set("documento", ""); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="J">Jurídica (CNPJ)</SelectItem>
+                    <SelectItem value="F">Física (CPF)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Situação</Label>
+                <Select value={form.situacao} onValueChange={v => set("situacao", v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="A">Ativo</SelectItem>
+                    <SelectItem value="I">Inativo</SelectItem>
+                    <SelectItem value="B">Bloqueado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label>Documento ({form.codTipoDocumento === "J" ? "CNPJ" : "CPF"}) *</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={form.documento}
+                  onChange={e => set("documento", maskDoc(e.target.value, form.codTipoDocumento))}
+                  placeholder={form.codTipoDocumento === "J" ? "00.000.000/0000-00" : "000.000.000-00"}
+                  className={errors.documento ? "border-red-500" : ""}
+                />
+                {form.codTipoDocumento === "J" && (
+                  <Button type="button" variant="outline" onClick={buscarCnpj} disabled={buscandoCnpj} className="shrink-0">
+                    {buscandoCnpj ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  </Button>
+                )}
+              </div>
+              {errors.documento && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.documento}</p>}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <Label>Razão Social / Nome *</Label>
+                <Input value={form.nome} onChange={e => set("nome", e.target.value)} className={errors.nome ? "border-red-500" : ""} />
+                {errors.nome && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.nome}</p>}
+              </div>
+              <div>
+                <Label>Nome Fantasia</Label>
+                <Input value={form.fantasia} onChange={e => set("fantasia", e.target.value)} />
+              </div>
+              <div>
+                <Label>E-mail</Label>
+                <Input type="email" value={form.email} onChange={e => set("email", e.target.value)} />
+              </div>
+              <div>
+                <Label>Telefone</Label>
+                <Input value={form.telefone} onChange={e => set("telefone", e.target.value.replace(/\D/g, "").slice(0, 11))} placeholder="(00) 0000-0000" />
+              </div>
+              <div>
+                <Label>Celular / WhatsApp *</Label>
+                <Input value={form.celular} onChange={e => set("celular", e.target.value.replace(/\D/g, "").slice(0, 11))} placeholder="(00) 00000-0000" className={errors.celular ? "border-red-500" : ""} />
+                {errors.celular && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.celular}</p>}
+              </div>
+              <div>
+                <Label>Inscrição Estadual</Label>
+                <Input value={form.ie} onChange={e => set("ie", e.target.value)} />
+              </div>
+              <div>
+                <Label>Indicador IE</Label>
+                <Select value={String(form.indIeDest)} onValueChange={v => set("indIeDest", Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Contribuinte</SelectItem>
+                    <SelectItem value="2">Isento</SelectItem>
+                    <SelectItem value="9">Não Contribuinte</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label>Observação</Label>
+              <Textarea value={form.observacao} onChange={e => set("observacao", e.target.value)} rows={3} />
+            </div>
+          </TabsContent>
+
+          {/* ABA ENDEREÇO */}
+          <TabsContent value="endereco" className="space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label>CEP *</Label>
+                <Input value={form.cep} onChange={e => set("cep", e.target.value.replace(/\D/g, "").slice(0, 8))} placeholder="00000000" className={errors.cep ? "border-red-500" : ""} />
+                {errors.cep && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.cep}</p>}
+              </div>
+              <div className="col-span-2">
+                <Label>Endereço *</Label>
+                <Input value={form.endereco} onChange={e => set("endereco", e.target.value)} className={errors.endereco ? "border-red-500" : ""} />
+                {errors.endereco && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.endereco}</p>}
+              </div>
+              <div>
+                <Label>Número *</Label>
+                <Input value={form.numero} onChange={e => set("numero", e.target.value)} className={errors.numero ? "border-red-500" : ""} />
+                {errors.numero && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.numero}</p>}
+              </div>
+              <div>
+                <Label>Complemento</Label>
+                <Input value={form.complemento} onChange={e => set("complemento", e.target.value)} />
+              </div>
+              <div>
+                <Label>Bairro *</Label>
+                <Input value={form.bairro} onChange={e => set("bairro", e.target.value)} className={errors.bairro ? "border-red-500" : ""} />
+                {errors.bairro && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.bairro}</p>}
+              </div>
+              <div className="col-span-3 relative">
+                <Label>Cidade *</Label>
+                <Input
+                  value={cidadeQuery}
+                  onChange={e => handleCidadeInput(e.target.value)}
+                  onBlur={() => setTimeout(() => setShowSugestoes(false), 200)}
+                  placeholder="Digite para buscar..."
+                  className={errors.codCidade ? "border-red-500" : ""}
+                />
+                {errors.codCidade && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.codCidade}</p>}
+                {showSugestoes && cidadeSugestoes.length > 0 && (
+                  <div className="absolute z-50 w-full bg-white border rounded-md shadow-lg mt-1 max-h-48 overflow-auto">
+                    {cidadeSugestoes.map(c => (
+                      <button key={c.CODCIDADE} className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm"
+                        onMouseDown={() => selecionarCidade(c.CODCIDADE, c.DESCCIDADE)}>
+                        {c.DESCCIDADE}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* ABA FISCAL / FINANCEIRO */}
+          <TabsContent value="fiscal" className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>CRT (Regime Tributário)</Label>
+                <Select value={String(form.crt)} onValueChange={v => set("crt", Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Simples Nacional</SelectItem>
+                    <SelectItem value="2">Simples Nacional — Excesso</SelectItem>
+                    <SelectItem value="3">Regime Normal</SelectItem>
+                    <SelectItem value="4">MEI</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Ambiente NF-e</Label>
+                <Select value={String(form.ambiente)} onValueChange={v => set("ambiente", Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Produção</SelectItem>
+                    <SelectItem value="1">Homologação (Teste)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Alíquota PIS (%)</Label>
+                <Input type="number" step="0.01" value={form.aliquotaPis} onChange={e => set("aliquotaPis", Number(e.target.value))} />
+              </div>
+              <div>
+                <Label>Alíquota COFINS (%)</Label>
+                <Input type="number" step="0.01" value={form.aliquotaCofins} onChange={e => set("aliquotaCofins", Number(e.target.value))} />
+              </div>
+              <div>
+                <Label>Juro Mensal (%)</Label>
+                <Input type="number" step="0.01" value={form.juroMensal} onChange={e => set("juroMensal", Number(e.target.value))} />
+              </div>
+              <div>
+                <Label>Banco</Label>
+                <Select value={String(form.banco)} onValueChange={v => set("banco", Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Nenhum</SelectItem>
+                    <SelectItem value="1">Banco do Brasil</SelectItem>
+                    <SelectItem value="2">Bradesco</SelectItem>
+                    <SelectItem value="3">Caixa Econômica</SelectItem>
+                    <SelectItem value="4">Itaú</SelectItem>
+                    <SelectItem value="5">Santander</SelectItem>
+                    <SelectItem value="6">Sicoob</SelectItem>
+                    <SelectItem value="7">Sicredi</SelectItem>
+                    <SelectItem value="8">Nubank</SelectItem>
+                    <SelectItem value="9">Inter</SelectItem>
+                    <SelectItem value="10">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* ABA CONTRATO — visível apenas para empresa master */}
+          {isMaster && (
+            <TabsContent value="contrato" className="space-y-4">
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-4">
+                <p className="text-sm text-purple-700 font-medium">Campos exclusivos para gestão de contratos DataDev</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Segmento</Label>
+                  <Select value={String(form.segmento)} onValueChange={v => set("segmento", Number(v))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Não Definido</SelectItem>
+                      <SelectItem value="1">Varejo</SelectItem>
+                      <SelectItem value="2">Atacado</SelectItem>
+                      <SelectItem value="3">Serviços</SelectItem>
+                      <SelectItem value="4">Indústria</SelectItem>
+                      <SelectItem value="5">Agronegócio</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Data de Implantação *</Label>
+                  <Input type="date" value={form.dataImplantacao} onChange={e => set("dataImplantacao", e.target.value)} className={errors.dataImplantacao ? "border-red-500" : ""} />
+                  {errors.dataImplantacao && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.dataImplantacao}</p>}
+                </div>
+                <div>
+                  <Label>Data de Rescisão</Label>
+                  <Input type="date" value={form.dataDemissao} onChange={e => set("dataDemissao", e.target.value)} />
+                </div>
+                <div>
+                  <Label>Valor Negociado (R$) *</Label>
+                  <Input type="number" step="0.01" value={form.valorNegociado} onChange={e => set("valorNegociado", Number(e.target.value))} className={errors.valorNegociado ? "border-red-500" : ""} />
+                  {errors.valorNegociado && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.valorNegociado}</p>}
+                </div>
+                <div>
+                  <Label>Valor Salário (R$) *</Label>
+                  <Input type="number" step="0.01" value={form.valorSalario} onChange={e => set("valorSalario", Number(e.target.value))} className={errors.valorSalario ? "border-red-500" : ""} />
+                  {errors.valorSalario && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.valorSalario}</p>}
+                </div>
+              </div>
+            </TabsContent>
+          )}
+        </Tabs>
+      </div>
+
+      {/* Footer */}
+      <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50">
+        <Button variant="outline" onClick={() => onClose()} disabled={isSaving}>Cancelar</Button>
+        <Button onClick={handleSalvar} disabled={isSaving} className="bg-purple-600 hover:bg-purple-700 text-white min-w-[120px]">
+          {isSaving ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Salvando...</> : isEdit ? "Salvar Alterações" : "Cadastrar Empresa"}
+        </Button>
+      </div>
+    </div>
+  );
+}
