@@ -12,7 +12,6 @@ import {
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Building2, Plus, Search, ChevronLeft, ChevronRight, Pencil, Loader2 } from "lucide-react";
 import EmpresaForm from "@/components/empresas/EmpresaForm";
-import KsDashboardLayout from "@/components/KsDashboardLayout";
 
 type Situacao = "A" | "I" | "B" | "TODOS";
 
@@ -56,8 +55,7 @@ export default function Empresas() {
   const totalPaginas = data?.totalPaginas ?? 1;
 
   return (
-    <KsDashboardLayout>
-      <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full">
         {/* Header da página */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -174,7 +172,6 @@ export default function Empresas() {
             </div>
           </div>
         )}
-      </div>
 
       {/* Modal do formulário */}
       <Dialog open={modalAberto} onOpenChange={open => { if (!open) fecharModal(); }}>
@@ -182,6 +179,6 @@ export default function Empresas() {
           <EmpresaForm guidPessoa={guidSelecionado} isMaster={isMaster} onClose={fecharModal} />
         </DialogContent>
       </Dialog>
-    </KsDashboardLayout>
+    </div>
   );
 }

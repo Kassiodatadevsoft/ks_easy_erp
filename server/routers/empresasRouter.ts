@@ -208,8 +208,6 @@ export const empresasRouter = router({
       agencia: z.string().optional(),
       conta: z.string().optional(),
       pix: z.string().optional(),
-      usuario: z.string().optional(),
-      senha: z.string().optional(),
       cep: z.string().min(8),
       endereco: z.string().min(1),
       numero: z.string().min(1),
@@ -224,6 +222,16 @@ export const empresasRouter = router({
       valorNegociado: z.number().optional(),
       valorSalario: z.number().optional(),
       observacao: z.string().optional(),
+      // Campos fiscais NF-e
+      certificadoBase64: z.string().optional(),
+      dtCertificado: z.string().optional(),
+      codPin: z.string().optional(),
+      csc: z.string().optional(),
+      codCsc: z.string().optional(),
+      numNfe: z.number().optional(),
+      serieNfe: z.number().optional(),
+      usuarioNfe: z.string().optional(),
+      senhaNfe: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const session = await getKsSession(ctx.req);
@@ -258,6 +266,8 @@ export const empresasRouter = router({
           COSEGMENTO, DATAADMISSAO, DATADEMISSAO,
           VALORNEGOCIADO, VALORSALARIO,
           OBSERVACAO,
+          CERTIFICADO, DTCERTIFICADO, CODPIN, CSC, CODCSC,
+          NUMNFE, SERIENFE, USUARIO, SENHAPRAZO,
           DATACADASTRO, ULTIMAALTERACAO, ULTIMOACESSO
         ) VALUES (
           @CODIGO, @GUIDPESSOA, @GUIDENTIDADE,
@@ -278,6 +288,8 @@ export const empresasRouter = router({
           @COSEGMENTO, @DATAADMISSAO, @DATADEMISSAO,
           @VALORNEGOCIADO, @VALORSALARIO,
           @OBSERVACAO,
+          @CERTIFICADO, @DTCERTIFICADO, @CODPIN, @CSC, @CODCSC,
+          @NUMNFE, @SERIENFE, @USUARIO, @SENHAPRAZO,
           GETDATE(), GETDATE(), GETDATE()
         )`,
         {
@@ -313,6 +325,15 @@ export const empresasRouter = router({
           VALORNEGOCIADO: { type: sql.Numeric(18, 2), value: input.valorNegociado ?? 0 },
           VALORSALARIO: { type: sql.Numeric(18, 2), value: input.valorSalario ?? 0 },
           OBSERVACAO: { type: sql.VarChar(500), value: input.observacao ?? null },
+          CERTIFICADO: { type: sql.VarChar(sql.MAX), value: input.certificadoBase64 ?? null },
+          DTCERTIFICADO: { type: sql.Date, value: input.dtCertificado ?? null },
+          CODPIN: { type: sql.VarChar(25), value: input.codPin ?? null },
+          CSC: { type: sql.VarChar(150), value: input.csc ?? null },
+          CODCSC: { type: sql.VarChar(20), value: input.codCsc ?? null },
+          NUMNFE: { type: sql.Int, value: input.numNfe ?? null },
+          SERIENFE: { type: sql.Int, value: input.serieNfe ?? null },
+          USUARIO: { type: sql.VarChar(15), value: input.usuarioNfe ?? null },
+          SENHAPRAZO: { type: sql.VarChar(25), value: input.senhaNfe ?? null },
         }
       );
 
@@ -362,9 +383,24 @@ export const empresasRouter = router({
       valorNegociado: z.number().optional(),
       valorSalario: z.number().optional(),
       observacao: z.string().optional(),
+      // Campos fiscais NF-e
+      certificadoBase64: z.string().optional(),
+      dtCertificado: z.string().optional(),
+      codPin: z.string().optional(),
+      csc: z.string().optional(),
+      codCsc: z.string().optional(),
+      numNfe: z.number().optional(),
+      serieNfe: z.number().optional(),
+      usuarioNfe: z.string().optional(),
+      senhaNfe: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const session = await getKsSession(ctx.req);
+
+      // Se certificadoBase64 for vazio string, não atualizar o campo CERTIFICADO
+      const certUpdate = input.certificadoBase64 !== undefined
+        ? `, CERTIFICADO = @CERTIFICADO`
+        : ``;
 
       await querySql(
         `UPDATE KS0002.KS00001 SET
@@ -381,6 +417,11 @@ export const empresasRouter = router({
           COSEGMENTO = @COSEGMENTO, DATADEMISSAO = @DATADEMISSAO,
           VALORNEGOCIADO = @VALORNEGOCIADO, VALORSALARIO = @VALORSALARIO,
           OBSERVACAO = @OBSERVACAO,
+          DTCERTIFICADO = @DTCERTIFICADO, CODPIN = @CODPIN,
+          CSC = @CSC, CODCSC = @CODCSC,
+          NUMNFE = @NUMNFE, SERIENFE = @SERIENFE,
+          USUARIO = @USUARIO, SENHAPRAZO = @SENHAPRAZO
+          ${certUpdate},
           ULTIMAALTERACAO = GETDATE()
         WHERE GUIDPESSOA = @GUID AND GUIDENTIDADE = @GUIDENTIDADE`,
         {
@@ -414,6 +455,17 @@ export const empresasRouter = router({
           VALORNEGOCIADO: { type: sql.Numeric(18, 2), value: input.valorNegociado ?? 0 },
           VALORSALARIO: { type: sql.Numeric(18, 2), value: input.valorSalario ?? 0 },
           OBSERVACAO: { type: sql.VarChar(500), value: input.observacao ?? null },
+          DTCERTIFICADO: { type: sql.Date, value: input.dtCertificado ?? null },
+          CODPIN: { type: sql.VarChar(25), value: input.codPin ?? null },
+          CSC: { type: sql.VarChar(150), value: input.csc ?? null },
+          CODCSC: { type: sql.VarChar(20), value: input.codCsc ?? null },
+          NUMNFE: { type: sql.Int, value: input.numNfe ?? null },
+          SERIENFE: { type: sql.Int, value: input.serieNfe ?? null },
+          USUARIO: { type: sql.VarChar(15), value: input.usuarioNfe ?? null },
+          SENHAPRAZO: { type: sql.VarChar(25), value: input.senhaNfe ?? null },
+          ...(input.certificadoBase64 !== undefined
+            ? { CERTIFICADO: { type: sql.VarChar(sql.MAX), value: input.certificadoBase64 || null } }
+            : {}),
         }
       );
 

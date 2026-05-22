@@ -83,16 +83,19 @@
 
 ## Módulo de Empresas
 
-- [ ] Backend: router tRPC para listar empresas (CADEMPRESA=1) filtrado por GUIDENTIDADE
-- [ ] Backend: criar empresa com CADEMPRESA=1 fixo, INSERT em KS0002.KS00001 + KS0002.KS00013
-- [ ] Backend: editar empresa
-- [ ] Backend: verificar CNPJ da empresa logada para ocultar campos sensíveis (CNPJ 50303631000158)
-- [ ] Frontend: página de listagem de empresas com grid/filtros/paginação
-- [ ] Frontend: formulário com abas Dados Gerais, Endereço, Fiscal/Financeiro e Contrato
-- [ ] Frontend: aba Contrato com campos EdtSegmento, EdtdATABASE, DtDemissao, edtValorNegociado, EdtVALORSALARIO
-- [ ] Frontend: campos fiscais (CRT, Ambiente NFe, Alíquota COFINS, Alíquota PIS, Juro Mensal)
-- [ ] Frontend: campos bancários (Banco, Agência, Conta, Pix)
-- [ ] Frontend: campos de acesso (Usuário, Senha com validação de força)
-- [ ] Frontend: ocultar aba Contrato se empresa logada for CNPJ 50303631000158
-- [ ] Frontend: validações obrigatórias (Documento, Nome, CEP, Endereço, Número, Bairro, Cidade, Data Implantação, Segmento, Valor Negociado, Valor Salário)
-- [ ] Frontend: busca CNPJ via BrasilAPI com auto-preenchimento
+- [x] Backend: router tRPC para listar empresas (CADEMPRESA=1) filtrado por GUIDENTIDADE
+- [x] Backend: criar empresa com CADEMPRESA=1 fixo, INSERT em KS0002.KS00001 + KS0002.KS00013
+- [x] Backend: editar empresa
+- [x] Backend: verificar CNPJ da empresa logada para ocultar campos sensíveis (CNPJ 50303631000158)
+- [x] Frontend: página de listagem de empresas com grid/filtros/paginação
+- [x] Frontend: formulário com abas Dados Gerais, Endereço, Fiscal/Financeiro e Contrato
+- [x] Frontend: aba Contrato com campos EdtSegmento, EdtdATABASE, DtDemissao, edtValorNegociado, EdtVALORSALARIO
+- [x] Frontend: campos fiscais (CRT, Ambiente NFe, Alíquota COFINS, Alíquota PIS, Juro Mensal)
+- [x] Frontend: campos bancários (Banco, Agência, Conta, Pix)
+- [x] Frontend: campos de acesso (Usuário, Senha com validação de força)
+- [x] Frontend: ocultar aba Contrato se empresa logada for CNPJ 50303631000158
+- [x] Frontend: validações obrigatórias (Documento, Nome, CEP, Endereço, Número, Bairro, Cidade, Data Implantação, Segmento, Valor Negociado, Valor Salário)
+- [x] Frontend: busca CNPJ via BrasilAPI com auto-preenchimento
+- [x] Frontend: upload de certificado digital .pfx/.p12 com conversão base64
+- [x] Frontend: campo DTCERTIFICADO (data de vencimento do certificado)
+- [x] Backend: campos fiscais NF-e no input Zod e SQLs (CERTIFICADO, DTCERTIFICADO, CODPIN, CSC, CODCSC, NUMNFE, SERIENFE, USUARIO, SENHAPRAZO)
