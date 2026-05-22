@@ -117,12 +117,12 @@ export default function Clientes() {
           </div>
           <div className="w-40">
             <label className="text-xs font-medium text-gray-600 mb-1 block">Situação</label>
-              <Select value={situacao ?? ""} onValueChange={v => { setSituacao(v === "" ? undefined : v as Situacao); setPagina(1); }}>
+              <Select value={situacao ?? "TODOS"} onValueChange={v => { setSituacao(v === "TODOS" ? undefined : v as Situacao); setPagina(1); }}>
               <SelectTrigger>
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos</SelectItem>
+                <SelectItem value="TODOS">Todos</SelectItem>
                 <SelectItem value="A">Ativo</SelectItem>
                 <SelectItem value="I">Inativo</SelectItem>
                 <SelectItem value="B">Bloqueado</SelectItem>
