@@ -7,6 +7,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import ComingSoon from "./pages/ComingSoon";
+import Clientes from "./pages/Clientes";
 import KsDashboardLayout from "./components/KsDashboardLayout";
 import { useKsAuth } from "./hooks/useKsAuth";
 import { useEffect } from "react";
@@ -50,7 +51,7 @@ function Router() {
 
       {/* Cadastros */}
       <Route path="/cadastros/clientes">
-        <ProtectedRoute><ComingSoon title="Cadastro de Clientes" /></ProtectedRoute>
+        <ProtectedRoute><Clientes /></ProtectedRoute>
       </Route>
       <Route path="/cadastros/fornecedores">
         <ProtectedRoute><ComingSoon title="Cadastro de Fornecedores" /></ProtectedRoute>

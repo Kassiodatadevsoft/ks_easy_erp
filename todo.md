@@ -48,3 +48,26 @@
 - [x] Testes de isolamento por GUIDENTIDADE (mock)
 - [ ] Validação de rotas protegidas
 - [ ] Checkpoint final e entrega
+
+## Módulo de Clientes
+
+- [ ] Backend: router tRPC para listar clientes (CADCLIENTE=1) filtrado por GUIDENTIDADE
+- [ ] Backend: busca por DOCUMENTO, FANTASIA, NOME, TELEFONE com paginação
+- [ ] Backend: buscar cidades da tabela KS0000.KS00005 por nome/código/IBGE
+- [ ] Backend: criar cliente (INSERT em KS0002.KS00001 com CADCLIENTE=1)
+- [ ] Backend: editar cliente (UPDATE em KS0002.KS00001)
+- [ ] Backend: validar duplicidade de DOCUMENTO antes de salvar
+- [ ] Backend: consulta CNPJ via API pública (ReceitaWS) para auto-preencher
+- [ ] Frontend: página de listagem de clientes com grid/tabela responsiva
+- [ ] Frontend: filtros por DOCUMENTO, FANTASIA, NOME, TELEFONE
+- [ ] Frontend: botão "Novo Cliente" abre formulário
+- [ ] Frontend: formulário de cadastro/edição com abas (Dados, Endereço, Financeiro)
+- [ ] Frontend: campo Tipo de Pessoa (Física/Jurídica) com máscara CPF/CNPJ
+- [ ] Frontend: campo Situação (Ativo/Inativo/Bloqueado)
+- [ ] Frontend: campo Indicador IE (Contribuinte/Isento/Não Contribuinte)
+- [ ] Frontend: busca de cidade com autocomplete (KS0000.KS00005)
+- [ ] Frontend: botão buscar CNPJ na Receita Federal (auto-preencher endereço)
+- [ ] Frontend: campos financeiros (limite de compra, dia vencimento, juros)
+- [ ] Frontend: checkboxes (Manter Promoções, Também é Usuário, Também é Fornecedor, Consta no SPC)
+- [ ] Frontend: validação de campos obrigatórios (Documento, Nome, CEP, Endereço, Número, Bairro, Cidade, Celular)
+- [ ] Frontend: rota e tabela de preço como campos opcionais (implementar depois)

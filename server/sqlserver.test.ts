@@ -13,11 +13,14 @@ describe("SQLSERVER_URL secret", () => {
     const url = process.env.SQLSERVER_URL ?? "";
     const lower = url.toLowerCase();
     // Must have at least a server/data source key OR be a valid mssql connection string
+    // Aceita formato mssql://user:pass@host:port/db OU chave=valor
     const hasServer =
       lower.includes("server=") ||
       lower.includes("data source=") ||
       lower.includes("localhost") ||
-      lower.includes("database=");
+      lower.includes("database=") ||
+      lower.startsWith("mssql://") ||
+      /mssql:\/\/.+@.+/.test(lower);
     expect(hasServer).toBe(true);
   });
 });

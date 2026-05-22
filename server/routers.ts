@@ -5,6 +5,7 @@ import { publicProcedure, router } from "./_core/trpc";
 import { ksAuthRouter } from "./routers/ksAuthRouter";
 import { entidadesRouter } from "./routers/entidadesRouter";
 import { syncRouter } from "./routers/syncRouter";
+import { clientesRouter } from "./routers/clientesRouter";
 
 export const appRouter = router({
   system: systemRouter,
@@ -24,6 +25,9 @@ export const appRouter = router({
 
   // Cadastro unificado de entidades (clientes, fornecedores, funcionários, etc.)
   entidades: entidadesRouter,
+
+  // Módulo de Clientes
+  clientes: clientesRouter,
 
   // Sincronização com sistema legado Delphi
   sync: syncRouter,
