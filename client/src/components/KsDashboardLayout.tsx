@@ -197,9 +197,6 @@ function KsLayoutInner({ children }: { children: React.ReactNode }) {
                     {(!collapsed || isMobile) && (
                       <>
                         <span className="flex-1 text-left truncate">{item.label}</span>
-                        {isActive && (
-                          <ChevronRight className="w-3 h-3 text-white/60 shrink-0" />
-                        )}
                       </>
                     )}
                   </button>

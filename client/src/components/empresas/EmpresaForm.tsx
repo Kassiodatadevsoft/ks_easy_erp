@@ -18,7 +18,7 @@ interface Props {
   onClose: (salvo?: boolean) => void;
 }
 
-interface FormData {
+interface EmpresaFormData {
   nome: string; fantasia: string; documento: string;
   codTipoDocumento: "F" | "J";
   telefone: string; celular: string; whatsapp: string; email: string;
@@ -34,9 +34,14 @@ interface FormData {
   segmento: number; dataImplantacao: string; dataDemissao: string;
   valorNegociado: number; valorSalario: number;
   observacao: string;
+  // Fiscal NF-e — visível só para master
+  certificado: string; codPin: string;
+  csc: string; codCsc: string;
+  numNfe: number; serieNfe: number;
+  usuarioNfe: string; senhaNfe: string;
 }
 
-const INITIAL: FormData = {
+const INITIAL: EmpresaFormData = {
   nome: "", fantasia: "", documento: "", codTipoDocumento: "J",
   telefone: "", celular: "", whatsapp: "", email: "",
   ie: "", indIeDest: 9,
@@ -49,6 +54,10 @@ const INITIAL: FormData = {
   segmento: 0, dataImplantacao: "", dataDemissao: "",
   valorNegociado: 0, valorSalario: 0,
   observacao: "",
+  certificado: "", codPin: "",
+  csc: "", codCsc: "",
+  numNfe: 0, serieNfe: 1,
+  usuarioNfe: "", senhaNfe: "",
 };
 
 function validarCNPJ(cnpj: string): boolean {
@@ -91,7 +100,7 @@ function maskDoc(val: string, tipo: "F" | "J") {
 
 export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
   const isEdit = !!guidPessoa;
-  const [form, setForm] = useState<FormData>(INITIAL);
+  const [form, setForm] = useState<EmpresaFormData>(INITIAL);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState("dados");
   const [cidadeQuery, setCidadeQuery] = useState("");
@@ -149,6 +158,14 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
         valorNegociado: Number(d.VALORNEGOCIADO ?? 0),
         valorSalario: Number(d.VALORSALARIO ?? 0),
         observacao: String(d.OBSERVACAO ?? ""),
+        certificado: String(d.CERTIFICADO ?? ""),
+        codPin: String(d.CODPIN ?? ""),
+        csc: String(d.CSC ?? ""),
+        codCsc: String(d.CODCSC ?? ""),
+        numNfe: Number(d.NUMNFE ?? 0),
+        serieNfe: Number(d.SERIENFE ?? 1),
+        usuarioNfe: String(d.USUARIO ?? ""),
+        senhaNfe: String(d.SENHAPRAZO ?? ""),
       });
       if (d.DESCCIDADE) setCidadeQuery(String(d.DESCCIDADE));
     }
@@ -161,7 +178,7 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
     }
   }, [buscarCidades.data]);
 
-  const set = (field: keyof FormData, value: unknown) => {
+  const set = (field: keyof EmpresaFormData, value: unknown) => {
     setForm(prev => ({ ...prev, [field]: value }));
     setErrors(prev => { const e = { ...prev }; delete e[field]; return e; });
   };
@@ -589,6 +606,48 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
                   <Label>Valor Salário (R$) *</Label>
                   <Input type="number" step="0.01" value={form.valorSalario} onChange={e => set("valorSalario", Number(e.target.value))} className={errors.valorSalario ? "border-red-500" : ""} />
                   {errors.valorSalario && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.valorSalario}</p>}
+                </div>
+              </div>
+
+              {/* Campos Fiscais NF-e */}
+              <div className="border-t pt-4">
+                <p className="text-sm font-semibold text-purple-700 mb-3 flex items-center gap-2">
+                  <span className="inline-block w-2 h-2 rounded-full bg-purple-500"></span>
+                  Configurações Fiscais / NF-e
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <Label>Certificado Digital (caminho/arquivo)</Label>
+                    <Input value={form.certificado} onChange={e => set("certificado", e.target.value)} placeholder="Caminho do certificado .pfx" />
+                  </div>
+                  <div>
+                    <Label>PIN do Certificado</Label>
+                    <Input type="password" value={form.codPin} onChange={e => set("codPin", e.target.value)} placeholder="PIN" />
+                  </div>
+                  <div>
+                    <Label>Número NF-e</Label>
+                    <Input type="number" value={form.numNfe} onChange={e => set("numNfe", Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <Label>Série NF-e</Label>
+                    <Input type="number" value={form.serieNfe} onChange={e => set("serieNfe", Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <Label>CSC (NFC-e — após credenciamento)</Label>
+                    <Input value={form.csc} onChange={e => set("csc", e.target.value)} placeholder="Token CSC" />
+                  </div>
+                  <div>
+                    <Label>Código CSC</Label>
+                    <Input value={form.codCsc} onChange={e => set("codCsc", e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Usuário NF-e</Label>
+                    <Input value={form.usuarioNfe} onChange={e => set("usuarioNfe", e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Senha NF-e</Label>
+                    <Input type="password" value={form.senhaNfe} onChange={e => set("senhaNfe", e.target.value)} />
+                  </div>
                 </div>
               </div>
             </TabsContent>
