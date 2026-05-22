@@ -16,9 +16,9 @@ import {
 } from "lucide-react";
 
 // URLs das imagens no storage
-const LOGO_URL       = "/manus-storage/datadev-logo_f7558a3c.png";
-const LOGO_FULL_URL  = "/manus-storage/datadev-logo-full_f2fd46f8.png";
-const ROBOT_URL      = "/manus-storage/datadev-robot_30f691bf.png";
+const LOGO_URL       = "/manus-storage/datadev-logo-clean_3b290173.png";
+const LOGO_FULL_URL  = "/manus-storage/datadev-logo-full-clean_4323d2b1.png";
+const ROBOT_URL      = "/manus-storage/datadev-robot-clean_7bc0c87c.png";
 
 const loginSchema = z.object({
   usuario: z.string().min(1, "Informe o usuário"),

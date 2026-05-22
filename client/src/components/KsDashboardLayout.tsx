@@ -31,7 +31,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 
-const LOGO_URL = "/manus-storage/datadev-logo_f7558a3c.png";
+const LOGO_URL = "/manus-storage/datadev-logo-clean_3b290173.png";
 
 // ─── Definição do menu ────────────────────────────────────────────────────────
 const MENU_GROUPS = [
