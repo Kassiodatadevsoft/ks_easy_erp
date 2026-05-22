@@ -1,35 +1,107 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Home from "./pages/Home";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import ComingSoon from "./pages/ComingSoon";
+import KsDashboardLayout from "./components/KsDashboardLayout";
+import { useKsAuth } from "./hooks/useKsAuth";
+import { useEffect } from "react";
+
+/**
+ * Rota protegida: redireciona para /login se não houver sessão KS válida.
+ */
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useKsAuth();
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/login");
+    }
+  }, [loading, user, navigate]);
+
+  if (loading) return null;
+  if (!user) return null;
+
+  return <KsDashboardLayout>{children}</KsDashboardLayout>;
+}
+
+function RedirectToLogin() {
+  const [, navigate] = useLocation();
+  useEffect(() => { navigate("/login"); }, [navigate]);
+  return null;
+}
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
+      {/* Rota pública */}
+      <Route path="/" component={RedirectToLogin} />
+      <Route path="/login" component={Login} />
+
+      {/* Dashboard */}
+      <Route path="/dashboard">
+        <ProtectedRoute><Dashboard /></ProtectedRoute>
+      </Route>
+
+      {/* Cadastros */}
+      <Route path="/cadastros/clientes">
+        <ProtectedRoute><ComingSoon title="Cadastro de Clientes" /></ProtectedRoute>
+      </Route>
+      <Route path="/cadastros/fornecedores">
+        <ProtectedRoute><ComingSoon title="Cadastro de Fornecedores" /></ProtectedRoute>
+      </Route>
+      <Route path="/cadastros/funcionarios">
+        <ProtectedRoute><ComingSoon title="Cadastro de Funcionários" /></ProtectedRoute>
+      </Route>
+      <Route path="/cadastros/transportadoras">
+        <ProtectedRoute><ComingSoon title="Cadastro de Transportadoras" /></ProtectedRoute>
+      </Route>
+      <Route path="/cadastros/empresas">
+        <ProtectedRoute><ComingSoon title="Cadastro de Empresas" /></ProtectedRoute>
+      </Route>
+
+      {/* Comercial */}
+      <Route path="/vendas">
+        <ProtectedRoute><ComingSoon title="Módulo de Vendas" /></ProtectedRoute>
+      </Route>
+      <Route path="/pedidos">
+        <ProtectedRoute><ComingSoon title="Módulo de Pedidos" /></ProtectedRoute>
+      </Route>
+
+      {/* Financeiro */}
+      <Route path="/financeiro/pagar">
+        <ProtectedRoute><ComingSoon title="Contas a Pagar" /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/receber">
+        <ProtectedRoute><ComingSoon title="Contas a Receber" /></ProtectedRoute>
+      </Route>
+
+      {/* Estoque */}
+      <Route path="/estoque/produtos">
+        <ProtectedRoute><ComingSoon title="Cadastro de Produtos" /></ProtectedRoute>
+      </Route>
+
+      {/* Configurações */}
+      <Route path="/configuracoes">
+        <ProtectedRoute><ComingSoon title="Configurações do Sistema" /></ProtectedRoute>
+      </Route>
+
+      {/* 404 */}
+      <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
+      <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
           <Router />
