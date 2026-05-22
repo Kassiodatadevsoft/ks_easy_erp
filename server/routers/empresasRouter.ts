@@ -473,4 +473,44 @@ export const empresasRouter = router({
 
       return { success: true };
     }),
+
+  /**
+   * Validar se o usuário NF-e já está em uso em QUALQUER empresa do sistema (multiempresa)
+   * A coluna USUARIO deve ser única globalmente na tabela KS0002.KS00001
+   */
+  validarUsuario: publicProcedure
+    .input(z.object({
+      usuario: z.string().min(1),
+      guidPessoaExcluir: z.string().optional(), // GUID da empresa atual (para ignorar na edição)
+    }))
+    .query(async ({ input, ctx }) => {
+      // Garante que o chamador tem sessão válida
+      await getKsSession(ctx.req);
+
+      const usuarioLimpo = input.usuario.trim().toUpperCase();
+      if (!usuarioLimpo) return { disponivel: true };
+
+      // Busca em TODA a tabela — sem filtro de GUIDENTIDADE — pois é multiempresa
+      const rows = await querySql<{ GUIDPESSOA: string; NOME: string; DOCUMENTO: string }>(
+        `SELECT TOP 1 GUIDPESSOA, NOME, DOCUMENTO
+         FROM KS0002.KS00001
+         WHERE UPPER(LTRIM(RTRIM(USUARIO))) = @USUARIO
+           AND CADEMPRESA = 1`,
+        { USUARIO: { type: sql.VarChar(15), value: usuarioLimpo } }
+      );
+
+      if (!rows || rows.length === 0) return { disponivel: true };
+
+      const found = rows[0];
+      // Se for a própria empresa sendo editada, ignora
+      if (input.guidPessoaExcluir && found.GUIDPESSOA === input.guidPessoaExcluir) {
+        return { disponivel: true };
+      }
+
+      return {
+        disponivel: false,
+        nome: found.NOME,
+        documento: found.DOCUMENTO,
+      };
+    }),
 });

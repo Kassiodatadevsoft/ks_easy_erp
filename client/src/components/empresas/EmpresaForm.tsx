@@ -161,6 +161,10 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
     { documento: form.documento, guidPessoaExcluir: guidPessoa ?? undefined },
     { enabled: form.documento.replace(/\D/g, "").length >= 11 }
   );
+  const validarUsuario = trpc.empresas.validarUsuario.useQuery(
+    { usuario: form.usuarioNfe.trim(), guidPessoaExcluir: guidPessoa ?? undefined },
+    { enabled: form.usuarioNfe.trim().length >= 3 }
+  );
   const criarMutation = trpc.empresas.criar.useMutation();
   const atualizarMutation = trpc.empresas.atualizar.useMutation();
 
@@ -293,12 +297,16 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
       if (!form.dataImplantacao) e.dataImplantacao = "Data de implantação é obrigatória";
       if (!form.valorNegociado) e.valorNegociado = "Valor negociado é obrigatório";
       if (!form.valorSalario) e.valorSalario = "Valor salário é obrigatório";
+      // Validação de usuário duplicado (multiempresa — verifica em todo o sistema)
+      if (form.usuarioNfe.trim() && validarUsuario.data && !validarUsuario.data.disponivel) {
+        e.usuarioNfe = `Usuário já cadastrado na empresa: ${validarUsuario.data.nome}`;
+      }
     }
     setErrors(e);
     if (Object.keys(e).length > 0) {
       const dadosErros = ["nome","documento","codTipoDocumento","telefone","celular","whatsapp","email","ie","indIeDest"];
       const enderecoErros = ["cep","endereco","numero","bairro","codCidade"];
-      const contratoErros = ["dataImplantacao","valorNegociado","valorSalario"];
+      const contratoErros = ["dataImplantacao","valorNegociado","valorSalario","usuarioNfe"];
       const hasErrosDados = dadosErros.some(k => e[k]);
       const hasErrosEndereco = enderecoErros.some(k => e[k]);
       const hasErrosContrato = contratoErros.some(k => e[k]);
@@ -363,7 +371,16 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
   const dadosFields = ["nome","documento","celular","email","ie","indIeDest"];
   const enderecoFields = ["cep","endereco","numero","bairro","codCidade"];
   const fiscalFields = ["crt","ambiente","aliquotaPis","aliquotaCofins","juroMensal"];
-  const contratoFields = ["dataImplantacao","valorNegociado","valorSalario"];
+  const contratoFields = ["dataImplantacao","valorNegociado","valorSalario","usuarioNfe"];
+
+  // Status da validação do usuário em tempo real
+  const usuarioStatus = (() => {
+    if (!form.usuarioNfe.trim() || form.usuarioNfe.trim().length < 3) return null;
+    if (validarUsuario.isLoading) return "checking";
+    if (validarUsuario.data?.disponivel === false) return "taken";
+    if (validarUsuario.data?.disponivel === true) return "available";
+    return null;
+  })();
 
   if (isLoading) {
     return (
@@ -737,13 +754,41 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
                     <Label>Código CSC</Label>
                     <Input value={form.codCsc} onChange={e => set("codCsc", e.target.value)} />
                   </div>
-                  <div>
-                    <Label>Usuário NF-e</Label>
-                    <Input value={form.usuarioNfe} onChange={e => set("usuarioNfe", e.target.value)} />
+                  <div className="col-span-2">
+                    <Label>Usuário *</Label>
+                    <div className="relative">
+                      <Input
+                        value={form.usuarioNfe}
+                        onChange={e => set("usuarioNfe", e.target.value.toUpperCase().slice(0, 15))}
+                        placeholder="Máx. 15 caracteres"
+                        className={errors.usuarioNfe ? "border-red-500 pr-8" : usuarioStatus === "available" ? "border-green-500 pr-8" : usuarioStatus === "taken" ? "border-red-500 pr-8" : ""}
+                        maxLength={15}
+                      />
+                      {usuarioStatus === "checking" && (
+                        <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-gray-400" />
+                      )}
+                      {usuarioStatus === "available" && (
+                        <span className="absolute right-2 top-2 text-green-600 text-xs font-semibold">✓ Disponível</span>
+                      )}
+                      {usuarioStatus === "taken" && (
+                        <span className="absolute right-2 top-2 text-red-500 text-xs font-semibold">✗ Em uso</span>
+                      )}
+                    </div>
+                    {errors.usuarioNfe && (
+                      <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />{errors.usuarioNfe}
+                      </p>
+                    )}
+                    {usuarioStatus === "taken" && !errors.usuarioNfe && validarUsuario.data && (
+                      <p className="text-orange-500 text-xs mt-1 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        Usuário já utilizado pela empresa: <strong>{validarUsuario.data.nome}</strong>
+                      </p>
+                    )}
                   </div>
                   <div>
-                    <Label>Senha NF-e</Label>
-                    <Input type="password" value={form.senhaNfe} onChange={e => set("senhaNfe", e.target.value)} />
+                    <Label>Senha</Label>
+                    <Input type="password" value={form.senhaNfe} onChange={e => set("senhaNfe", e.target.value)} placeholder="Senha de acesso" />
                   </div>
                 </div>
               </div>
