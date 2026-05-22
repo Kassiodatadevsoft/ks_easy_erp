@@ -13,25 +13,18 @@ import {
   User,
   AlertCircle,
   ChevronRight,
-  BarChart3,
-  ShoppingCart,
-  Users,
-  FileText,
 } from "lucide-react";
+
+// URLs das imagens no storage
+const LOGO_URL       = "/manus-storage/datadev-logo_f7558a3c.png";
+const LOGO_FULL_URL  = "/manus-storage/datadev-logo-full_f2fd46f8.png";
+const ROBOT_URL      = "/manus-storage/datadev-robot_30f691bf.png";
 
 const loginSchema = z.object({
   usuario: z.string().min(1, "Informe o usuário"),
-  senha: z.string().min(1, "Informe a senha"),
+  senha:   z.string().min(1, "Informe a senha"),
 });
-
 type LoginForm = z.infer<typeof loginSchema>;
-
-const FEATURES = [
-  { icon: BarChart3, label: "Financeiro" },
-  { icon: ShoppingCart, label: "Vendas" },
-  { icon: Users, label: "Cadastros" },
-  { icon: FileText, label: "Fiscal" },
-];
 
 export default function Login() {
   const [, navigate] = useLocation();
@@ -50,7 +43,7 @@ export default function Login() {
       navigate("/dashboard");
     },
     onError: (err) => {
-      setErrorMsg(err.message || "Erro ao realizar login. Tente novamente.");
+      setErrorMsg(err.message || "Usuário ou senha incorretos. Tente novamente.");
     },
   });
 
@@ -62,92 +55,94 @@ export default function Login() {
   const loading = isSubmitting || loginMutation.isPending;
 
   return (
-    <div className="min-h-screen flex bg-slate-950">
-      {/* Painel esquerdo — branding (visível apenas em telas médias+) */}
-      <div className="hidden md:flex md:w-[45%] lg:w-1/2 flex-col relative overflow-hidden bg-gradient-to-br from-blue-700 via-blue-800 to-slate-900">
-        {/* Padrão de grade decorativo */}
+    <div className="min-h-screen flex bg-[#0f1623]">
+
+      {/* ── Painel esquerdo — branding DataDev ── */}
+      <div className="hidden md:flex md:w-[48%] lg:w-1/2 flex-col relative overflow-hidden bg-gradient-to-br from-[#1a2340] via-[#1e2d52] to-[#0f1623]">
+
+        {/* Grade decorativa */}
         <div
-          className="absolute inset-0 opacity-10"
+          className="absolute inset-0 opacity-[0.07]"
           style={{
             backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)",
-            backgroundSize: "40px 40px",
+              "linear-gradient(rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.15) 1px, transparent 1px)",
+            backgroundSize: "48px 48px",
           }}
         />
-        {/* Círculos de fundo */}
-        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-blue-500/20 blur-3xl" />
-        <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-blue-400/10 blur-3xl" />
 
-        <div className="relative flex flex-col justify-between h-full p-10 lg:p-14">
-          {/* Logo */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center border border-white/20">
-              <BarChart3 className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <span className="text-white font-bold text-xl tracking-tight">KS</span>
-              <span className="text-blue-200 font-light text-xl"> Easy ERP</span>
-            </div>
+        {/* Brilhos de fundo */}
+        <div className="absolute top-0 left-0 w-80 h-80 rounded-full bg-blue-700/20 blur-3xl -translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute bottom-0 right-0 w-96 h-96 rounded-full bg-indigo-600/15 blur-3xl translate-x-1/3 translate-y-1/3" />
+
+        <div className="relative flex flex-col justify-between h-full p-10 lg:p-14 z-10">
+
+          {/* Logo topo */}
+          <div>
+            <img
+              src={LOGO_FULL_URL}
+              alt="DataDev Logo"
+              className="h-12 object-contain"
+              onError={(e) => {
+                // fallback para logo pequeno
+                (e.target as HTMLImageElement).src = LOGO_URL;
+              }}
+            />
           </div>
 
-          {/* Conteúdo central */}
-          <div className="space-y-8">
-            <div>
-              <h1 className="text-3xl lg:text-4xl font-bold text-white leading-tight">
+          {/* Robô + texto central */}
+          <div className="flex flex-col items-center gap-6">
+            <img
+              src={ROBOT_URL}
+              alt="DataDev Robot"
+              className="w-52 lg:w-64 object-contain drop-shadow-2xl"
+            />
+            <div className="text-center">
+              <h1 className="text-2xl lg:text-3xl font-bold text-white leading-tight">
                 Gestão empresarial
                 <br />
-                <span className="text-blue-200">simples e eficiente</span>
+                <span className="text-blue-400">simples e eficiente</span>
               </h1>
-              <p className="text-blue-200/70 mt-4 text-sm lg:text-base leading-relaxed max-w-sm">
-                Controle financeiro, vendas, cadastros e emissão fiscal em uma
-                única plataforma integrada ao seu sistema legado.
+              <p className="text-slate-400 text-sm mt-3 max-w-xs mx-auto leading-relaxed">
+                Controle financeiro, vendas, cadastros e emissão fiscal integrados
+                ao seu sistema legado Delphi.
               </p>
-            </div>
-
-            {/* Módulos */}
-            <div className="grid grid-cols-2 gap-3">
-              {FEATURES.map(({ icon: Icon, label }) => (
-                <div
-                  key={label}
-                  className="flex items-center gap-2.5 bg-white/8 backdrop-blur rounded-xl px-4 py-3 border border-white/10"
-                >
-                  <Icon className="w-4 h-4 text-blue-200 shrink-0" />
-                  <span className="text-white/80 text-sm font-medium">{label}</span>
-                </div>
-              ))}
             </div>
           </div>
 
           {/* Rodapé */}
-          <p className="text-blue-300/40 text-xs">
-            © {new Date().getFullYear()} KS Consulting — Todos os direitos reservados
-          </p>
+          <div className="text-center">
+            <p className="text-slate-600 text-xs">
+              DataDev — Consultoria e Desenvolvimento de Software
+            </p>
+            <p className="text-slate-700 text-xs mt-0.5">
+              © {new Date().getFullYear()} Todos os direitos reservados
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Painel direito — formulário */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 bg-slate-950">
+      {/* ── Painel direito — formulário ── */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
+
         {/* Logo mobile */}
-        <div className="flex md:hidden items-center gap-2 mb-10">
-          <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center">
-            <BarChart3 className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-white font-bold text-xl">KS</span>
-          <span className="text-blue-400 font-light text-xl">Easy ERP</span>
+        <div className="flex md:hidden flex-col items-center gap-3 mb-10">
+          <img src={LOGO_FULL_URL} alt="DataDev" className="h-10 object-contain" />
+          <img src={ROBOT_URL} alt="Robô DataDev" className="w-24 object-contain" />
         </div>
 
         <div className="w-full max-w-sm">
+
           {/* Título */}
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-white">Bem-vindo de volta</h2>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-slate-500 text-sm mt-1">
               Informe suas credenciais para acessar o sistema
             </p>
           </div>
 
-          {/* Alerta de erro */}
+          {/* Erro */}
           {errorMsg && (
-            <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 mb-6">
+            <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 mb-5">
               <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
               <p className="text-red-300 text-sm leading-snug">{errorMsg}</p>
             </div>
@@ -155,6 +150,7 @@ export default function Login() {
 
           {/* Formulário */}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+
             {/* Usuário */}
             <div className="space-y-1.5">
               <Label htmlFor="usuario" className="text-slate-300 text-sm">
@@ -168,7 +164,7 @@ export default function Login() {
                   autoComplete="username"
                   placeholder="Digite seu usuário"
                   disabled={loading}
-                  className="pl-10 h-11 bg-slate-900 border-slate-700 text-white placeholder:text-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 rounded-xl"
+                  className="pl-10 h-11 bg-[#1a2340] border-[#2a3a5c] text-white placeholder:text-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 rounded-xl"
                   {...register("usuario")}
                 />
               </div>
@@ -190,7 +186,7 @@ export default function Login() {
                   autoComplete="current-password"
                   placeholder="Digite sua senha"
                   disabled={loading}
-                  className="pl-10 h-11 bg-slate-900 border-slate-700 text-white placeholder:text-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 rounded-xl"
+                  className="pl-10 h-11 bg-[#1a2340] border-[#2a3a5c] text-white placeholder:text-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 rounded-xl"
                   {...register("senha")}
                 />
               </div>
@@ -203,7 +199,7 @@ export default function Login() {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full h-11 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-all duration-150 active:scale-[0.98] mt-2 shadow-lg shadow-blue-900/30"
+              className="w-full h-11 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-all duration-150 active:scale-[0.98] mt-2 shadow-lg shadow-blue-900/40"
             >
               {loading ? (
                 <>
@@ -220,7 +216,7 @@ export default function Login() {
           </form>
 
           <p className="text-center text-slate-700 text-xs mt-8">
-            KS Easy ERP — Versão 1.0
+            DataDev ERP — Versão 1.0
           </p>
         </div>
       </div>

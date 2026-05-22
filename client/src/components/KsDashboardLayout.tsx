@@ -13,7 +13,6 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
-  BarChart3,
   Building2,
   ChevronRight,
   CreditCard,
@@ -31,6 +30,8 @@ import {
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
+
+const LOGO_URL = "/manus-storage/datadev-logo_f7558a3c.png";
 
 // ─── Definição do menu ────────────────────────────────────────────────────────
 const MENU_GROUPS = [
@@ -123,18 +124,31 @@ function KsLayoutInner({ children }: { children: React.ReactNode }) {
       <div className="flex flex-col h-full">
         {/* Logo */}
         <div
-          className={`flex items-center gap-2.5 px-4 h-14 border-b border-white/8 shrink-0 ${
-            collapsed && !isMobile ? "justify-center px-0" : ""
+          className={`flex items-center h-14 border-b border-white/8 shrink-0 px-4 ${
+            collapsed && !isMobile ? "justify-center px-0" : "gap-2.5"
           }`}
         >
-          <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center shrink-0">
-            <BarChart3 className="w-4 h-4 text-white" />
-          </div>
+          {(!collapsed || isMobile) ? (
+            <img
+              src={LOGO_URL}
+              alt="DataDev"
+              className="h-7 object-contain"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+              }}
+            />
+          ) : (
+            <img
+              src={LOGO_URL}
+              alt="DataDev"
+              className="h-6 w-6 object-contain"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+              }}
+            />
+          )}
           {(!collapsed || isMobile) && (
-            <div className="min-w-0">
-              <span className="text-white font-bold text-base leading-none">KS</span>
-              <span className="text-blue-300 font-light text-base leading-none"> ERP</span>
-            </div>
+            <span className="text-white/40 text-xs font-medium">ERP</span>
           )}
         </div>
 
@@ -223,11 +237,7 @@ function KsLayoutInner({ children }: { children: React.ReactNode }) {
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent
-              side="top"
-              align="start"
-              className="w-56 mb-1"
-            >
+            <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
               <DropdownMenuLabel className="pb-1">
                 <p className="text-sm font-semibold truncate">{user?.nome}</p>
                 <p className="text-xs text-muted-foreground font-normal truncate">
@@ -259,7 +269,7 @@ function KsLayoutInner({ children }: { children: React.ReactNode }) {
       {/* ── Sidebar desktop ── */}
       {!isMobile && (
         <aside
-          className="hidden md:flex flex-col bg-slate-900 border-r border-white/5 shrink-0 transition-all duration-200"
+          className="hidden md:flex flex-col bg-[#0f1623] border-r border-white/5 shrink-0 transition-all duration-200"
           style={{ width: sidebarWidth }}
         >
           <SidebarContent />
@@ -269,13 +279,11 @@ function KsLayoutInner({ children }: { children: React.ReactNode }) {
       {/* ── Drawer mobile ── */}
       {isMobile && mobileOpen && (
         <>
-          {/* Overlay */}
           <div
             className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
-          {/* Drawer */}
-          <aside className="fixed left-0 top-0 bottom-0 w-64 bg-slate-900 z-50 flex flex-col shadow-2xl">
+          <aside className="fixed left-0 top-0 bottom-0 w-64 bg-[#0f1623] z-50 flex flex-col shadow-2xl">
             <SidebarContent onNavigate={() => setMobileOpen(false)} />
           </aside>
         </>
@@ -286,7 +294,6 @@ function KsLayoutInner({ children }: { children: React.ReactNode }) {
         {/* Header */}
         <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0 shadow-sm">
           <div className="flex items-center gap-3">
-            {/* Toggle sidebar desktop */}
             {!isMobile && (
               <Button
                 variant="ghost"
@@ -297,7 +304,6 @@ function KsLayoutInner({ children }: { children: React.ReactNode }) {
                 <Menu className="w-4 h-4" />
               </Button>
             )}
-            {/* Botão mobile */}
             {isMobile && (
               <Button
                 variant="ghost"
@@ -309,17 +315,15 @@ function KsLayoutInner({ children }: { children: React.ReactNode }) {
               </Button>
             )}
 
-            {/* Breadcrumb / título da página */}
             <div className="flex items-center gap-1.5 text-sm">
-              <span className="text-slate-400 hidden sm:inline">KS ERP</span>
+              <span className="text-slate-400 hidden sm:inline">DataDev ERP</span>
               <ChevronRight className="w-3.5 h-3.5 text-slate-300 hidden sm:inline" />
               <span className="font-semibold text-slate-700">{activeLabel}</span>
             </div>
           </div>
 
-          {/* Lado direito do header */}
+          {/* Lado direito */}
           <div className="flex items-center gap-3">
-            {/* Empresa */}
             {nomeEmpresa && (
               <Badge
                 variant="secondary"
@@ -330,7 +334,6 @@ function KsLayoutInner({ children }: { children: React.ReactNode }) {
               </Badge>
             )}
 
-            {/* Avatar com dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition-colors focus:outline-none">
