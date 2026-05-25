@@ -108,3 +108,10 @@
 - [x] Frontend: CargoForm.tsx com campos Cargo, Classificação (CODTIPO), Situação, Dashboard inicial (CODPAINEL), Desconto máximo, Comissão, PDV, Alterar preço produto
 - [x] Frontend: registrar rota /cargos no App.tsx
 - [x] Frontend: adicionar item Cargos no menu do DashboardLayout
+
+## Módulo Transportadoras (KS0002.KS00001 — CADTRANSPORTADORA=1)
+- [ ] Backend: transportadorasRouter.ts com listar, buscarPorGuid, criar, atualizar, excluir
+- [ ] Frontend: página Transportadoras.tsx com listagem, filtros e paginação
+- [ ] Frontend: TransportadoraForm.tsx baseado no FornecedorForm (maiúsculas, validações)
+- [ ] Frontend: registrar rota /cadastros/transportadoras no App.tsx
+- [ ] Frontend: adicionar item Transportadoras no menu do KsDashboardLayout
