@@ -147,3 +147,11 @@
 - [x] Frontend: ícone estrela para produtos em destaque na listagem
 - [x] Frontend: registrar rota /estoque/produtos no App.tsx
 - [x] Frontend: adicionar item Produtos no menu do KsDashboardLayout (seção "Estoque / Cardápio")
+
+## Melhorias no Módulo de Produtos (v2)
+- [x] SQL Server: adicionar colunas fiscais e de estoque na KS0000.KS00009 (NCM, CEST, CFOP, CSOSN, ALIQICMS, ALIQPIS, ALIQCOFINS, UNIDADE, ESTOQUE, ESTOQUEMINIMO)
+- [x] Backend: atualizar produtosRouter.ts com novos campos fiscais e de estoque no Zod e SQLs
+- [x] Frontend: ProdutoForm - fixar 7 tamanhos no modo "Por Tamanho" (BROTINHO, PEQUENA, MEDIA, GRANDE, TREM, BITREM, UNICO) sem botão adicionar/remover
+- [x] Frontend: ProdutoForm - adicionar campo Preço de Venda no modo "Preço Único"
+- [x] Frontend: ProdutoForm - nova aba "Fiscal" com NCM, CEST, CFOP, CSOSN (Simples Nacional), alíquotas ICMS/PIS/COFINS, Unidade Fiscal
+- [x] Frontend: ProdutoForm - nova aba "Estoque" com Estoque Atual e Estoque Mínimo
