@@ -155,3 +155,18 @@
 - [x] Frontend: ProdutoForm - adicionar campo Preço de Venda no modo "Preço Único"
 - [x] Frontend: ProdutoForm - nova aba "Fiscal" com NCM, CEST, CFOP, CSOSN (Simples Nacional), alíquotas ICMS/PIS/COFINS, Unidade Fiscal
 - [x] Frontend: ProdutoForm - nova aba "Estoque" com Estoque Atual e Estoque Mínimo
+
+## Módulo de Delivery (Sistema de Pedidos Online)
+- [x] SQL Server: criar tabelas KS0001.KS00001 (pedidos) e KS0001.KS00002 (itens do pedido)
+- [x] Backend: deliveryRouter com categorias, produtos, criarPedido, pedidoPorToken, pedidosAdmin, pedidoComItens, atualizarStatusPedido
+- [x] Backend: status alinhados com fluxo real (RECEBIDO, PREPARANDO, SAIU_ENTREGA, PRONTO_RETIRADA, ENTREGUE, CANCELADO)
+- [x] Backend: notificação ao dono a cada novo pedido
+- [x] Frontend: DeliveryCartContext (carrinho genérico para ERP)
+- [x] Frontend: ProdutoCard e ProdutoModal (seleção de tamanho e meio a meio)
+- [x] Frontend: DeliveryCartDrawer (gaveta do carrinho)
+- [x] Frontend: Cardapio.tsx (cardápio público com filtros por categoria)
+- [x] Frontend: Checkout.tsx (finalização do pedido com entrega/retirada)
+- [x] Frontend: PedidoTracking.tsx (rastreamento público por token)
+- [x] Frontend: PedidosOnline.tsx (painel admin de pedidos no ERP)
+- [x] App.tsx: rotas /cardapio, /checkout, /pedido/:token, /delivery/pedidos
+- [x] Menu lateral: grupo Delivery com item Pedidos Online

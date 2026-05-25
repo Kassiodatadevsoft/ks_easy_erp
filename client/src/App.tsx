@@ -18,6 +18,13 @@ import Produtos from "./pages/Produtos";
 import KsDashboardLayout from "./components/KsDashboardLayout";
 import { useKsAuth } from "./hooks/useKsAuth";
 import { useEffect } from "react";
+// Delivery
+import { DeliveryCartProvider } from "./contexts/DeliveryCartContext";
+import DeliveryCartDrawer from "./components/delivery/DeliveryCartDrawer";
+import Cardapio from "./pages/delivery/Cardapio";
+import CheckoutDelivery from "./pages/delivery/Checkout";
+import PedidoTracking from "./pages/delivery/PedidoTracking";
+import PedidosOnline from "./pages/delivery/PedidosOnline";
 
 /**
  * Rota protegida: redireciona para /login se não houver sessão KS válida.
@@ -100,6 +107,16 @@ function Router() {
         <ProtectedRoute><Produtos /></ProtectedRoute>
       </Route>
 
+      {/* Delivery — admin */}
+      <Route path="/delivery/pedidos">
+        <ProtectedRoute><PedidosOnline /></ProtectedRoute>
+      </Route>
+
+      {/* Delivery — público (cardápio, checkout, rastreamento) */}
+      <Route path="/cardapio" component={Cardapio} />
+      <Route path="/checkout" component={CheckoutDelivery} />
+      <Route path="/pedido/:token" component={PedidoTracking} />
+
       {/* Configurações */}
       <Route path="/configuracoes">
         <ProtectedRoute><ComingSoon title="Configurações do Sistema" /></ProtectedRoute>
@@ -117,8 +134,11 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
-          <Toaster />
-          <Router />
+          <DeliveryCartProvider>
+            <Toaster />
+            <Router />
+            <DeliveryCartDrawer />
+          </DeliveryCartProvider>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

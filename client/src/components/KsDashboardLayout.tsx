@@ -23,6 +23,7 @@ import {
   Menu,
   Package,
   Settings,
+  ShoppingBag,
   ShoppingCart,
   Tag,
   Truck,
@@ -73,6 +74,12 @@ const MENU_GROUPS = [
     items: [
       { icon: Tag,     label: "Categorias", path: "/estoque/categorias" },
       { icon: Package, label: "Produtos",   path: "/estoque/produtos" },
+    ],
+  },
+  {
+    label: "Delivery",
+    items: [
+      { icon: ShoppingBag, label: "Pedidos Online", path: "/delivery/pedidos" },
     ],
   },
   {
