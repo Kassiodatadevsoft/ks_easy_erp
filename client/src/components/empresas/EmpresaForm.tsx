@@ -483,12 +483,12 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <Label>Razão Social / Nome *</Label>
-                <Input value={form.nome} onChange={e => set("nome", e.target.value)} className={errors.nome ? "border-red-500" : ""} />
+                <Input value={form.nome} onChange={e => set("nome", e.target.value.toUpperCase())} className={errors.nome ? "border-red-500" : ""} />
                 {errors.nome && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.nome}</p>}
               </div>
               <div>
                 <Label>Nome Fantasia</Label>
-                <Input value={form.fantasia} onChange={e => set("fantasia", e.target.value)} />
+                <Input value={form.fantasia} onChange={e => set("fantasia", e.target.value.toUpperCase())} />
               </div>
               <div>
                 <Label>E-mail</Label>
@@ -505,7 +505,7 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
               </div>
               <div>
                 <Label>Inscrição Estadual</Label>
-                <Input value={form.ie} onChange={e => set("ie", e.target.value)} />
+                <Input value={form.ie} onChange={e => set("ie", e.target.value.toUpperCase())} />
               </div>
               <div>
                 <Label>Indicador IE</Label>
@@ -522,7 +522,7 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
 
             <div>
               <Label>Observação</Label>
-              <Textarea value={form.observacao} onChange={e => set("observacao", e.target.value)} rows={3} />
+              <Textarea value={form.observacao} onChange={e => set("observacao", e.target.value.toUpperCase())} rows={3} />
             </div>
           </TabsContent>
 
@@ -536,21 +536,21 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
               </div>
               <div className="col-span-2">
                 <Label>Endereço *</Label>
-                <Input value={form.endereco} onChange={e => set("endereco", e.target.value)} className={errors.endereco ? "border-red-500" : ""} />
+                <Input value={form.endereco} onChange={e => set("endereco", e.target.value.toUpperCase())} className={errors.endereco ? "border-red-500" : ""} />
                 {errors.endereco && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.endereco}</p>}
               </div>
               <div>
                 <Label>Número *</Label>
-                <Input value={form.numero} onChange={e => set("numero", e.target.value)} className={errors.numero ? "border-red-500" : ""} />
+                <Input value={form.numero} onChange={e => set("numero", e.target.value.toUpperCase())} className={errors.numero ? "border-red-500" : ""} />
                 {errors.numero && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.numero}</p>}
               </div>
               <div>
                 <Label>Complemento</Label>
-                <Input value={form.complemento} onChange={e => set("complemento", e.target.value)} />
+                <Input value={form.complemento} onChange={e => set("complemento", e.target.value.toUpperCase())} />
               </div>
               <div>
                 <Label>Bairro *</Label>
-                <Input value={form.bairro} onChange={e => set("bairro", e.target.value)} className={errors.bairro ? "border-red-500" : ""} />
+                <Input value={form.bairro} onChange={e => set("bairro", e.target.value.toUpperCase())} className={errors.bairro ? "border-red-500" : ""} />
                 {errors.bairro && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.bairro}</p>}
               </div>
               <div className="col-span-3 relative">
@@ -748,11 +748,11 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
                   </div>
                   <div>
                     <Label>CSC (NFC-e — após credenciamento)</Label>
-                    <Input value={form.csc} onChange={e => set("csc", e.target.value)} placeholder="Token CSC" />
+                    <Input value={form.csc} onChange={e => set("csc", e.target.value.toUpperCase())} placeholder="Token CSC" />
                   </div>
                   <div>
                     <Label>Código CSC</Label>
-                    <Input value={form.codCsc} onChange={e => set("codCsc", e.target.value)} />
+                    <Input value={form.codCsc} onChange={e => set("codCsc", e.target.value.toUpperCase())} />
                   </div>
                   <div className="col-span-2">
                     <Label>Usuário *</Label>

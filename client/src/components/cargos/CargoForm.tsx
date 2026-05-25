@@ -174,7 +174,7 @@ export default function CargoForm({ guidCargo, onClose }: Props) {
             <div className="relative mt-1">
               <Input
                 value={form.cargo}
-                onChange={e => set("cargo", e.target.value)}
+                onChange={e => set("cargo", e.target.value.toUpperCase())}
                 placeholder="Nome do cargo"
                 maxLength={80}
                 className={

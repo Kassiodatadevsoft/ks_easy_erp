@@ -479,8 +479,8 @@ export default function ClienteForm({ guidPessoa, onClose }: Props) {
                     <Input
                       className={`mt-1 ${errors.nome ? "border-red-400 focus-visible:ring-red-400" : ""}`}
                       value={form.nome}
-                      onChange={e => set("nome", e.target.value)}
-                      placeholder="Nome completo ou Razão Social"
+                      onChange={e => set("nome", e.target.value.toUpperCase())}
+                      placeholder="NOME COMPLETO OU RAZÃO SOCIAL"
                     />
                     <FieldError msg={errors.nome} />
                   </div>
@@ -491,8 +491,8 @@ export default function ClienteForm({ guidPessoa, onClose }: Props) {
                     <Input
                       className="mt-1"
                       value={form.fantasia}
-                      onChange={e => set("fantasia", e.target.value)}
-                      placeholder="Nome fantasia"
+                      onChange={e => set("fantasia", e.target.value.toUpperCase())}
+                      placeholder="NOME FANTASIA"
                     />
                   </div>
                 </div>
@@ -577,8 +577,8 @@ export default function ClienteForm({ guidPessoa, onClose }: Props) {
                     <Input
                       className="mt-1"
                       value={form.ie}
-                      onChange={e => set("ie", e.target.value)}
-                      placeholder="Somente números"
+                      onChange={e => set("ie", e.target.value.toUpperCase())}
+                      placeholder="SOMENTE NÚMEROS"
                     />
                   </div>
                 </div>
@@ -624,8 +624,8 @@ export default function ClienteForm({ guidPessoa, onClose }: Props) {
                     className="mt-1 resize-none"
                     rows={3}
                     value={form.observacao}
-                    onChange={e => set("observacao", e.target.value)}
-                    placeholder="Observações sobre o cliente..."
+                    onChange={e => set("observacao", e.target.value.toUpperCase())}
+                    placeholder="OBSERVAÇÕES SOBRE O CLIENTE..."
                   />
                 </div>
               </TabsContent>
@@ -653,8 +653,8 @@ export default function ClienteForm({ guidPessoa, onClose }: Props) {
                     <Input
                       className={`mt-1 ${errors.endereco ? "border-red-400 focus-visible:ring-red-400" : ""}`}
                       value={form.endereco}
-                      onChange={e => set("endereco", e.target.value)}
-                      placeholder="Rua, Avenida, etc."
+                      onChange={e => set("endereco", e.target.value.toUpperCase())}
+                      placeholder="RUA, AVENIDA, ETC."
                     />
                     <FieldError msg={errors.endereco} />
                   </div>
@@ -668,8 +668,8 @@ export default function ClienteForm({ guidPessoa, onClose }: Props) {
                     <Input
                       className={`mt-1 ${errors.numero ? "border-red-400 focus-visible:ring-red-400" : ""}`}
                       value={form.numero}
-                      onChange={e => set("numero", e.target.value)}
-                      placeholder="S/N ou número"
+                      onChange={e => set("numero", e.target.value.toUpperCase())}
+                      placeholder="S/N OU NÚMERO"
                     />
                     <FieldError msg={errors.numero} />
                   </div>
@@ -678,8 +678,8 @@ export default function ClienteForm({ guidPessoa, onClose }: Props) {
                     <Input
                       className="mt-1"
                       value={form.complemento}
-                      onChange={e => set("complemento", e.target.value)}
-                      placeholder="Apto, Sala, Bloco..."
+                      onChange={e => set("complemento", e.target.value.toUpperCase())}
+                      placeholder="APTO, SALA, BLOCO..."
                     />
                   </div>
                 </div>
@@ -692,8 +692,8 @@ export default function ClienteForm({ guidPessoa, onClose }: Props) {
                     <Input
                       className={`mt-1 ${errors.bairro ? "border-red-400 focus-visible:ring-red-400" : ""}`}
                       value={form.bairro}
-                      onChange={e => set("bairro", e.target.value)}
-                      placeholder="Bairro"
+                      onChange={e => set("bairro", e.target.value.toUpperCase())}
+                      placeholder="BAIRRO"
                     />
                     <FieldError msg={errors.bairro} />
                   </div>
