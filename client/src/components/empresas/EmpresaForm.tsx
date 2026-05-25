@@ -809,6 +809,39 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
                   </div>
                 </div>
               </div>
+
+              {/* GUID da Empresa — para configuração do sistema offline */}
+              {isEdit && guidPessoa && (
+                <div className="border-t pt-4">
+                  <p className="text-sm font-semibold text-gray-600 mb-3 flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-full bg-gray-400"></span>
+                    Identificador para Sistema Offline
+                  </p>
+                  <div>
+                    <Label className="text-xs text-gray-500">GUID da Empresa (GUIDPESSOA)</Label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Input
+                        readOnly
+                        value={guidPessoa}
+                        className="font-mono text-xs bg-gray-50 text-gray-600 cursor-default select-all"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => {
+                          navigator.clipboard.writeText(guidPessoa);
+                          toast.success("GUID copiado!");
+                        }}
+                      >
+                        Copiar
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">Use este GUID para configurar a sincronização offline no sistema Delphi.</p>
+                  </div>
+                </div>
+              )}
             </TabsContent>
           )}
         </Tabs>

@@ -16,8 +16,11 @@ unit UKsSyncManager;
 
   Dependências:
     - Indy (TIdHTTP) — já incluído no Delphi
-    - SuperObject ou System.JSON (para parsear JSON)
-    - Tabelas locais: KS00001_LOCAL, KS00007_LOCAL, KS00005_LOCAL
+    - System.JSON (para parsear JSON)
+    - Tabelas locais: as MESMAS tabelas do servidor
+        KS0002.KS00001  → Pessoas (clientes, fornecedores, funcionários, etc.)
+        KS0000.KS00007  → Cargos
+        KS0000.KS00005  → Cidades
 
   Configuração:
     - URL_SERVIDOR: URL base do sistema web (ex: https://xxx.manus.space)
@@ -99,7 +102,7 @@ begin
     Q.Connection := ADOConn;
 
     // Verifica se já existe
-    Q.SQL.Text := 'SELECT COUNT(*) AS CNT FROM KS00001_LOCAL WHERE GUIDPESSOA = :GUID';
+    Q.SQL.Text := 'SELECT COUNT(*) AS CNT FROM KS0002.KS00001 WHERE GUIDPESSOA = :GUID';
     Q.Parameters.ParamByName('GUID').Value := GuidPessoa;
     Q.Open;
 
@@ -108,7 +111,7 @@ begin
       // UPDATE
       Q.Close;
       Q.SQL.Text :=
-        'UPDATE KS00001_LOCAL SET ' +
+        'UPDATE KS0002.KS00001 SET ' +
         '  NOME = :NOME, FANTASIA = :FANTASIA, DOCUMENTO = :DOC, ' +
         '  CODTIPODOCUMENTO = :CODTIPO, TELEFONE = :TEL, CELULAR = :CEL, ' +
         '  WHATSAPP = :WA, EMAIL = :EMAIL, IE = :IE, ' +
@@ -128,7 +131,7 @@ begin
       // INSERT
       Q.Close;
       Q.SQL.Text :=
-        'INSERT INTO KS00001_LOCAL (' +
+        'INSERT INTO KS0002.KS00001 (' +
         '  GUIDPESSOA, GUIDENTIDADE, CODIGO, NOME, FANTASIA, DOCUMENTO, CODTIPODOCUMENTO, ' +
         '  TELEFONE, CELULAR, WHATSAPP, EMAIL, IE, ' +
         '  CEP, ENDERECO, NUMERO, COMPLEMENTO, BAIRRO, CODCIDADE, ' +
@@ -205,7 +208,7 @@ begin
   Q := TADOQuery.Create(nil);
   try
     Q.Connection := ADOConn;
-    Q.SQL.Text := 'SELECT COUNT(*) AS CNT FROM KS00007_LOCAL WHERE GUIDCARGO = :GUID';
+    Q.SQL.Text := 'SELECT COUNT(*) AS CNT FROM KS0000.KS00007 WHERE GUIDCARGO = :GUID';
     Q.Parameters.ParamByName('GUID').Value := GuidCargo;
     Q.Open;
 
@@ -213,7 +216,7 @@ begin
     begin
       Q.Close;
       Q.SQL.Text :=
-        'UPDATE KS00007_LOCAL SET ' +
+        'UPDATE KS0000.KS00007 SET ' +
         '  CARGO = :CARGO, DESCONTOMAXIMO = :DESC, CODTIPO = :CODTIPO, ' +
         '  SITUACAO = :SIT, ALTERARPRECOPRODUTO = :ALTPRE, ' +
         '  CODPAINEL = :CODPAI, COMISSAO = :COM, PDV = :PDV, ' +
@@ -224,7 +227,7 @@ begin
     begin
       Q.Close;
       Q.SQL.Text :=
-        'INSERT INTO KS00007_LOCAL (' +
+        'INSERT INTO KS0000.KS00007 (' +
         '  GUIDCARGO, CODCARGO, CARGO, DESCONTOMAXIMO, CODTIPO, ' +
         '  SITUACAO, ALTERARPRECOPRODUTO, CODPAINEL, COMISSAO, PDV, ' +
         '  DATACADASTRO, ULTIMAALTERACAO ' +
