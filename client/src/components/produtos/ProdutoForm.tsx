@@ -21,11 +21,22 @@ interface ProdutoFormProps {
   onSalvo: () => void;
 }
 
-// Os 7 tamanhos fixos para o modo "Por Tamanho"
 const TAMANHOS_FIXOS = ["BROTINHO", "PEQUENA", "MEDIA", "GRANDE", "TREM", "BITREM", "UNICO"] as const;
 type TamanhoFixo = typeof TAMANHOS_FIXOS[number];
 
-// CSOSN — Simples Nacional
+// ─── Tabelas fiscais ──────────────────────────────────────────────────────────
+const ORIGEM_OPCOES = [
+  { value: 0, label: "0 – Nacional (exceto 3, 4, 5 e 8)" },
+  { value: 1, label: "1 – Estrangeira: importação direta (exceto 6)" },
+  { value: 2, label: "2 – Estrangeira: adquirida no mercado interno (exceto 7)" },
+  { value: 3, label: "3 – Nacional: conteúdo de importação > 40% e ≤ 70%" },
+  { value: 4, label: "4 – Nacional: processos produtivos básicos (DL 288/67 e Leis 8.248/91, 8.387/91, 10.176/01, 11.484/07)" },
+  { value: 5, label: "5 – Nacional: conteúdo de importação ≤ 40%" },
+  { value: 6, label: "6 – Estrangeira: importação direta, sem similar nacional (CAMEX / gás natural)" },
+  { value: 7, label: "7 – Estrangeira: mercado interno, sem similar nacional (CAMEX / gás natural)" },
+  { value: 8, label: "8 – Nacional: conteúdo de importação > 70%" },
+];
+
 const CSOSN_OPCOES = [
   { value: "101", label: "101 – Tributada com permissão de crédito" },
   { value: "102", label: "102 – Tributada sem permissão de crédito" },
@@ -39,7 +50,6 @@ const CSOSN_OPCOES = [
   { value: "900", label: "900 – Outros" },
 ];
 
-// CST ICMS — Regime Normal (Lucro Presumido / Lucro Real)
 const CST_ICMS_OPCOES = [
   { value: "000", label: "000 – Tributada integralmente" },
   { value: "010", label: "010 – Tributada com ST" },
@@ -54,7 +64,6 @@ const CST_ICMS_OPCOES = [
   { value: "090", label: "090 – Outras" },
 ];
 
-// Regime de tributação do produto na Reforma Tributária
 const REGIME_TRIB_OPCOES = [
   { value: 1, label: "1 – Padrão (alíquota cheia IBS + CBS)" },
   { value: 2, label: "2 – Reduzido (50% de redução)" },
@@ -63,7 +72,6 @@ const REGIME_TRIB_OPCOES = [
   { value: 5, label: "5 – Seletivo (IS – bens e serviços prejudiciais)" },
 ];
 
-// CFOP mais comuns para saída
 const CFOP_OPCOES = [
   { value: "5101", label: "5101 – Venda de produção do estabelecimento" },
   { value: "5102", label: "5102 – Venda de mercadoria adquirida de terceiros" },
@@ -73,7 +81,6 @@ const CFOP_OPCOES = [
   { value: "6102", label: "6102 – Venda de mercadoria (interestadual)" },
 ];
 
-// Unidades fiscais
 const UNIDADES = ["UN", "KG", "G", "L", "ML", "M", "M2", "M3", "CX", "PC", "PAR", "DZ", "CT", "SC", "FD", "PT"];
 
 interface TamanhosPrecos {
@@ -90,6 +97,8 @@ interface FormData {
   codBarras: string;
   // Fiscal
   ncm: string; cest: string; cfop: string; unidade: string;
+  origemProduto: number;
+  fracionado: boolean;
   // Legado
   csosn: string; cst: string;
   aliqIcms: string; aliqPis: string; aliqCofins: string; aliqIpi: string;
@@ -97,8 +106,6 @@ interface FormData {
   aliqIbs: string; aliqCbs: string; aliqIs: string;
   regimeTrib: number; percReducao: string;
   codBenefIbs: string; codRegimeEsp: string;
-  // Fracionado
-  fracionado: boolean;
   // Estoque
   estoque: string; estoqueMinimo: string;
   // Delivery
@@ -113,12 +120,13 @@ const FORM_INICIAL: FormData = {
   tamanhosPrecos: { BROTINHO: "", PEQUENA: "", MEDIA: "", GRANDE: "", TREM: "", BITREM: "", UNICO: "" },
   codBarras: "",
   ncm: "", cest: "", cfop: "", unidade: "UN",
+  origemProduto: 0,
+  fracionado: false,
   csosn: "", cst: "",
   aliqIcms: "0.00", aliqPis: "0.65", aliqCofins: "3.00", aliqIpi: "0.00",
   aliqIbs: "0.00", aliqCbs: "0.00", aliqIs: "0.00",
   regimeTrib: 1, percReducao: "0.00",
   codBenefIbs: "", codRegimeEsp: "",
-  fracionado: false,
   estoque: "0", estoqueMinimo: "0",
   imageUrl: "", erpCode: "",
 };
@@ -128,7 +136,7 @@ function InfoTip({ text }: { text: string }) {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help inline ml-1" />
+          <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help inline ml-1 shrink-0" />
         </TooltipTrigger>
         <TooltipContent className="max-w-xs text-xs">{text}</TooltipContent>
       </Tooltip>
@@ -151,7 +159,6 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
     { enabled: isEdicao && open }
   );
 
-  // Validação em tempo real do nome
   const [nomeDebounced, setNomeDebounced] = useState("");
   useEffect(() => {
     const t = setTimeout(() => setNomeDebounced(form.produto), 400);
@@ -163,7 +170,6 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
     { enabled: nomeDebounced.length >= 2 }
   );
 
-  // Preencher alíquotas padrão da empresa ao abrir novo produto
   useEffect(() => {
     if (!isEdicao && regime && open) {
       setForm(prev => ({
@@ -176,12 +182,10 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
     }
   }, [regime, isEdicao, open]);
 
-  // Preencher form ao carregar dados de edição
   useEffect(() => {
     if (produtoData) {
       let modoPreco: "simples" | "tamanhos" = "tamanhos";
       const tp: TamanhosPrecos = { BROTINHO: "", PEQUENA: "", MEDIA: "", GRANDE: "", TREM: "", BITREM: "", UNICO: "" };
-
       if (produtoData.PRECOS) {
         try {
           const precosObj = JSON.parse(produtoData.PRECOS);
@@ -197,7 +201,6 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
           }
         } catch { /* usar padrão */ }
       }
-
       const d = produtoData as Record<string, unknown>;
       setForm({
         produto: String(d.PRODUTO ?? ""),
@@ -215,6 +218,8 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         cest: String(d.CEST ?? ""),
         cfop: String(d.CFOP ?? ""),
         unidade: String(d.UNIDADE ?? "UN"),
+        origemProduto: Number(d.ORIGEMPRODUTO ?? 0),
+        fracionado: Boolean(d.FRACIONADO),
         csosn: String(d.CSOSN ?? ""),
         cst: String(d.CST ?? ""),
         aliqIcms: d.ALIQICMS !== undefined ? String(d.ALIQICMS) : "0.00",
@@ -228,7 +233,6 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         percReducao: d.PERCREDUCAO !== undefined ? String(d.PERCREDUCAO) : "0.00",
         codBenefIbs: String(d.CODBENEFIBS ?? ""),
         codRegimeEsp: String(d.CODREGIMEESP ?? ""),
-        fracionado: Boolean(d.FRACIONADO),
         estoque: d.ESTOQUE !== undefined ? String(d.ESTOQUE) : "0",
         estoqueMinimo: d.ESTOQUEMINIMO !== undefined ? String(d.ESTOQUEMINIMO) : "0",
         imageUrl: String(d.IMAGEURL ?? ""),
@@ -288,7 +292,6 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
     try {
       const precosPayload = buildPrecosPayload();
       const catSelecionada = categorias?.find(c => c.GUIDCATEGORIA === form.guidCategoria);
-
       const payload = {
         produto: form.produto,
         descricao: form.descricao || undefined,
@@ -309,6 +312,8 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         cest: form.cest || undefined,
         cfop: form.cfop || undefined,
         unidade: form.unidade || "UN",
+        origemProduto: form.origemProduto,
+        fracionado: form.fracionado,
         csosn: form.csosn || undefined,
         cst: form.cst || undefined,
         aliqIcms: parseFloat(form.aliqIcms || "0"),
@@ -322,7 +327,6 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         percReducao: parseFloat(form.percReducao || "0"),
         codBenefIbs: form.codBenefIbs || undefined,
         codRegimeEsp: form.codRegimeEsp || undefined,
-        fracionado: form.fracionado,
         estoque: parseFloat(form.estoque || "0"),
         estoqueMinimo: parseFloat(form.estoqueMinimo || "0"),
       };
@@ -346,7 +350,6 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
   const nomeValido = validacaoNome?.disponivel;
   const nomeEmUso = validacaoNome && !validacaoNome.disponivel;
 
-  // Badge de regime
   const regimeBadge = regime ? (
     regime.isMEI ? (
       <Badge variant="outline" className="text-xs border-orange-400 text-orange-600">MEI</Badge>
@@ -359,32 +362,36 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="w-[95vw] max-w-3xl max-h-[92vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      {/* Modal largo com altura controlada */}
+      <DialogContent className="w-[96vw] max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0">
+        {/* Cabeçalho fixo */}
+        <DialogHeader className="px-5 pt-5 pb-3 shrink-0 border-b">
+          <DialogTitle className="flex items-center gap-2 text-base">
             {isEdicao ? "Editar Produto" : "Novo Produto"}
             {regimeBadge}
           </DialogTitle>
         </DialogHeader>
 
         <Tabs value={abaAtiva} onValueChange={setAbaAtiva} className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="grid grid-cols-5 shrink-0 h-auto">
-            <TabsTrigger value="dados" className="relative text-xs py-2">
-              Dados Gerais
-              {erros.produto && (
-                <Badge variant="destructive" className="ml-1 h-4 w-4 p-0 text-[10px] flex items-center justify-center">!</Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="precos" className="text-xs py-2">Preços</TabsTrigger>
-            <TabsTrigger value="fiscal" className="text-xs py-2">Fiscal</TabsTrigger>
-            <TabsTrigger value="estoque" className="text-xs py-2">Estoque</TabsTrigger>
-            <TabsTrigger value="delivery" className="text-xs py-2">Delivery / ERP</TabsTrigger>
-          </TabsList>
+          {/* Abas com scroll horizontal em telas pequenas */}
+          <div className="shrink-0 border-b overflow-x-auto">
+            <TabsList className="w-full rounded-none h-10 bg-transparent border-0 flex min-w-max">
+              <TabsTrigger value="dados" className="relative flex-1 min-w-[90px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">
+                Dados Gerais
+                {erros.produto && <span className="absolute -top-0.5 right-1 w-3.5 h-3.5 bg-destructive text-white text-[9px] rounded-full flex items-center justify-center">!</span>}
+              </TabsTrigger>
+              <TabsTrigger value="precos" className="flex-1 min-w-[70px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">Preços</TabsTrigger>
+              <TabsTrigger value="fiscal" className="flex-1 min-w-[60px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">Fiscal</TabsTrigger>
+              <TabsTrigger value="estoque" className="flex-1 min-w-[70px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">Estoque</TabsTrigger>
+              <TabsTrigger value="delivery" className="flex-1 min-w-[90px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">Delivery / ERP</TabsTrigger>
+            </TabsList>
+          </div>
 
+          {/* Conteúdo com scroll vertical */}
           <div className="flex-1 overflow-y-auto">
 
             {/* ── ABA DADOS GERAIS ─────────────────────────────────────────── */}
-            <TabsContent value="dados" className="space-y-4 p-1 mt-0">
+            <TabsContent value="dados" className="space-y-4 p-4 mt-0">
               <div className="space-y-1">
                 <Label htmlFor="produto">Nome do Produto <span className="text-destructive">*</span></Label>
                 <div className="relative">
@@ -394,7 +401,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                     onChange={e => setTexto("produto", e.target.value)}
                     placeholder="EX: PIZZA CALABRESA"
                     maxLength={150}
-                    className={erros.produto || nomeEmUso ? "border-destructive pr-8" : nomeValido && form.produto.length >= 2 ? "border-green-500 pr-8" : "pr-8"}
+                    className={`pr-8 ${erros.produto || nomeEmUso ? "border-destructive" : nomeValido && form.produto.length >= 2 ? "border-green-500" : ""}`}
                   />
                   {form.produto.length >= 2 && (
                     <div className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -407,11 +414,9 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 )}
               </div>
 
-              {/* Código de Barras */}
               <div className="space-y-1">
                 <Label htmlFor="codBarras" className="flex items-center gap-1">
-                  <Barcode className="h-4 w-4" />
-                  Código de Barras (EAN / GTIN)
+                  <Barcode className="h-4 w-4" /> Código de Barras (EAN / GTIN)
                 </Label>
                 <Input
                   id="codBarras"
@@ -448,7 +453,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 </Select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label htmlFor="ordemExibicao">Ordem de Exibição</Label>
                   <Input id="ordemExibicao" type="number" min={0} max={9999} value={form.ordemExibicao} onChange={e => setField("ordemExibicao", parseInt(e.target.value) || 0)} />
@@ -475,10 +480,10 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
             </TabsContent>
 
             {/* ── ABA PREÇOS ───────────────────────────────────────────────── */}
-            <TabsContent value="precos" className="space-y-4 p-1 mt-0">
+            <TabsContent value="precos" className="space-y-4 p-4 mt-0">
               <div className="space-y-2">
                 <Label>Modo de Preço</Label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {(["simples", "tamanhos"] as const).map(modo => (
                     <button key={modo} type="button" onClick={() => setField("modoPreco", modo)}
                       className={`p-3 rounded-md border text-left transition-colors ${form.modoPreco === modo ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"}`}>
@@ -490,7 +495,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
               </div>
 
               {form.modoPreco === "simples" ? (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label htmlFor="precocusto">Preço de Custo (R$)</Label>
                     <Input id="precocusto" type="number" min={0} step={0.01} value={form.precocusto} onChange={e => setField("precocusto", e.target.value)} placeholder="0,00" />
@@ -532,7 +537,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
             </TabsContent>
 
             {/* ── ABA FISCAL ───────────────────────────────────────────────── */}
-            <TabsContent value="fiscal" className="space-y-4 p-1 mt-0">
+            <TabsContent value="fiscal" className="space-y-4 p-4 mt-0">
 
               {/* Banner de regime */}
               {regime && (
@@ -542,7 +547,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                   : "bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300"
                 }`}>
                   <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                  <div>
+                  <div className="min-w-0">
                     <span className="font-medium">{regime.descricaoRegime}</span>
                     <span className="text-xs ml-2 opacity-75">(CRT {regime.crt})</span>
                     {regime.isMEI && <p className="text-xs mt-0.5 opacity-80">MEI: isento de ICMS, PIS e COFINS. Preencha apenas NCM, CFOP e campos da Reforma Tributária.</p>}
@@ -552,8 +557,24 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 </div>
               )}
 
-              {/* NCM, CEST, CFOP, Unidade */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Origem do produto — Tabela A */}
+              <div className="space-y-1">
+                <Label className="flex items-center gap-1">
+                  Origem da Mercadoria (Tabela A)
+                  <InfoTip text="Define a procedência do produto conforme a Tabela A do ICMS. Obrigatório na NF-e. Código 0 = Nacional é o mais comum." />
+                </Label>
+                <Select value={String(form.origemProduto)} onValueChange={v => setField("origemProduto", parseInt(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ORIGEM_OPCOES.map(o => (
+                      <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* NCM e CEST */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label htmlFor="ncm">NCM <InfoTip text="Nomenclatura Comum do Mercosul — 8 dígitos. Obrigatório na NF-e." /></Label>
                   <Input id="ncm" value={form.ncm} onChange={e => setField("ncm", e.target.value.replace(/\D/g, "").slice(0, 8))} placeholder="00000000" maxLength={8} />
@@ -564,7 +585,8 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              {/* CFOP, Unidade e Fracionado */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1">
                   <Label>CFOP <InfoTip text="Código Fiscal de Operações e Prestações — define a natureza da operação." /></Label>
                   <Select value={form.cfop || "NENHUM"} onValueChange={v => setField("cfop", v === "NENHUM" ? "" : v)}>
@@ -589,22 +611,17 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                     Fracionado <InfoTip text="Produto vendido em frações (ex: kg, litro, metro). Permite quantidades decimais no PDV e na NF-e." />
                   </Label>
                   <div className="flex items-center gap-3 h-10 px-3 rounded-md border">
-                    <Switch
-                      id="fracionado"
-                      checked={form.fracionado}
-                      onCheckedChange={v => setField("fracionado", v)}
-                    />
-                    <span className="text-sm">{form.fracionado ? "Sim — venda fracionada" : "Não — venda inteira"}</span>
+                    <Switch id="fracionado" checked={form.fracionado} onCheckedChange={v => setField("fracionado", v)} />
+                    <span className="text-sm">{form.fracionado ? "Sim — fracionado" : "Não — inteiro"}</span>
                   </div>
                 </div>
               </div>
 
               <Separator />
 
-              {/* ── Tributação Legada (NF-e) ── */}
+              {/* Tributação Legada */}
               <p className="text-sm font-semibold">Tributação Legada — NF-e (atual)</p>
 
-              {/* Simples / MEI: CSOSN */}
               {(regime?.isSimples || !regime) && (
                 <div className="space-y-1">
                   <Label>CSOSN <InfoTip text="Código de Situação da Operação no Simples Nacional. Obrigatório para emissão de NF-e no Simples." /></Label>
@@ -618,7 +635,6 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 </div>
               )}
 
-              {/* Regime Normal: CST ICMS */}
               {regime?.isNormal && (
                 <div className="space-y-1">
                   <Label>CST ICMS <InfoTip text="Código de Situação Tributária do ICMS para Regime Normal (Lucro Presumido / Lucro Real)." /></Label>
@@ -632,9 +648,8 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 </div>
               )}
 
-              {/* Alíquotas legadas */}
               {!regime?.isMEI && (
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="space-y-1">
                     <Label htmlFor="aliqIcms">ICMS (%)</Label>
                     <Input id="aliqIcms" type="number" min={0} max={100} step={0.01} value={form.aliqIcms} onChange={e => setField("aliqIcms", e.target.value)} placeholder="0.00" />
@@ -656,8 +671,8 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
 
               <Separator />
 
-              {/* ── Reforma Tributária (vigência 2026+) ── */}
-              <div className="flex items-center gap-2">
+              {/* Reforma Tributária */}
+              <div className="flex items-center gap-2 flex-wrap">
                 <p className="text-sm font-semibold">Reforma Tributária — IBS / CBS / IS</p>
                 <Badge className="text-[10px] bg-purple-600 text-white">Vigência 2026+</Badge>
               </div>
@@ -672,56 +687,42 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 </Select>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <Label htmlFor="aliqIbs">
-                    IBS (%) <InfoTip text="Imposto sobre Bens e Serviços — substitui ICMS e ISS. Alíquota de referência: ~26,5% (federal + estadual + municipal)." />
-                  </Label>
+                  <Label htmlFor="aliqIbs">IBS (%) <InfoTip text="Imposto sobre Bens e Serviços — substitui ICMS e ISS. Referência: ~26,5%." /></Label>
                   <Input id="aliqIbs" type="number" min={0} max={100} step={0.0001} value={form.aliqIbs} onChange={e => setField("aliqIbs", e.target.value)} placeholder="0.0000" />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="aliqCbs">
-                    CBS (%) <InfoTip text="Contribuição sobre Bens e Serviços — substitui PIS e COFINS. Alíquota de referência: ~8,8%." />
-                  </Label>
+                  <Label htmlFor="aliqCbs">CBS (%) <InfoTip text="Contribuição sobre Bens e Serviços — substitui PIS e COFINS. Referência: ~8,8%." /></Label>
                   <Input id="aliqCbs" type="number" min={0} max={100} step={0.0001} value={form.aliqCbs} onChange={e => setField("aliqCbs", e.target.value)} placeholder="0.0000" />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="aliqIs">
-                    IS (%) <InfoTip text="Imposto Seletivo — incide sobre bens e serviços considerados prejudiciais à saúde ou ao meio ambiente (cigarros, bebidas alcoólicas, etc.)." />
-                  </Label>
+                  <Label htmlFor="aliqIs">IS (%) <InfoTip text="Imposto Seletivo — bens prejudiciais à saúde ou ao meio ambiente." /></Label>
                   <Input id="aliqIs" type="number" min={0} max={100} step={0.0001} value={form.aliqIs} onChange={e => setField("aliqIs", e.target.value)} placeholder="0.0000" />
                 </div>
               </div>
 
-              {/* Redução de base — só para regime reduzido */}
               {form.regimeTrib === 2 && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <Label htmlFor="percReducao">
-                      Redução da Base (%) <InfoTip text="Percentual de redução da base de cálculo do IBS/CBS. Ex: 50% = alíquota efetiva pela metade." />
-                    </Label>
+                    <Label htmlFor="percReducao">Redução da Base (%) <InfoTip text="Percentual de redução da base de cálculo do IBS/CBS." /></Label>
                     <Input id="percReducao" type="number" min={0} max={100} step={0.01} value={form.percReducao} onChange={e => setField("percReducao", e.target.value)} placeholder="50.00" />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="codBenefIbs">
-                      Código de Benefício Fiscal <InfoTip text="Código do benefício fiscal IBS/CBS (a ser definido pela Receita Federal)." />
-                    </Label>
+                    <Label htmlFor="codBenefIbs">Código de Benefício Fiscal <InfoTip text="Código do benefício fiscal IBS/CBS (a ser definido pela Receita Federal)." /></Label>
                     <Input id="codBenefIbs" value={form.codBenefIbs} onChange={e => setTexto("codBenefIbs", e.target.value)} placeholder="EX: BEN0001" maxLength={20} />
                   </div>
                 </div>
               )}
 
-              {/* Regime especial */}
               <div className="space-y-1">
-                <Label htmlFor="codRegimeEsp">
-                  Regime Especial <InfoTip text="Código de regime especial, como cashback obrigatório (previsto na Reforma para produtos da cesta básica)." />
-                </Label>
+                <Label htmlFor="codRegimeEsp">Regime Especial <InfoTip text="Código de regime especial, como cashback obrigatório (previsto na Reforma para produtos da cesta básica)." /></Label>
                 <Input id="codRegimeEsp" value={form.codRegimeEsp} onChange={e => setTexto("codRegimeEsp", e.target.value)} placeholder="EX: CASHBACK" maxLength={10} />
               </div>
             </TabsContent>
 
             {/* ── ABA ESTOQUE ──────────────────────────────────────────────── */}
-            <TabsContent value="estoque" className="space-y-4 p-1 mt-0">
+            <TabsContent value="estoque" className="space-y-4 p-4 mt-0">
               <div className="p-3 rounded-md bg-muted/50 border text-sm">
                 <p className="font-medium">Controle de Estoque</p>
                 <p className="text-muted-foreground text-xs mt-1">
@@ -729,7 +730,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-1">
                   <Label htmlFor="estoque">Estoque Atual</Label>
                   <Input id="estoque" type="number" min={0} step={0.001} value={form.estoque} onChange={e => setField("estoque", e.target.value)} placeholder="0" />
@@ -750,7 +751,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
             </TabsContent>
 
             {/* ── ABA DELIVERY / ERP ───────────────────────────────────────── */}
-            <TabsContent value="delivery" className="space-y-4 p-1 mt-0">
+            <TabsContent value="delivery" className="space-y-4 p-4 mt-0">
               <div className="space-y-1">
                 <Label htmlFor="erpCode">Código ERP</Label>
                 <Input id="erpCode" value={form.erpCode} onChange={e => setTexto("erpCode", e.target.value)} placeholder="EX: PROD-001" maxLength={100} />
@@ -761,7 +762,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 <Label htmlFor="imageUrl">URL da Imagem</Label>
                 <Input id="imageUrl" value={form.imageUrl} onChange={e => setField("imageUrl", e.target.value)} placeholder="https://exemplo.com/imagem.jpg" maxLength={500} />
                 {form.imageUrl && (
-                  <div className="mt-2 rounded-md overflow-hidden border w-32 h-32">
+                  <div className="mt-2 rounded-md overflow-hidden border w-28 h-28">
                     <img src={form.imageUrl} alt="Preview" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                   </div>
                 )}
@@ -780,7 +781,8 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
           </div>
         </Tabs>
 
-        <div className="flex justify-end gap-2 pt-2 border-t shrink-0">
+        {/* Rodapé fixo */}
+        <div className="flex justify-end gap-2 px-5 py-3 border-t shrink-0">
           <Button variant="outline" onClick={onClose} disabled={salvando}>Cancelar</Button>
           <Button onClick={handleSalvar} disabled={salvando || Boolean(nomeEmUso)}>
             {salvando ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}

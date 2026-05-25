@@ -76,6 +76,8 @@ const produtoInputBase = {
   percReducao: z.number().min(0).max(100).default(0),  // % redução da base IBS/CBS
   codBenefIbs: z.string().max(20).optional(),          // Código de benefício fiscal IBS/CBS
   codRegimeEsp: z.string().max(10).optional(),         // Regime especial (cashback, etc.)
+  // ── Origem do produto (Tabela A ICMS) ──
+  origemProduto: z.number().int().min(0).max(8).default(0),
   // ── Produto fracionado ──
   fracionado: z.boolean().default(false),
   // ── Estoque ──
@@ -122,6 +124,7 @@ type ProdutoRow = {
   CODBENEFIBS: string | null;
   CODREGIMEESP: string | null;
   UNIDADE: string | null;
+  ORIGEMPRODUTO: number;
   FRACIONADO: boolean;
   ESTOQUE: number;
   ESTOQUEMINIMO: number;
@@ -146,6 +149,7 @@ const SELECT_CAMPOS = `
   p.CODBENEFIBS, p.CODREGIMEESP, p.UNIDADE,
   ISNULL(p.ESTOQUE,0) AS ESTOQUE,
   ISNULL(p.ESTOQUEMINIMO,0) AS ESTOQUEMINIMO,
+  ISNULL(p.ORIGEMPRODUTO,0) AS ORIGEMPRODUTO,
   ISNULL(p.FRACIONADO,0) AS FRACIONADO,
   p.CODBARRAS
 `;
@@ -308,7 +312,7 @@ export const produtosRouter = router({
             ALIQICMS, ALIQPIS, ALIQCOFINS, ALIQIPI,
             ALIQIBS, ALIQCBS, ALIQIS,
             REGIMETRIB, PERCREDUCAO, CODBENEFIBS, CODREGIMEESP,
-            UNIDADE, ESTOQUE, ESTOQUEMINIMO, FRACIONADO, CODBARRAS,
+            UNIDADE, ESTOQUE, ESTOQUEMINIMO, ORIGEMPRODUTO, FRACIONADO, CODBARRAS,
             GUIDPRODUTO, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
          VALUES
            (${codProduto}, '${produto}', ${descricao ? `'${descricao}'` : "NULL"},
@@ -325,6 +329,7 @@ export const produtosRouter = router({
             ${sqlStr(input.codBenefIbs)}, ${sqlStr(input.codRegimeEsp)},
             ${sqlStr(input.unidade || "UN")},
             ${sqlNum(input.estoque)}, ${sqlNum(input.estoqueMinimo)},
+            ${input.origemProduto},
             ${input.fracionado ? 1 : 0},
             ${sqlStr(input.codBarras)},
             NEWID(), '${session.guidEntidade}', '${now}', '${now}')`
@@ -378,6 +383,7 @@ export const produtosRouter = router({
            UNIDADE = ${sqlStr(input.unidade || "UN")},
            ESTOQUE = ${sqlNum(input.estoque)},
            ESTOQUEMINIMO = ${sqlNum(input.estoqueMinimo)},
+           ORIGEMPRODUTO = ${input.origemProduto},
            FRACIONADO = ${input.fracionado ? 1 : 0},
            CODBARRAS = ${sqlStr(input.codBarras)},
            ULTIMAALTERACAO = '${now}'
