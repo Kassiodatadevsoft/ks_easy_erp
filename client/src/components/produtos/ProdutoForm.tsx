@@ -97,6 +97,8 @@ interface FormData {
   aliqIbs: string; aliqCbs: string; aliqIs: string;
   regimeTrib: number; percReducao: string;
   codBenefIbs: string; codRegimeEsp: string;
+  // Fracionado
+  fracionado: boolean;
   // Estoque
   estoque: string; estoqueMinimo: string;
   // Delivery
@@ -116,6 +118,7 @@ const FORM_INICIAL: FormData = {
   aliqIbs: "0.00", aliqCbs: "0.00", aliqIs: "0.00",
   regimeTrib: 1, percReducao: "0.00",
   codBenefIbs: "", codRegimeEsp: "",
+  fracionado: false,
   estoque: "0", estoqueMinimo: "0",
   imageUrl: "", erpCode: "",
 };
@@ -225,6 +228,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         percReducao: d.PERCREDUCAO !== undefined ? String(d.PERCREDUCAO) : "0.00",
         codBenefIbs: String(d.CODBENEFIBS ?? ""),
         codRegimeEsp: String(d.CODREGIMEESP ?? ""),
+        fracionado: Boolean(d.FRACIONADO),
         estoque: d.ESTOQUE !== undefined ? String(d.ESTOQUE) : "0",
         estoqueMinimo: d.ESTOQUEMINIMO !== undefined ? String(d.ESTOQUEMINIMO) : "0",
         imageUrl: String(d.IMAGEURL ?? ""),
@@ -318,6 +322,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         percReducao: parseFloat(form.percReducao || "0"),
         codBenefIbs: form.codBenefIbs || undefined,
         codRegimeEsp: form.codRegimeEsp || undefined,
+        fracionado: form.fracionado,
         estoque: parseFloat(form.estoque || "0"),
         estoqueMinimo: parseFloat(form.estoqueMinimo || "0"),
       };
@@ -559,7 +564,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-1">
                   <Label>CFOP <InfoTip text="Código Fiscal de Operações e Prestações — define a natureza da operação." /></Label>
                   <Select value={form.cfop || "NENHUM"} onValueChange={v => setField("cfop", v === "NENHUM" ? "" : v)}>
@@ -578,6 +583,19 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                       {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="flex items-center gap-1">
+                    Fracionado <InfoTip text="Produto vendido em frações (ex: kg, litro, metro). Permite quantidades decimais no PDV e na NF-e." />
+                  </Label>
+                  <div className="flex items-center gap-3 h-10 px-3 rounded-md border">
+                    <Switch
+                      id="fracionado"
+                      checked={form.fracionado}
+                      onCheckedChange={v => setField("fracionado", v)}
+                    />
+                    <span className="text-sm">{form.fracionado ? "Sim — venda fracionada" : "Não — venda inteira"}</span>
+                  </div>
                 </div>
               </div>
 

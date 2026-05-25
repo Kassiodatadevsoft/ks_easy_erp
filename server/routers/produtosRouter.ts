@@ -76,6 +76,8 @@ const produtoInputBase = {
   percReducao: z.number().min(0).max(100).default(0),  // % redução da base IBS/CBS
   codBenefIbs: z.string().max(20).optional(),          // Código de benefício fiscal IBS/CBS
   codRegimeEsp: z.string().max(10).optional(),         // Regime especial (cashback, etc.)
+  // ── Produto fracionado ──
+  fracionado: z.boolean().default(false),
   // ── Estoque ──
   estoque: z.number().default(0),
   estoqueMinimo: z.number().default(0),
@@ -120,6 +122,7 @@ type ProdutoRow = {
   CODBENEFIBS: string | null;
   CODREGIMEESP: string | null;
   UNIDADE: string | null;
+  FRACIONADO: boolean;
   ESTOQUE: number;
   ESTOQUEMINIMO: number;
 };
@@ -143,6 +146,7 @@ const SELECT_CAMPOS = `
   p.CODBENEFIBS, p.CODREGIMEESP, p.UNIDADE,
   ISNULL(p.ESTOQUE,0) AS ESTOQUE,
   ISNULL(p.ESTOQUEMINIMO,0) AS ESTOQUEMINIMO,
+  ISNULL(p.FRACIONADO,0) AS FRACIONADO,
   p.CODBARRAS
 `;
 
@@ -304,7 +308,7 @@ export const produtosRouter = router({
             ALIQICMS, ALIQPIS, ALIQCOFINS, ALIQIPI,
             ALIQIBS, ALIQCBS, ALIQIS,
             REGIMETRIB, PERCREDUCAO, CODBENEFIBS, CODREGIMEESP,
-            UNIDADE, ESTOQUE, ESTOQUEMINIMO, CODBARRAS,
+            UNIDADE, ESTOQUE, ESTOQUEMINIMO, FRACIONADO, CODBARRAS,
             GUIDPRODUTO, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
          VALUES
            (${codProduto}, '${produto}', ${descricao ? `'${descricao}'` : "NULL"},
@@ -321,6 +325,7 @@ export const produtosRouter = router({
             ${sqlStr(input.codBenefIbs)}, ${sqlStr(input.codRegimeEsp)},
             ${sqlStr(input.unidade || "UN")},
             ${sqlNum(input.estoque)}, ${sqlNum(input.estoqueMinimo)},
+            ${input.fracionado ? 1 : 0},
             ${sqlStr(input.codBarras)},
             NEWID(), '${session.guidEntidade}', '${now}', '${now}')`
       );
@@ -373,6 +378,7 @@ export const produtosRouter = router({
            UNIDADE = ${sqlStr(input.unidade || "UN")},
            ESTOQUE = ${sqlNum(input.estoque)},
            ESTOQUEMINIMO = ${sqlNum(input.estoqueMinimo)},
+           FRACIONADO = ${input.fracionado ? 1 : 0},
            CODBARRAS = ${sqlStr(input.codBarras)},
            ULTIMAALTERACAO = '${now}'
          WHERE GUIDPRODUTO = '${input.guidProduto}'
