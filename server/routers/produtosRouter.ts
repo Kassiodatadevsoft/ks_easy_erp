@@ -55,7 +55,9 @@ const produtoInputBase = {
   ordemExibicao: z.number().int().default(0),
   situacao: z.enum(["A", "I"]).default("A"),
   // ── Identificação do produto ──
-  codBarras: z.string().max(50).optional(),
+  codBarras: z.string().max(14).optional(),
+  codBarraCaixa: z.string().max(14).optional(),  // EAN/GTIN da embalagem/caixa
+  qtdCaixa: z.number().min(1).default(1),         // Qtd de unidades por caixa
   // ── Identificação fiscal ──
   ncm: z.string().max(10).optional(),
   cest: z.string().max(10).optional(),
@@ -130,6 +132,8 @@ type ProdutoRow = {
   REGIMETRIB: number;
   PERCREDUCAO: number;
   CODBARRAS: string | null;
+  CODBARRACAIXA: string | null;
+  QTDCAIXA: number;
   CODBENEFIBS: string | null;
   CODREGIMEESP: string | null;
   UNIDADE: string | null;
@@ -166,6 +170,8 @@ const SELECT_CAMPOS = `
   ISNULL(p.ESTOQUE,0) AS ESTOQUE,
   ISNULL(p.ESTOQUEMINIMO,0) AS ESTOQUEMINIMO,
   ISNULL(p.ORIGEMPRODUTO,0) AS ORIGEMPRODUTO,
+  p.CODBARRACAIXA,
+  ISNULL(p.QTDCAIXA,1) AS QTDCAIXA,
   ISNULL(p.PERCDESCONTO,0) AS PERCDESCONTO,
   ISNULL(p.PRECOPROMO,0) AS PRECOPROMO,
   p.DTINICIOPROMO, p.DTFIMPROMO,
@@ -337,6 +343,7 @@ export const produtosRouter = router({
             UNIDADE, ESTOQUE, ESTOQUEMINIMO, ORIGEMPRODUTO,
             PERCDESCONTO, PRECOPROMO, DTINICIOPROMO, DTFIMPROMO,
             BALANCA, SERVICO, ALTERADESCRICAO, FRACIONADO, CODBARRAS,
+            CODBARRACAIXA, QTDCAIXA,
             GUIDPRODUTO, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
          VALUES
            (${codProduto}, '${produto}', ${descricao ? `'${descricao}'` : "NULL"},
@@ -360,6 +367,7 @@ export const produtosRouter = router({
             ${input.balanca ? 1 : 0}, ${input.servico ? 1 : 0}, ${input.alteraDescricao ? 1 : 0},
             ${input.fracionado ? 1 : 0},
             ${sqlStr(input.codBarras)},
+            ${sqlStr(input.codBarraCaixa)}, ${sqlNum(input.qtdCaixa ?? 1)},
             NEWID(), '${session.guidEntidade}', '${now}', '${now}')`
       );
 
@@ -421,6 +429,8 @@ export const produtosRouter = router({
            ALTERADESCRICAO = ${input.alteraDescricao ? 1 : 0},
            FRACIONADO = ${input.fracionado ? 1 : 0},
            CODBARRAS = ${sqlStr(input.codBarras)},
+           CODBARRACAIXA = ${sqlStr(input.codBarraCaixa)},
+           QTDCAIXA = ${sqlNum(input.qtdCaixa ?? 1)},
            ULTIMAALTERACAO = '${now}'
          WHERE GUIDPRODUTO = '${input.guidProduto}'
            AND GUIDENTIDADE = '${session.guidEntidade}'`

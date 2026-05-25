@@ -95,6 +95,8 @@ interface FormData {
   precoVenda: string; precocusto: string;
   tamanhosPrecos: TamanhosPrecos;
   codBarras: string;
+  codBarraCaixa: string;  // EAN/GTIN da caixa/embalagem
+  qtdCaixa: string;       // Qtd de unidades por caixa
   // Fiscal
   ncm: string; cest: string; cfop: string; unidade: string;
   origemProduto: number;
@@ -124,6 +126,8 @@ const FORM_INICIAL: FormData = {
   precoVenda: "", precocusto: "",
   tamanhosPrecos: { BROTINHO: "", PEQUENA: "", MEDIA: "", GRANDE: "", TREM: "", BITREM: "", UNICO: "" },
   codBarras: "",
+  codBarraCaixa: "",
+  qtdCaixa: "1",
   ncm: "", cest: "", cfop: "", unidade: "UN",
   origemProduto: 0,
   fracionado: false,
@@ -222,6 +226,8 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         precocusto: d.PRECOCUSTO ? String(d.PRECOCUSTO) : "",
         tamanhosPrecos: tp,
         codBarras: String(d.CODBARRAS ?? ""),
+        codBarraCaixa: String(d.CODBARRACAIXA ?? ""),
+        qtdCaixa: d.QTDCAIXA !== undefined ? String(d.QTDCAIXA) : "1",
         ncm: String(d.NCM ?? ""),
         cest: String(d.CEST ?? ""),
         cfop: String(d.CFOP ?? ""),
@@ -323,6 +329,8 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         ordemExibicao: form.ordemExibicao,
         situacao: form.situacao,
         codBarras: form.codBarras || undefined,
+        codBarraCaixa: form.codBarraCaixa || undefined,
+        qtdCaixa: parseFloat(form.qtdCaixa || "1") || 1,
         ncm: form.ncm || undefined,
         cest: form.cest || undefined,
         cfop: form.cfop || undefined,
@@ -421,7 +429,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                     id="produto"
                     value={form.produto}
                     onChange={e => setTexto("produto", e.target.value)}
-                    placeholder="EX: PIZZA CALABRESA"
+                    placeholder="EX: REFRIGERANTE LATA 350ML"
                     maxLength={150}
                     className={`pr-8 ${erros.produto || nomeEmUso ? "border-destructive" : nomeValido && form.produto.length >= 2 ? "border-green-500" : ""}`}
                   />
@@ -447,7 +455,38 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                   placeholder="EX: 7891234567890"
                   maxLength={14}
                 />
-                <p className="text-xs text-muted-foreground">EAN-8, EAN-13 ou GTIN-14. Usado no PDV e na NF-e.</p>
+                <p className="text-xs text-muted-foreground">EAN-8, EAN-13 ou GTIN-14. Usado no PDV e na NF-e para venda da <strong>unidade</strong>.</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-3 rounded-md border bg-muted/20">
+                <div className="sm:col-span-2 space-y-1">
+                  <Label htmlFor="codBarraCaixa" className="flex items-center gap-1">
+                    <Barcode className="h-4 w-4" /> Cód. de Barras da Caixa / Embalagem
+                  </Label>
+                  <Input
+                    id="codBarraCaixa"
+                    value={form.codBarraCaixa}
+                    onChange={e => setField("codBarraCaixa", e.target.value.replace(/\D/g, "").slice(0, 14))}
+                    placeholder="EX: 17891234567890"
+                    maxLength={14}
+                  />
+                  <p className="text-xs text-muted-foreground">EAN da embalagem/caixa. Ao escanear este código no PDV, baixa N unidades do estoque.</p>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="qtdCaixa" className="flex items-center gap-1">
+                    Qtd por Caixa <InfoTip text="Quantidade de unidades contidas em cada caixa/embalagem. Ao vender pela caixa, o estoque é baixado por esta quantidade." />
+                  </Label>
+                  <Input
+                    id="qtdCaixa"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={form.qtdCaixa}
+                    onChange={e => setField("qtdCaixa", e.target.value)}
+                    placeholder="Ex: 12"
+                  />
+                  <p className="text-xs text-muted-foreground">Unidades/caixa</p>
+                </div>
               </div>
 
               <div className="space-y-1">
