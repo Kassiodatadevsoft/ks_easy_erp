@@ -10,8 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { FuncionarioForm } from "@/components/funcionarios/FuncionarioForm";
+import FuncionarioForm from "@/components/funcionarios/FuncionarioForm";
 import {
   UserCog, Plus, Search, ChevronLeft, ChevronRight,
   Pencil, Loader2,
@@ -194,19 +193,12 @@ export default function Funcionarios() {
       )}
 
       {/* Modal */}
-      <Dialog open={modalAberto} onOpenChange={open => { if (!open) handleFecharModal(); }}>
-        <DialogContent className="p-0 border-0 bg-transparent shadow-none max-w-none w-auto">
-          <DialogTitle className="sr-only">
-            {guidSelecionado ? "Editar Funcionário" : "Novo Funcionário"}
-          </DialogTitle>
-          {modalAberto && (
-            <FuncionarioForm
-              guidPessoa={guidSelecionado}
-              onClose={handleFecharModal}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {modalAberto && (
+        <FuncionarioForm
+          guidPessoa={guidSelecionado}
+          onClose={handleFecharModal}
+        />
+      )}
     </div>
   );
 }

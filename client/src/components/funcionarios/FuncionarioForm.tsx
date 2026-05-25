@@ -118,7 +118,7 @@ function FieldError({ msg }: { msg?: string }) {
   );
 }
 
-export function FuncionarioForm({ guidPessoa, onClose }: Props) {
+export default function FuncionarioForm({ guidPessoa, onClose }: Props) {
   const isEdicao = Boolean(guidPessoa);
   const [form, setForm] = useState<FormData>(INITIAL);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
