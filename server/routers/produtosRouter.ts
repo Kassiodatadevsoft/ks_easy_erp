@@ -78,6 +78,15 @@ const produtoInputBase = {
   codRegimeEsp: z.string().max(10).optional(),         // Regime especial (cashback, etc.)
   // ── Origem do produto (Tabela A ICMS) ──
   origemProduto: z.number().int().min(0).max(8).default(0),
+  // ── Promoção ──
+  percDesconto: z.number().min(0).max(100).default(0),
+  precoPromo: z.number().min(0).default(0),
+  dtInicioPromo: z.string().optional(),  // ISO date string ou null
+  dtFimPromo: z.string().optional(),
+  // ── Flags de comportamento ──
+  balanca: z.boolean().default(false),
+  servico: z.boolean().default(false),
+  alteraDescricao: z.boolean().default(false),
   // ── Produto fracionado ──
   fracionado: z.boolean().default(false),
   // ── Estoque ──
@@ -125,6 +134,13 @@ type ProdutoRow = {
   CODREGIMEESP: string | null;
   UNIDADE: string | null;
   ORIGEMPRODUTO: number;
+  PERCDESCONTO: number;
+  PRECOPROMO: number;
+  DTINICIOPROMO: Date | null;
+  DTFIMPROMO: Date | null;
+  BALANCA: boolean;
+  SERVICO: boolean;
+  ALTERADESCRICAO: boolean;
   FRACIONADO: boolean;
   ESTOQUE: number;
   ESTOQUEMINIMO: number;
@@ -150,6 +166,12 @@ const SELECT_CAMPOS = `
   ISNULL(p.ESTOQUE,0) AS ESTOQUE,
   ISNULL(p.ESTOQUEMINIMO,0) AS ESTOQUEMINIMO,
   ISNULL(p.ORIGEMPRODUTO,0) AS ORIGEMPRODUTO,
+  ISNULL(p.PERCDESCONTO,0) AS PERCDESCONTO,
+  ISNULL(p.PRECOPROMO,0) AS PRECOPROMO,
+  p.DTINICIOPROMO, p.DTFIMPROMO,
+  ISNULL(p.BALANCA,0) AS BALANCA,
+  ISNULL(p.SERVICO,0) AS SERVICO,
+  ISNULL(p.ALTERADESCRICAO,0) AS ALTERADESCRICAO,
   ISNULL(p.FRACIONADO,0) AS FRACIONADO,
   p.CODBARRAS
 `;
@@ -312,7 +334,9 @@ export const produtosRouter = router({
             ALIQICMS, ALIQPIS, ALIQCOFINS, ALIQIPI,
             ALIQIBS, ALIQCBS, ALIQIS,
             REGIMETRIB, PERCREDUCAO, CODBENEFIBS, CODREGIMEESP,
-            UNIDADE, ESTOQUE, ESTOQUEMINIMO, ORIGEMPRODUTO, FRACIONADO, CODBARRAS,
+            UNIDADE, ESTOQUE, ESTOQUEMINIMO, ORIGEMPRODUTO,
+            PERCDESCONTO, PRECOPROMO, DTINICIOPROMO, DTFIMPROMO,
+            BALANCA, SERVICO, ALTERADESCRICAO, FRACIONADO, CODBARRAS,
             GUIDPRODUTO, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
          VALUES
            (${codProduto}, '${produto}', ${descricao ? `'${descricao}'` : "NULL"},
@@ -330,6 +354,10 @@ export const produtosRouter = router({
             ${sqlStr(input.unidade || "UN")},
             ${sqlNum(input.estoque)}, ${sqlNum(input.estoqueMinimo)},
             ${input.origemProduto},
+            ${sqlNum(input.percDesconto)}, ${sqlNum(input.precoPromo)},
+            ${input.dtInicioPromo ? `'${input.dtInicioPromo}'` : 'NULL'},
+            ${input.dtFimPromo ? `'${input.dtFimPromo}'` : 'NULL'},
+            ${input.balanca ? 1 : 0}, ${input.servico ? 1 : 0}, ${input.alteraDescricao ? 1 : 0},
             ${input.fracionado ? 1 : 0},
             ${sqlStr(input.codBarras)},
             NEWID(), '${session.guidEntidade}', '${now}', '${now}')`
@@ -384,6 +412,13 @@ export const produtosRouter = router({
            ESTOQUE = ${sqlNum(input.estoque)},
            ESTOQUEMINIMO = ${sqlNum(input.estoqueMinimo)},
            ORIGEMPRODUTO = ${input.origemProduto},
+           PERCDESCONTO = ${sqlNum(input.percDesconto)},
+           PRECOPROMO = ${sqlNum(input.precoPromo)},
+           DTINICIOPROMO = ${input.dtInicioPromo ? `'${input.dtInicioPromo}'` : 'NULL'},
+           DTFIMPROMO = ${input.dtFimPromo ? `'${input.dtFimPromo}'` : 'NULL'},
+           BALANCA = ${input.balanca ? 1 : 0},
+           SERVICO = ${input.servico ? 1 : 0},
+           ALTERADESCRICAO = ${input.alteraDescricao ? 1 : 0},
            FRACIONADO = ${input.fracionado ? 1 : 0},
            CODBARRAS = ${sqlStr(input.codBarras)},
            ULTIMAALTERACAO = '${now}'

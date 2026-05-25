@@ -106,6 +106,11 @@ interface FormData {
   aliqIbs: string; aliqCbs: string; aliqIs: string;
   regimeTrib: number; percReducao: string;
   codBenefIbs: string; codRegimeEsp: string;
+  // Promoção
+  percDesconto: string; precoPromo: string;
+  dtInicioPromo: string; dtFimPromo: string;
+  // Flags de comportamento (PDV)
+  balanca: boolean; servico: boolean; alteraDescricao: boolean;
   // Estoque
   estoque: string; estoqueMinimo: string;
   // Delivery
@@ -127,6 +132,9 @@ const FORM_INICIAL: FormData = {
   aliqIbs: "0.00", aliqCbs: "0.00", aliqIs: "0.00",
   regimeTrib: 1, percReducao: "0.00",
   codBenefIbs: "", codRegimeEsp: "",
+  percDesconto: "0", precoPromo: "0",
+  dtInicioPromo: "", dtFimPromo: "",
+  balanca: false, servico: false, alteraDescricao: false,
   estoque: "0", estoqueMinimo: "0",
   imageUrl: "", erpCode: "",
 };
@@ -233,6 +241,13 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         percReducao: d.PERCREDUCAO !== undefined ? String(d.PERCREDUCAO) : "0.00",
         codBenefIbs: String(d.CODBENEFIBS ?? ""),
         codRegimeEsp: String(d.CODREGIMEESP ?? ""),
+        percDesconto: d.PERCDESCONTO !== undefined ? String(d.PERCDESCONTO) : "0",
+        precoPromo: d.PRECOPROMO !== undefined ? String(d.PRECOPROMO) : "0",
+        dtInicioPromo: d.DTINICIOPROMO ? new Date(d.DTINICIOPROMO as string).toISOString().slice(0,10) : "",
+        dtFimPromo: d.DTFIMPROMO ? new Date(d.DTFIMPROMO as string).toISOString().slice(0,10) : "",
+        balanca: Boolean(d.BALANCA),
+        servico: Boolean(d.SERVICO),
+        alteraDescricao: Boolean(d.ALTERADESCRICAO),
         estoque: d.ESTOQUE !== undefined ? String(d.ESTOQUE) : "0",
         estoqueMinimo: d.ESTOQUEMINIMO !== undefined ? String(d.ESTOQUEMINIMO) : "0",
         imageUrl: String(d.IMAGEURL ?? ""),
@@ -327,6 +342,13 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         percReducao: parseFloat(form.percReducao || "0"),
         codBenefIbs: form.codBenefIbs || undefined,
         codRegimeEsp: form.codRegimeEsp || undefined,
+        percDesconto: parseFloat(form.percDesconto || "0"),
+        precoPromo: parseFloat(form.precoPromo || "0"),
+        dtInicioPromo: form.dtInicioPromo || undefined,
+        dtFimPromo: form.dtFimPromo || undefined,
+        balanca: form.balanca,
+        servico: form.servico,
+        alteraDescricao: form.alteraDescricao,
         estoque: parseFloat(form.estoque || "0"),
         estoqueMinimo: parseFloat(form.estoqueMinimo || "0"),
       };
@@ -477,6 +499,32 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                   <p className="text-xs text-muted-foreground">Aparece na seção de destaques do delivery</p>
                 </div>
               </div>
+
+              <Separator />
+              <p className="text-sm font-semibold text-muted-foreground">Configurações do PDV</p>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 p-3 rounded-md border">
+                  <Switch id="balanca" checked={form.balanca} onCheckedChange={v => setField("balanca", v)} />
+                  <div>
+                    <Label htmlFor="balanca" className="cursor-pointer">Produto para Balança</Label>
+                    <p className="text-xs text-muted-foreground">O PDV solicita pesagem ao vender este produto</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-md border">
+                  <Switch id="servico" checked={form.servico} onCheckedChange={v => setField("servico", v)} />
+                  <div>
+                    <Label htmlFor="servico" className="cursor-pointer">Produto é Serviço</Label>
+                    <p className="text-xs text-muted-foreground">Classifica como serviço na NF-e (NFS-e) e no PDV</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-md border">
+                  <Switch id="alteraDescricao" checked={form.alteraDescricao} onCheckedChange={v => setField("alteraDescricao", v)} />
+                  <div>
+                    <Label htmlFor="alteraDescricao" className="cursor-pointer">Permite Alterar Descrição na Venda</Label>
+                    <p className="text-xs text-muted-foreground">Operador pode editar a descrição do item na tela de venda</p>
+                  </div>
+                </div>
+              </div>
             </TabsContent>
 
             {/* ── ABA PREÇOS ───────────────────────────────────────────────── */}
@@ -534,6 +582,35 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                   </div>
                 </div>
               )}
+
+              {/* ── Promoção ── */}
+              <Separator />
+              <div className="space-y-3">
+                <p className="text-sm font-semibold">Promoção</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="percDesconto">% Desconto <InfoTip text="Percentual de desconto sobre o preço de venda. Ex: 10 = 10% de desconto." /></Label>
+                    <Input id="percDesconto" type="number" min={0} max={100} step={0.01} value={form.percDesconto} onChange={e => setField("percDesconto", e.target.value)} placeholder="0,00" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="precoPromo">Preço Promocional (R$) <InfoTip text="Preço com desconto aplicado. Pode ser calculado automaticamente pelo PDV usando o % de desconto." /></Label>
+                    <Input id="precoPromo" type="number" min={0} step={0.01} value={form.precoPromo} onChange={e => setField("precoPromo", e.target.value)} placeholder="0,00" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="dtInicioPromo">Data Inicial da Promoção</Label>
+                    <Input id="dtInicioPromo" type="date" value={form.dtInicioPromo} onChange={e => setField("dtInicioPromo", e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="dtFimPromo">Data Final da Promoção</Label>
+                    <Input id="dtFimPromo" type="date" value={form.dtFimPromo} onChange={e => setField("dtFimPromo", e.target.value)} />
+                    {form.dtFimPromo && new Date(form.dtFimPromo) < new Date() && (
+                      <p className="text-xs text-yellow-600">⚠️ Promoção expirada</p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </TabsContent>
 
             {/* ── ABA FISCAL ───────────────────────────────────────────────── */}
