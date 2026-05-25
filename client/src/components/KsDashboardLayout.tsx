@@ -13,6 +13,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
+  Briefcase,
   Building2,
   ChevronRight,
   CreditCard,
@@ -49,6 +50,7 @@ const MENU_GROUPS = [
       { icon: Users,     label: "Funcionários",     path: "/cadastros/funcionarios" },
       { icon: Truck,     label: "Transportadoras",  path: "/cadastros/transportadoras" },
       { icon: Building2, label: "Empresas",         path: "/cadastros/empresas" },
+      { icon: Briefcase, label: "Cargos",            path: "/cadastros/cargos" },
     ],
   },
   {

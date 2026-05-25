@@ -8,6 +8,7 @@ import { syncRouter } from "./routers/syncRouter";
 import { clientesRouter } from "./routers/clientesRouter";
 import { fornecedoresRouter } from "./routers/fornecedoresRouter";
 import { empresasRouter } from "./routers/empresasRouter";
+import { cargosRouter } from "./routers/cargosRouter";
 
 export const appRouter = router({
   system: systemRouter,
@@ -36,6 +37,9 @@ export const appRouter = router({
 
   // Módulo de Empresas
   empresas: empresasRouter,
+
+  // Módulo de Cargos
+  cargos: cargosRouter,
 
   // Sincronização com sistema legado Delphi
   sync: syncRouter,

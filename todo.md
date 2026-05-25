@@ -99,3 +99,12 @@
 - [x] Frontend: upload de certificado digital .pfx/.p12 com conversão base64
 - [x] Frontend: campo DTCERTIFICADO (data de vencimento do certificado)
 - [x] Backend: campos fiscais NF-e no input Zod e SQLs (CERTIFICADO, DTCERTIFICADO, CODPIN, CSC, CODCSC, NUMNFE, SERIENFE, USUARIO, SENHAPRAZO)
+
+## Módulo Cargos (KS0000.KS00007)
+
+- [x] Backend: cargosRouter.ts com listar, buscarPorGuid, criar, atualizar, excluir
+- [x] Backend: validação de nome duplicado por GUIDENTIDADE
+- [x] Frontend: página Cargos.tsx com listagem, filtros e paginação
+- [x] Frontend: CargoForm.tsx com campos Cargo, Classificação (CODTIPO), Situação, Dashboard inicial (CODPAINEL), Desconto máximo, Comissão, PDV, Alterar preço produto
+- [x] Frontend: registrar rota /cargos no App.tsx
+- [x] Frontend: adicionar item Cargos no menu do DashboardLayout

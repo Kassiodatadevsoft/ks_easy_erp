@@ -10,6 +10,7 @@ import ComingSoon from "./pages/ComingSoon";
 import Clientes from "./pages/Clientes";
 import Fornecedores from "./pages/Fornecedores";
 import Empresas from "./pages/Empresas";
+import Cargos from "./pages/Cargos";
 import KsDashboardLayout from "./components/KsDashboardLayout";
 import { useKsAuth } from "./hooks/useKsAuth";
 import { useEffect } from "react";
@@ -66,6 +67,9 @@ function Router() {
       </Route>
       <Route path="/cadastros/empresas">
         <ProtectedRoute><Empresas /></ProtectedRoute>
+      </Route>
+      <Route path="/cadastros/cargos">
+        <ProtectedRoute><Cargos /></ProtectedRoute>
       </Route>
 
       {/* Comercial */}
