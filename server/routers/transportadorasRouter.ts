@@ -320,4 +320,22 @@ export const transportadorasRouter = router({
       );
       return { success: true };
     }),
+
+  /**
+   * Excluir transportadora (soft delete: SITUACAO = 'I')
+   */
+  excluir: publicProcedure
+    .input(z.object({ guidPessoa: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const session = await getKsSession(ctx.req);
+      await querySql(
+        `UPDATE KS0002.KS00001 SET SITUACAO = 'I', ULTIMAALTERACAO = GETDATE()
+         WHERE GUIDPESSOA = @GUID AND GUIDENTIDADE = @GUIDENTIDADE AND CADTRANSPORTADORA = 1`,
+        {
+          GUID: { type: sql.UniqueIdentifier, value: input.guidPessoa },
+          GUIDENTIDADE: { type: sql.UniqueIdentifier, value: session.guidEntidade },
+        }
+      );
+      return { success: true };
+    }),
 });

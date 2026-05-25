@@ -110,8 +110,14 @@
 - [x] Frontend: adicionar item Cargos no menu do DashboardLayout
 
 ## Módulo Transportadoras (KS0002.KS00001 — CADTRANSPORTADORA=1)
-- [ ] Backend: transportadorasRouter.ts com listar, buscarPorGuid, criar, atualizar, excluir
-- [ ] Frontend: página Transportadoras.tsx com listagem, filtros e paginação
-- [ ] Frontend: TransportadoraForm.tsx baseado no FornecedorForm (maiúsculas, validações)
-- [ ] Frontend: registrar rota /cadastros/transportadoras no App.tsx
-- [ ] Frontend: adicionar item Transportadoras no menu do KsDashboardLayout
+- [x] Backend: transportadorasRouter.ts com listar, buscarPorGuid, criar, atualizar, excluir
+- [x] Frontend: página Transportadoras.tsx com listagem, filtros e paginação
+- [x] Frontend: TransportadoraForm.tsx baseado no FornecedorForm (maiúsculas, validações)
+- [x] Frontend: registrar rota /cadastros/transportadoras no App.tsx
+- [x] Frontend: adicionar item Transportadoras no menu do KsDashboardLayout
+
+## Campo MENSALIDADE e Sincronização Offline
+- [ ] Frontend: campo MENSALIDADE (Mensal=1/Anual=2) no formulário de Empresas, visível apenas para CNPJ 50.303.631/0001-58
+- [ ] Backend: adicionar MENSALIDADE no Zod do criar/atualizar e nos SQLs do empresasRouter
+- [ ] Backend: endpoint REST /api/sync/empresa para sincronização Delphi offline (recebe GUIDENTIDADE + ULTIMAALTERACAO, retorna dados alterados)
+- [ ] Documentação: funções Delphi para comunicar com o endpoint de sincronização

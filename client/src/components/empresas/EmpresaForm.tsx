@@ -33,6 +33,7 @@ interface EmpresaFormData {
   // Contrato — visível só para master
   segmento: number; dataImplantacao: string; dataDemissao: string;
   valorNegociado: number; valorSalario: number;
+  mensalidade: number; // 1=Mensal, 2=Anual
   observacao: string;
   // Fiscal NF-e — visível só para master
   certificado: string;       // nome/key do arquivo salvo
@@ -55,7 +56,7 @@ const INITIAL: EmpresaFormData = {
   codCidade: null, descCidade: "",
   situacao: "A",
   segmento: 0, dataImplantacao: "", dataDemissao: "",
-  valorNegociado: 0, valorSalario: 0,
+  valorNegociado: 0, valorSalario: 0, mensalidade: 1,
   observacao: "",
   certificado: "", certificadoBase64: "", dtCertificado: "",
   codPin: "",
@@ -201,6 +202,7 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
         dataDemissao: d.DATADEMISSAO ? new Date(d.DATADEMISSAO as string).toISOString().slice(0, 10) : "",
         valorNegociado: Number(d.VALORNEGOCIADO ?? 0),
         valorSalario: Number(d.VALORSALARIO ?? 0),
+        mensalidade: Number(d.MENSALIDADE ?? 1),
         observacao: String(d.OBSERVACAO ?? ""),
         certificado: String(d.CERTIFICADO ?? ""),
         certificadoBase64: "",
@@ -297,6 +299,7 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
       if (!form.dataImplantacao) e.dataImplantacao = "Data de implantação é obrigatória";
       if (!form.valorNegociado) e.valorNegociado = "Valor negociado é obrigatório";
       if (!form.valorSalario) e.valorSalario = "Valor salário é obrigatório";
+      if (!form.mensalidade) e.mensalidade = "Tipo de mensalidade é obrigatório";
       // Validação de usuário duplicado (multiempresa — verifica em todo o sistema)
       if (form.usuarioNfe.trim() && validarUsuario.data && !validarUsuario.data.disponivel) {
         e.usuarioNfe = `Usuário já cadastrado na empresa: ${validarUsuario.data.nome}`;
@@ -337,6 +340,7 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
       dataDemissao: form.dataDemissao || undefined,
       valorNegociado: form.valorNegociado || undefined,
       valorSalario: form.valorSalario || undefined,
+      mensalidade: form.mensalidade,
       observacao: form.observacao || undefined,
       certificado: form.certificado || undefined,
       certificadoBase64: form.certificadoBase64 || undefined,
@@ -675,6 +679,19 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
                   <Label>Valor Salário (R$) *</Label>
                   <Input type="number" step="0.01" value={form.valorSalario} onChange={e => set("valorSalario", Number(e.target.value))} className={errors.valorSalario ? "border-red-500" : ""} />
                   {errors.valorSalario && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.valorSalario}</p>}
+                </div>
+                <div>
+                  <Label>Tipo de Mensalidade *</Label>
+                  <Select value={String(form.mensalidade)} onValueChange={v => set("mensalidade", Number(v))}>
+                    <SelectTrigger className={errors.mensalidade ? "border-red-500" : ""}>
+                      <SelectValue placeholder="Selecione..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">Mensal</SelectItem>
+                      <SelectItem value="2">Anual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {errors.mensalidade && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{errors.mensalidade}</p>}
                 </div>
               </div>
 
