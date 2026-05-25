@@ -11,6 +11,7 @@ import Clientes from "./pages/Clientes";
 import Fornecedores from "./pages/Fornecedores";
 import Empresas from "./pages/Empresas";
 import Cargos from "./pages/Cargos";
+import Funcionarios from "./pages/Funcionarios";
 import KsDashboardLayout from "./components/KsDashboardLayout";
 import { useKsAuth } from "./hooks/useKsAuth";
 import { useEffect } from "react";
@@ -60,7 +61,7 @@ function Router() {
         <ProtectedRoute><Fornecedores /></ProtectedRoute>
       </Route>
       <Route path="/cadastros/funcionarios">
-        <ProtectedRoute><ComingSoon title="Cadastro de Funcionários" /></ProtectedRoute>
+        <ProtectedRoute><Funcionarios /></ProtectedRoute>
       </Route>
       <Route path="/cadastros/transportadoras">
         <ProtectedRoute><ComingSoon title="Cadastro de Transportadoras" /></ProtectedRoute>
