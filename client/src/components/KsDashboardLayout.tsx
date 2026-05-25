@@ -24,6 +24,7 @@ import {
   Package,
   Settings,
   ShoppingCart,
+  Tag,
   Truck,
   Users,
   X,
@@ -68,9 +69,10 @@ const MENU_GROUPS = [
     ],
   },
   {
-    label: "Estoque",
+    label: "Estoque / Cardápio",
     items: [
-      { icon: Package, label: "Produtos", path: "/estoque/produtos" },
+      { icon: Tag,     label: "Categorias", path: "/estoque/categorias" },
+      { icon: Package, label: "Produtos",   path: "/estoque/produtos" },
     ],
   },
   {

@@ -13,6 +13,8 @@ import Empresas from "./pages/Empresas";
 import Cargos from "./pages/Cargos";
 import Funcionarios from "./pages/Funcionarios";
 import Transportadoras from "./pages/Transportadoras";
+import Categorias from "./pages/Categorias";
+import Produtos from "./pages/Produtos";
 import KsDashboardLayout from "./components/KsDashboardLayout";
 import { useKsAuth } from "./hooks/useKsAuth";
 import { useEffect } from "react";
@@ -90,9 +92,12 @@ function Router() {
         <ProtectedRoute><ComingSoon title="Contas a Receber" /></ProtectedRoute>
       </Route>
 
-      {/* Estoque */}
+      {/* Estoque / Cardápio */}
+      <Route path="/estoque/categorias">
+        <ProtectedRoute><Categorias /></ProtectedRoute>
+      </Route>
       <Route path="/estoque/produtos">
-        <ProtectedRoute><ComingSoon title="Cadastro de Produtos" /></ProtectedRoute>
+        <ProtectedRoute><Produtos /></ProtectedRoute>
       </Route>
 
       {/* Configurações */}

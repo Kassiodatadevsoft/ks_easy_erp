@@ -121,3 +121,29 @@
 - [ ] Backend: adicionar MENSALIDADE no Zod do criar/atualizar e nos SQLs do empresasRouter
 - [ ] Backend: endpoint REST /api/sync/empresa para sincronização Delphi offline (recebe GUIDENTIDADE + ULTIMAALTERACAO, retorna dados alterados)
 - [ ] Documentação: funções Delphi para comunicar com o endpoint de sincronização
+
+## Módulo de Categorias (KS0000.KS00008)
+- [x] SQL Server: criar tabela KS0000.KS00008 (CODCATEGORIA, CATEGORIA, DESCRICAO, SLUG, ORDEMEXIBICAO, SITUACAO, GUIDCATEGORIA, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
+- [x] Backend: categoriasRouter.ts com listar, buscarPorGuid, validarNome, criar, atualizar, excluir, listarTodas
+- [x] Backend: registrar categoriasRouter no routers.ts
+- [x] Frontend: CategoriaForm.tsx com campos Nome, Descrição, Slug, Ordem, Situação e validação em tempo real
+- [x] Frontend: página Categorias.tsx com listagem, filtros, paginação e confirmação de inativação
+- [x] Frontend: registrar rota /estoque/categorias no App.tsx
+- [x] Frontend: adicionar item Categorias no menu do KsDashboardLayout
+
+## Módulo de Produtos (KS0000.KS00009)
+- [x] SQL Server: criar tabela KS0000.KS00009 (CODPRODUTO, PRODUTO, DESCRICAO, CODCATEGORIA, GUIDENTIDADECAT, PRECOS, TAMANHOSDISP, PRECO, PRECOVENDA, IMAGEURL, ERPCODE, DESTAQUE, ORDEMEXIBICAO, SITUACAO, GUIDPRODUTO, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
+- [x] Backend: produtosRouter.ts com listar, buscarPorGuid, validarNome, criar, atualizar, excluir
+- [x] Backend: JOIN com KS0000.KS00008 para exibir nome da categoria
+- [x] Backend: campo ERPCODE para integração bidirecional com sistema de delivery
+- [x] Backend: registrar produtosRouter no routers.ts
+- [x] Frontend: ProdutoForm.tsx com 3 abas (Dados Gerais, Preços/Tamanhos, Delivery/ERP)
+- [x] Frontend: modo de preço Simples (preço único) ou Por Tamanho (JSON com múltiplos tamanhos)
+- [x] Frontend: campo ERPCODE com explicação de integração com delivery
+- [x] Frontend: campo URL da imagem com preview
+- [x] Frontend: switch Destaque (produto aparece na seção de destaques do delivery)
+- [x] Frontend: página Produtos.tsx com listagem, filtros por categoria/situação, paginação
+- [x] Frontend: exibição de faixa de preços (mínimo–máximo) na listagem
+- [x] Frontend: ícone estrela para produtos em destaque na listagem
+- [x] Frontend: registrar rota /estoque/produtos no App.tsx
+- [x] Frontend: adicionar item Produtos no menu do KsDashboardLayout (seção "Estoque / Cardápio")
