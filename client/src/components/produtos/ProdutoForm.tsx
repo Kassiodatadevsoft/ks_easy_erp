@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, XCircle, Info, Barcode } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Info, Barcode, Plus, Trash2, Package } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ProdutoFormProps {
@@ -21,8 +21,8 @@ interface ProdutoFormProps {
   onSalvo: () => void;
 }
 
-const TAMANHOS_FIXOS = ["BROTINHO", "PEQUENA", "MEDIA", "GRANDE", "TREM", "BITREM", "UNICO"] as const;
-type TamanhoFixo = typeof TAMANHOS_FIXOS[number];
+// Tamanhos dinâmicos — agora gerenciados como array de objetos
+interface TamanhoItem { nome: string; preco: number; qtd: number; }
 
 // ─── Tabelas fiscais ──────────────────────────────────────────────────────────
 const ORIGEM_OPCOES = [
@@ -83,20 +83,19 @@ const CFOP_OPCOES = [
 
 const UNIDADES = ["UN", "KG", "G", "L", "ML", "M", "M2", "M3", "CX", "PC", "PAR", "DZ", "CT", "SC", "FD", "PT"];
 
-interface TamanhosPrecos {
-  BROTINHO: string; PEQUENA: string; MEDIA: string;
-  GRANDE: string; TREM: string; BITREM: string; UNICO: string;
-}
+
 
 interface FormData {
-  produto: string; descricao: string; guidCategoria: string;
-  ordemExibicao: number; situacao: "A" | "I"; destaque: boolean;
+  produto: string; referencia: string; descricao: string; guidCategoria: string;
+  ordemExibicao: number; situacao: "A" | "I"; destaque: boolean; delivery: boolean;
   modoPreco: "simples" | "tamanhos";
   precoVenda: string; precocusto: string;
-  tamanhosPrecos: TamanhosPrecos;
+  tamanhos: TamanhoItem[];
+  // Formação de preço
+  aliqIcmsForm: string; percReducaoForm: string; percFreteForm: string; percJurosForm: string;
   codBarras: string;
-  codBarraCaixa: string;  // EAN/GTIN da caixa/embalagem
-  qtdCaixa: string;       // Qtd de unidades por caixa
+  codBarraCaixa: string;
+  qtdCaixa: string;
   // Fiscal
   ncm: string; cest: string; cfop: string; unidade: string;
   origemProduto: number;
@@ -120,11 +119,12 @@ interface FormData {
 }
 
 const FORM_INICIAL: FormData = {
-  produto: "", descricao: "", guidCategoria: "",
-  ordemExibicao: 0, situacao: "A", destaque: false,
+  produto: "", referencia: "", descricao: "", guidCategoria: "",
+  ordemExibicao: 0, situacao: "A", destaque: false, delivery: true,
   modoPreco: "tamanhos",
   precoVenda: "", precocusto: "",
-  tamanhosPrecos: { BROTINHO: "", PEQUENA: "", MEDIA: "", GRANDE: "", TREM: "", BITREM: "", UNICO: "" },
+  tamanhos: [],
+  aliqIcmsForm: "0", percReducaoForm: "0", percFreteForm: "0", percJurosForm: "0",
   codBarras: "",
   codBarraCaixa: "",
   qtdCaixa: "1",
@@ -197,34 +197,43 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
   useEffect(() => {
     if (produtoData) {
       let modoPreco: "simples" | "tamanhos" = "tamanhos";
-      const tp: TamanhosPrecos = { BROTINHO: "", PEQUENA: "", MEDIA: "", GRANDE: "", TREM: "", BITREM: "", UNICO: "" };
+      let tamanhos: TamanhoItem[] = [];
       if (produtoData.PRECOS) {
         try {
           const precosObj = JSON.parse(produtoData.PRECOS);
-          const keys = Object.keys(precosObj);
-          if (keys.length === 1 && keys[0] === "unico") {
-            modoPreco = "simples";
-          } else {
+          if (Array.isArray(precosObj)) {
+            // Novo formato: array de { nome, preco, qtd }
+            tamanhos = precosObj;
             modoPreco = "tamanhos";
-            TAMANHOS_FIXOS.forEach(t => {
-              const key = t.toLowerCase();
-              if (precosObj[key] !== undefined) tp[t] = String(precosObj[key]);
-            });
+          } else if (typeof precosObj === "object" && precosObj !== null) {
+            const keys = Object.keys(precosObj);
+            if (keys.length === 1 && keys[0] === "unico") {
+              modoPreco = "simples";
+            } else {
+              modoPreco = "tamanhos";
+              tamanhos = keys.map(k => ({ nome: k.toUpperCase(), preco: Number(precosObj[k]) || 0, qtd: 1 }));
+            }
           }
         } catch { /* usar padrão */ }
       }
       const d = produtoData as Record<string, unknown>;
       setForm({
         produto: String(d.PRODUTO ?? ""),
+        referencia: String(d.REFERENCIA ?? ""),
         descricao: String(d.DESCRICAO ?? ""),
         guidCategoria: String(d.GUIDENTIDADECAT ?? ""),
         ordemExibicao: Number(d.ORDEMEXIBICAO ?? 0),
         situacao: (String(d.SITUACAO ?? "A")) as "A" | "I",
         destaque: Boolean(d.DESTAQUE),
+        delivery: d.DELIVERY !== undefined ? Boolean(d.DELIVERY) : true,
         modoPreco,
         precoVenda: d.PRECOVENDA ? String(d.PRECOVENDA) : "",
         precocusto: d.PRECOCUSTO ? String(d.PRECOCUSTO) : "",
-        tamanhosPrecos: tp,
+        tamanhos,
+        aliqIcmsForm: d.ALIQICMSFORM !== undefined ? String(d.ALIQICMSFORM) : "0",
+        percReducaoForm: d.PERCREDUCAOFORM !== undefined ? String(d.PERCREDUCAOFORM) : "0",
+        percFreteForm: d.PERCFRETEFORM !== undefined ? String(d.PERCFRETEFORM) : "0",
+        percJurosForm: d.PERCJUROSFORM !== undefined ? String(d.PERCJUROSFORM) : "0",
         codBarras: String(d.CODBARRAS ?? ""),
         codBarraCaixa: String(d.CODBARRACAIXA ?? ""),
         qtdCaixa: d.QTDCAIXA !== undefined ? String(d.QTDCAIXA) : "1",
@@ -279,31 +288,43 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
   function setTexto(key: keyof FormData, value: string) {
     setField(key, value.toUpperCase() as FormData[typeof key]);
   }
-  function setTamanhoPreco(tamanho: TamanhoFixo, valor: string) {
-    setForm(prev => ({ ...prev, tamanhosPrecos: { ...prev.tamanhosPrecos, [tamanho]: valor } }));
-  }
+  const addTamanho = useCallback(() => setForm(f => ({ ...f, tamanhos: [...f.tamanhos, { nome: "", preco: 0, qtd: 1 }] })), []);
+  const removeTamanho = useCallback((i: number) => setForm(f => ({ ...f, tamanhos: f.tamanhos.filter((_, idx) => idx !== i) })), []);
+  const updateTamanho = useCallback((i: number, field: keyof TamanhoItem, v: string | number) =>
+    setForm(f => { const t = [...f.tamanhos]; t[i] = { ...t[i], [field]: field === "nome" ? String(v).toUpperCase() : Number(v) }; return { ...f, tamanhos: t }; }), []);
 
   function buildPrecosPayload() {
     if (form.modoPreco === "simples") {
       const p = parseFloat(form.precoVenda || "0");
       return { precos: JSON.stringify({ unico: p }), tamanhosDisp: JSON.stringify(["unico"]) };
     }
-    const precosObj: Record<string, number> = {};
-    const tamanhos: string[] = [];
-    TAMANHOS_FIXOS.forEach(t => {
-      const key = t.toLowerCase();
-      precosObj[key] = parseFloat(form.tamanhosPrecos[t] || "0");
-      tamanhos.push(key);
-    });
-    return { precos: JSON.stringify(precosObj), tamanhosDisp: JSON.stringify(tamanhos) };
+    // Novo formato: array de { nome, preco, qtd }
+    const tamanhoKeys = form.tamanhos.map(t => t.nome);
+    return { precos: JSON.stringify(form.tamanhos), tamanhosDisp: JSON.stringify(tamanhoKeys) };
+  }
+  function calcTotalFormacao(): number {
+    const custo = parseFloat(form.precocusto || "0");
+    const icms = custo * (parseFloat(form.aliqIcmsForm || "0") / 100);
+    const red = custo * (parseFloat(form.percReducaoForm || "0") / 100);
+    const frete = custo * (parseFloat(form.percFreteForm || "0") / 100);
+    const juros = custo * (parseFloat(form.percJurosForm || "0") / 100);
+    return custo + icms - red + frete + juros;
   }
 
   function validar(): boolean {
     const novosErros: Record<string, string> = {};
     if (!form.produto.trim()) novosErros.produto = "Nome do produto é obrigatório";
     if (validacaoNome && !validacaoNome.disponivel) novosErros.produto = "Já existe um produto com este nome";
+    if (!form.ncm.trim()) novosErros.ncm = "NCM é obrigatório";
+    if (!form.cfop.trim() || form.cfop === "NENHUM") novosErros.cfop = "CFOP é obrigatório";
+    if ((regime?.isSimples || !regime) && !form.csosn.trim()) novosErros.csosn = "CSOSN é obrigatório para Simples Nacional";
+    if (regime?.isNormal && !form.cst.trim()) novosErros.cst = "CST é obrigatório para Regime Normal";
+    if (form.modoPreco === "tamanhos" && form.tamanhos.some(t => !t.nome.trim())) novosErros.tamanhos = "Todos os tamanhos precisam ter um nome";
     setErros(novosErros);
-    if (novosErros.produto) setAbaAtiva("dados");
+    const fiscalErros = ["ncm", "cfop", "csosn", "cst"];
+    if (fiscalErros.some(k => novosErros[k])) setAbaAtiva("fiscal");
+    else if (novosErros.produto) setAbaAtiva("dados");
+    else if (novosErros.tamanhos) setAbaAtiva("precos");
     return Object.keys(novosErros).length === 0;
   }
 
@@ -326,11 +347,17 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         imageUrl: form.imageUrl || undefined,
         erpCode: form.erpCode || undefined,
         destaque: form.destaque,
+        delivery: form.delivery,
         ordemExibicao: form.ordemExibicao,
         situacao: form.situacao,
+        referencia: form.referencia || undefined,
         codBarras: form.codBarras || undefined,
         codBarraCaixa: form.codBarraCaixa || undefined,
         qtdCaixa: parseFloat(form.qtdCaixa || "1") || 1,
+        aliqIcmsForm: parseFloat(form.aliqIcmsForm || "0"),
+        percReducaoForm: parseFloat(form.percReducaoForm || "0"),
+        percFreteForm: parseFloat(form.percFreteForm || "0"),
+        percJurosForm: parseFloat(form.percJurosForm || "0"),
         ncm: form.ncm || undefined,
         cest: form.cest || undefined,
         cfop: form.cfop || undefined,
@@ -422,6 +449,12 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
 
             {/* ── ABA DADOS GERAIS ─────────────────────────────────────────── */}
             <TabsContent value="dados" className="space-y-4 p-4 mt-0">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2 space-y-1">
+                  <Label>Referência</Label>
+                  <Input value={form.referencia} onChange={e => setTexto("referencia", e.target.value)} placeholder="REF-001" maxLength={50} />
+                </div>
+              </div>
               <div className="space-y-1">
                 <Label htmlFor="produto">Nome do Produto <span className="text-destructive">*</span></Label>
                 <div className="relative">
@@ -531,11 +564,20 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 p-3 rounded-md border">
-                <Switch id="destaque" checked={form.destaque} onCheckedChange={v => setField("destaque", v)} />
-                <div>
-                  <Label htmlFor="destaque" className="cursor-pointer">Produto em Destaque</Label>
-                  <p className="text-xs text-muted-foreground">Aparece na seção de destaques do delivery</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="flex items-center gap-3 p-3 rounded-md border">
+                  <Switch id="destaque" checked={form.destaque} onCheckedChange={v => setField("destaque", v)} />
+                  <div>
+                    <Label htmlFor="destaque" className="cursor-pointer">Produto em Destaque</Label>
+                    <p className="text-xs text-muted-foreground">Aparece na seção de destaques</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-md border">
+                  <Switch id="delivery" checked={form.delivery} onCheckedChange={v => setField("delivery", v)} />
+                  <div>
+                    <Label htmlFor="delivery" className="cursor-pointer">Vai para o Delivery</Label>
+                    <p className="text-xs text-muted-foreground">Exibir no cardápio online</p>
+                  </div>
                 </div>
               </div>
 
@@ -582,24 +624,82 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
               </div>
 
               {form.modoPreco === "simples" ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="precocusto">Preço de Custo (R$)</Label>
-                    <Input id="precocusto" type="number" min={0} step={0.01} value={form.precocusto} onChange={e => setField("precocusto", e.target.value)} placeholder="0,00" />
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="precocusto">Preço de Custo (R$)</Label>
+                      <Input id="precocusto" type="number" min={0} step={0.01} value={form.precocusto} onChange={e => setField("precocusto", e.target.value)} placeholder="0,00" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="precoVenda">Preço de Venda (R$)</Label>
+                      <Input id="precoVenda" type="number" min={0} step={0.01} value={form.precoVenda} onChange={e => setField("precoVenda", e.target.value)} placeholder="0,00" />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="precoVenda">Preço de Venda (R$) <span className="text-destructive">*</span></Label>
-                    <Input id="precoVenda" type="number" min={0} step={0.01} value={form.precoVenda} onChange={e => setField("precoVenda", e.target.value)} placeholder="0,00" />
-                    <p className="text-xs text-muted-foreground">Preço exibido no delivery e no PDV</p>
+                  {/* Formação de preço */}
+                  <div className="rounded-md border bg-muted/30 p-4 space-y-3">
+                    <p className="text-sm font-semibold">Formação de Preço (sobre o Custo)</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {([
+                        { k: "aliqIcmsForm" as const, l: "ICMS (%)" },
+                        { k: "percReducaoForm" as const, l: "Redução (%)" },
+                        { k: "percFreteForm" as const, l: "Frete (%)" },
+                        { k: "percJurosForm" as const, l: "Juros (%)" },
+                      ] as const).map(({ k, l }) => (
+                        <div key={k} className="space-y-1">
+                          <Label className="text-xs">{l}</Label>
+                          <Input type="number" min={0} max={100} step={0.01} value={form[k]} onChange={e => setField(k, e.target.value)} />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t">
+                      <span className="text-sm text-muted-foreground">Total calculado:</span>
+                      <span className="text-lg font-bold text-primary">R$ {calcTotalFormacao().toFixed(2)}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Custo + ICMS − Redução + Frete + Juros</p>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <Label>Preços por Tamanho</Label>
-                    <span className="text-xs text-muted-foreground">Informe 0,00 para tamanhos não disponíveis</span>
+                    <Label>Tamanhos / Variações</Label>
+                    <Button type="button" size="sm" variant="outline" onClick={addTamanho} className="gap-1 h-7 text-xs">
+                      <Plus className="h-3 w-3" /> Adicionar
+                    </Button>
                   </div>
-                  <div className="rounded-md border overflow-hidden">
+                  {erros.tamanhos && <p className="text-xs text-destructive">{erros.tamanhos}</p>}
+                  {form.tamanhos.length === 0 ? (
+                    <div className="text-center py-8 border-2 border-dashed rounded-md text-muted-foreground">
+                      <Package className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                      <p className="text-sm">Nenhum tamanho cadastrado.</p>
+                      <p className="text-xs mt-1">Clique em "Adicionar" para incluir tamanhos, cores ou grades.</p>
+                      <p className="text-xs mt-1 opacity-70">Exemplos: P / M / G / GG (roupas) · BROTINHO / GRANDE (pizzas) · 250ML / 1L (bebidas)</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <div className="grid grid-cols-12 gap-2 px-2">
+                        <span className="col-span-5 text-xs font-semibold text-muted-foreground">Nome / Variação</span>
+                        <span className="col-span-3 text-xs font-semibold text-muted-foreground">Preço (R$)</span>
+                        <span className="col-span-3 text-xs font-semibold text-muted-foreground">Qtd Estoque</span>
+                        <span className="col-span-1" />
+                      </div>
+                      {form.tamanhos.map((t, i) => (
+                        <div key={i} className="grid grid-cols-12 gap-2 items-center bg-muted/30 rounded p-1.5">
+                          <Input className="col-span-5 h-8 text-sm" value={t.nome}
+                            onChange={e => updateTamanho(i, "nome", e.target.value)}
+                            placeholder="EX: P, M, G / BROTINHO..." />
+                          <Input type="number" min={0} step={0.01} className="col-span-3 h-8 text-sm" value={t.preco}
+                            onChange={e => updateTamanho(i, "preco", e.target.value)} />
+                          <Input type="number" min={0} step={1} className="col-span-3 h-8 text-sm" value={t.qtd}
+                            onChange={e => updateTamanho(i, "qtd", e.target.value)} />
+                          <Button type="button" variant="ghost" size="icon" className="col-span-1 h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => removeTamanho(i)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">Exemplos: P / M / G / GG (roupas) · BROTINHO / PEQUENA / GRANDE (pizzas) · 250ML / 500ML / 1L (bebidas)</p>
+                  {/* Tamanho não tem uma tabela abaixo — removido o bloco antigo */}
+                  <div className="hidden">
                     <table className="w-full text-sm">
                       <thead className="bg-muted/50">
                         <tr>
@@ -607,16 +707,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                           <th className="text-left px-3 py-2 font-medium w-1/2">Preço de Venda (R$)</th>
                         </tr>
                       </thead>
-                      <tbody>
-                        {TAMANHOS_FIXOS.map((tamanho, idx) => (
-                          <tr key={tamanho} className={idx % 2 === 0 ? "bg-background" : "bg-muted/20"}>
-                            <td className="px-3 py-2 font-medium">{tamanho}</td>
-                            <td className="px-3 py-1.5">
-                              <Input type="number" min={0} step={0.01} value={form.tamanhosPrecos[tamanho]} onChange={e => setTamanhoPreco(tamanho, e.target.value)} placeholder="0,00" className="h-8" />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
+                      <tbody></tbody>
                     </table>
                   </div>
                 </div>
@@ -692,8 +783,9 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
               {/* NCM e CEST */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <Label htmlFor="ncm">NCM <InfoTip text="Nomenclatura Comum do Mercosul — 8 dígitos. Obrigatório na NF-e." /></Label>
-                  <Input id="ncm" value={form.ncm} onChange={e => setField("ncm", e.target.value.replace(/\D/g, "").slice(0, 8))} placeholder="00000000" maxLength={8} />
+                  <Label htmlFor="ncm">NCM <span className="text-destructive">*</span> <InfoTip text="Nomenclatura Comum do Mercosul — 8 dígitos. Obrigatório na NF-e." /></Label>
+                  <Input id="ncm" value={form.ncm} onChange={e => setField("ncm", e.target.value.replace(/\D/g, "").slice(0, 8))} placeholder="00000000" maxLength={8} className={erros.ncm ? "border-destructive" : ""} />
+                  {erros.ncm && <p className="text-xs text-destructive">{erros.ncm}</p>}
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="cest">CEST <InfoTip text="Código Especificador da Substituição Tributária — 7 dígitos. Obrigatório quando há ST." /></Label>
@@ -703,34 +795,35 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
 
               {/* CFOP, Unidade e Fracionado */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <Label>CFOP <InfoTip text="Código Fiscal de Operações e Prestações — define a natureza da operação." /></Label>
-                  <Select value={form.cfop || "NENHUM"} onValueChange={v => setField("cfop", v === "NENHUM" ? "" : v)}>
-                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="NENHUM">Não definido</SelectItem>
-                      {CFOP_OPCOES.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-1">
+                <Label className="flex items-center gap-1">CFOP <span className="text-destructive">*</span> <InfoTip text="Código Fiscal de Operações e Prestações — define a natureza da operação." /></Label>
+                <Select value={form.cfop || "NENHUM"} onValueChange={v => setField("cfop", v === "NENHUM" ? "" : v)}>
+                  <SelectTrigger className={erros.cfop ? "border-destructive" : ""}><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NENHUM">Não definido</SelectItem>
+                    {CFOP_OPCOES.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {erros.cfop && <p className="text-xs text-destructive">{erros.cfop}</p>}
+              </div>
+              <div className="space-y-1">
+                <Label>Unidade Fiscal <InfoTip text="Unidade de medida usada na NF-e (UN, KG, L, CX, etc.)" /></Label>
+                <Select value={form.unidade} onValueChange={v => setField("unidade", v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="flex items-center gap-1">
+                  Fracionado <InfoTip text="Produto vendido em frações (ex: kg, litro, metro). Permite quantidades decimais no PDV e na NF-e." />
+                </Label>
+                <div className="flex items-center gap-3 h-10 px-3 rounded-md border">
+                  <Switch id="fracionado" checked={form.fracionado} onCheckedChange={v => setField("fracionado", v)} />
+                  <span className="text-sm">{form.fracionado ? "Sim — fracionado" : "Não — inteiro"}</span>
                 </div>
-                <div className="space-y-1">
-                  <Label>Unidade Fiscal <InfoTip text="Unidade de medida usada na NF-e (UN, KG, L, CX, etc.)" /></Label>
-                  <Select value={form.unidade} onValueChange={v => setField("unidade", v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="flex items-center gap-1">
-                    Fracionado <InfoTip text="Produto vendido em frações (ex: kg, litro, metro). Permite quantidades decimais no PDV e na NF-e." />
-                  </Label>
-                  <div className="flex items-center gap-3 h-10 px-3 rounded-md border">
-                    <Switch id="fracionado" checked={form.fracionado} onCheckedChange={v => setField("fracionado", v)} />
-                    <span className="text-sm">{form.fracionado ? "Sim — fracionado" : "Não — inteiro"}</span>
-                  </div>
-                </div>
+              </div>
               </div>
 
               <Separator />
@@ -740,27 +833,29 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
 
               {(regime?.isSimples || !regime) && (
                 <div className="space-y-1">
-                  <Label>CSOSN <InfoTip text="Código de Situação da Operação no Simples Nacional. Obrigatório para emissão de NF-e no Simples." /></Label>
+                  <Label>CSOSN <span className="text-destructive">*</span> <InfoTip text="Código de Situação da Operação no Simples Nacional. Obrigatório para emissão de NF-e no Simples." /></Label>
                   <Select value={form.csosn || "NENHUM"} onValueChange={v => setField("csosn", v === "NENHUM" ? "" : v)}>
-                    <SelectTrigger><SelectValue placeholder="Selecione o CSOSN..." /></SelectTrigger>
+                    <SelectTrigger className={erros.csosn ? "border-destructive" : ""}><SelectValue placeholder="Selecione o CSOSN..." /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="NENHUM">Não definido</SelectItem>
                       {CSOSN_OPCOES.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  {erros.csosn && <p className="text-xs text-destructive">{erros.csosn}</p>}
                 </div>
               )}
 
               {regime?.isNormal && (
                 <div className="space-y-1">
-                  <Label>CST ICMS <InfoTip text="Código de Situação Tributária do ICMS para Regime Normal (Lucro Presumido / Lucro Real)." /></Label>
+                  <Label>CST ICMS <span className="text-destructive">*</span> <InfoTip text="Código de Situação Tributária do ICMS para Regime Normal (Lucro Presumido / Lucro Real)." /></Label>
                   <Select value={form.cst || "NENHUM"} onValueChange={v => setField("cst", v === "NENHUM" ? "" : v)}>
-                    <SelectTrigger><SelectValue placeholder="Selecione o CST..." /></SelectTrigger>
+                    <SelectTrigger className={erros.cst ? "border-destructive" : ""}><SelectValue placeholder="Selecione o CST..." /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="NENHUM">Não definido</SelectItem>
                       {CST_ICMS_OPCOES.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  {erros.cst && <p className="text-xs text-destructive">{erros.cst}</p>}
                 </div>
               )}
 

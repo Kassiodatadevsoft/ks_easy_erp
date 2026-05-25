@@ -94,6 +94,15 @@ const produtoInputBase = {
   // ── Estoque ──
   estoque: z.number().default(0),
   estoqueMinimo: z.number().default(0),
+  // ── Identificação adicional ──
+  referencia: z.string().max(50).optional(),
+  // ── Delivery ──
+  delivery: z.boolean().default(true),
+  // ── Formação de preço (modo Preço Único) ──
+  aliqIcmsForm: z.number().min(0).max(100).default(0),
+  percReducaoForm: z.number().min(0).max(100).default(0),
+  percFreteForm: z.number().min(0).max(100).default(0),
+  percJurosForm: z.number().min(0).max(100).default(0),
 };
 
 type ProdutoRow = {
@@ -148,6 +157,12 @@ type ProdutoRow = {
   FRACIONADO: boolean;
   ESTOQUE: number;
   ESTOQUEMINIMO: number;
+  REFERENCIA: string | null;
+  DELIVERY: boolean;
+  ALIQICMSFORM: number;
+  PERCREDUCAOFORM: number;
+  PERCFRETEFORM: number;
+  PERCJUROSFORM: number;
 };
 
 const SELECT_CAMPOS = `
@@ -179,7 +194,13 @@ const SELECT_CAMPOS = `
   ISNULL(p.SERVICO,0) AS SERVICO,
   ISNULL(p.ALTERADESCRICAO,0) AS ALTERADESCRICAO,
   ISNULL(p.FRACIONADO,0) AS FRACIONADO,
-  p.CODBARRAS
+  p.CODBARRAS,
+  p.REFERENCIA,
+  ISNULL(p.DELIVERY,1) AS DELIVERY,
+  ISNULL(p.ALIQICMSFORM,0) AS ALIQICMSFORM,
+  ISNULL(p.PERCREDUCAOFORM,0) AS PERCREDUCAOFORM,
+  ISNULL(p.PERCFRETEFORM,0) AS PERCFRETEFORM,
+  ISNULL(p.PERCJUROSFORM,0) AS PERCJUROSFORM
 `;
 
 // ─── Router ───────────────────────────────────────────────────────────────────
@@ -344,6 +365,8 @@ export const produtosRouter = router({
             PERCDESCONTO, PRECOPROMO, DTINICIOPROMO, DTFIMPROMO,
             BALANCA, SERVICO, ALTERADESCRICAO, FRACIONADO, CODBARRAS,
             CODBARRACAIXA, QTDCAIXA,
+            REFERENCIA, DELIVERY,
+            ALIQICMSFORM, PERCREDUCAOFORM, PERCFRETEFORM, PERCJUROSFORM,
             GUIDPRODUTO, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
          VALUES
            (${codProduto}, '${produto}', ${descricao ? `'${descricao}'` : "NULL"},
@@ -368,6 +391,8 @@ export const produtosRouter = router({
             ${input.fracionado ? 1 : 0},
             ${sqlStr(input.codBarras)},
             ${sqlStr(input.codBarraCaixa)}, ${sqlNum(input.qtdCaixa ?? 1)},
+            ${sqlStr(input.referencia ? input.referencia.toUpperCase() : null)}, ${input.delivery ? 1 : 0},
+            ${sqlNum(input.aliqIcmsForm)}, ${sqlNum(input.percReducaoForm)}, ${sqlNum(input.percFreteForm)}, ${sqlNum(input.percJurosForm)},
             NEWID(), '${session.guidEntidade}', '${now}', '${now}')`
       );
 
@@ -431,6 +456,12 @@ export const produtosRouter = router({
            CODBARRAS = ${sqlStr(input.codBarras)},
            CODBARRACAIXA = ${sqlStr(input.codBarraCaixa)},
            QTDCAIXA = ${sqlNum(input.qtdCaixa ?? 1)},
+           REFERENCIA = ${sqlStr(input.referencia ? input.referencia.toUpperCase() : null)},
+           DELIVERY = ${input.delivery ? 1 : 0},
+           ALIQICMSFORM = ${sqlNum(input.aliqIcmsForm)},
+           PERCREDUCAOFORM = ${sqlNum(input.percReducaoForm)},
+           PERCFRETEFORM = ${sqlNum(input.percFreteForm)},
+           PERCJUROSFORM = ${sqlNum(input.percJurosForm)},
            ULTIMAALTERACAO = '${now}'
          WHERE GUIDPRODUTO = '${input.guidProduto}'
            AND GUIDENTIDADE = '${session.guidEntidade}'`

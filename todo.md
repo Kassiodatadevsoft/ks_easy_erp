@@ -170,3 +170,14 @@
 - [x] Frontend: PedidosOnline.tsx (painel admin de pedidos no ERP)
 - [x] App.tsx: rotas /cardapio, /checkout, /pedido/:token, /delivery/pedidos
 - [x] Menu lateral: grupo Delivery com item Pedidos Online
+
+## Melhorias no Módulo de Produtos (v3)
+- [ ] SQL Server: adicionar colunas REFERENCIA, DELIVERY, ALIQICMSFORM, PERCREDUCAOFORM, PERCFRETEFORM, PERCJUROSFORM na KS0000.KS00009
+- [ ] SQL Server: alterar coluna PRECOS para suportar tamanhos dinâmicos com campo quantidade (JSON: [{nome, preco, qtd}])
+- [ ] Backend: atualizar produtosRouter com novos campos no Zod, SELECT, INSERT e UPDATE
+- [ ] Frontend: corrigir layout aba Fiscal — CFOP, Unidade Fiscal e Fracionado em grid responsivo sem sobreposição
+- [ ] Frontend: tornar NCM, CFOP, CSOSN e Nome do Produto campos obrigatórios com validação
+- [ ] Frontend: adicionar campo Referência (código interno/referência do produto)
+- [ ] Frontend: adicionar campo "Vai para o Delivery?" (switch) na aba Dados Gerais
+- [ ] Frontend: aba Preços — modo Por Tamanho com tamanhos dinâmicos (adicionar/remover) + campo Quantidade por tamanho
+- [ ] Frontend: aba Preços — modo Preço Único com campos de formação de preço (ICMS%, Redução%, Frete%, Juros%) e campo Total calculado automaticamente
