@@ -8,18 +8,21 @@ import { toast } from "sonner";
 import type { ProdutoRow } from "./ProdutoCard";
 import { getSizes, getPrices } from "./ProdutoCard";
 
+// SIZE_CONFIG legado mantido para compatibilidade com produtos antigos
 export const SIZE_CONFIG: Record<string, { label: string; desc: string }> = {
   BROTINHO: { label: "Brotinho",  desc: "Pequena individual" },
-  PEQUENA:  { label: "Pequena",   desc: "2–3 fatias" },
-  MEDIA:    { label: "Média",     desc: "4–6 fatias" },
-  GRANDE:   { label: "Grande",    desc: "6–8 fatias" },
-  TREM:     { label: "Trem",      desc: "8–10 fatias" },
-  BITREM:   { label: "Bitrem",    desc: "10–12 fatias" },
+  PEQUENA:  { label: "Pequena",   desc: "2–3 porções" },
+  MEDIA:    { label: "Média",     desc: "4–6 porções" },
+  GRANDE:   { label: "Grande",    desc: "6–8 porções" },
+  TREM:     { label: "Trem",      desc: "8–10 porções" },
+  BITREM:   { label: "Bitrem",    desc: "10–12 porções" },
   UNICO:    { label: "Único",     desc: "Tamanho padrão" },
 };
 
-// Tamanhos que permitem meio a meio
-const HALF_HALF_SIZES = ["MEDIA", "GRANDE", "TREM", "BITREM"];
+// Para produtos com tamanhos dinâmicos, qualquer tamanho com 2+ opções permite meio a meio
+function canDoHalfHalf(sizes: string[]): boolean {
+  return sizes.length >= 2;
+}
 
 interface Props {
   produto: ProdutoRow;
@@ -40,7 +43,7 @@ export default function ProdutoModal({ produto, allProdutos, open, onClose }: Pr
   const [observacao, setObservacao] = useState("");
   const [halfSearch, setHalfSearch] = useState("");
 
-  const canHalfHalf = HALF_HALF_SIZES.includes(selectedSize);
+  const canHalfHalf = canDoHalfHalf(sizes) && sizes.includes(selectedSize);
   const basePrice = prices[selectedSize] ?? 0;
 
   // Meio a meio: preço = média dos dois sabores
@@ -121,7 +124,7 @@ export default function ProdutoModal({ produto, allProdutos, open, onClose }: Pr
                       <p className="text-xs text-muted-foreground">{cfg.desc}</p>
                     )}
                     <p className={`text-sm font-bold mt-1 ${isSelected ? "text-primary" : "text-foreground"}`}>
-                      R$ {price.toFixed(2)}
+                      {price > 0 ? `R$ ${price.toFixed(2)}` : "Consulte"}
                     </p>
                   </button>
                 );

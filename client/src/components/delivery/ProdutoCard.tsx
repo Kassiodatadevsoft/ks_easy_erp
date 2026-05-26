@@ -60,8 +60,21 @@ function getPrecoMinimo(produto: ProdutoRow): { preco: number; precoOriginal?: n
   return { preco: min, promoAtiva: false };
 }
 
+/**
+ * Suporta dois formatos de PRECOS:
+ *  - Novo: array [{nome, preco, qtd}] — vem do novo cadastro de produtos
+ *  - Legado: objeto {tamanho: preco} — formato antigo da pizzaria
+ */
 export function getSizes(produto: ProdutoRow): string[] {
   try {
+    if (produto.PRECOS) {
+      const parsed = JSON.parse(produto.PRECOS);
+      // Novo formato: array de objetos
+      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object") {
+        return parsed.map((t: { nome: string }) => t.nome).filter(Boolean);
+      }
+    }
+    // Legado: TAMANHOSDISP
     if (produto.TAMANHOSDISP) {
       const parsed = JSON.parse(produto.TAMANHOSDISP);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -74,7 +87,18 @@ export function getPrices(produto: ProdutoRow): Record<string, number> {
   try {
     if (produto.PRECOS) {
       const parsed = JSON.parse(produto.PRECOS);
-      if (typeof parsed === "object" && parsed !== null) return parsed;
+      // Novo formato: array [{nome, preco, qtd}]
+      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object") {
+        const map: Record<string, number> = {};
+        for (const t of parsed as { nome: string; preco: number }[]) {
+          if (t.nome) map[t.nome] = Number(t.preco) || 0;
+        }
+        return map;
+      }
+      // Legado: {tamanho: preco} ou {unico: preco}
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        return parsed as Record<string, number>;
+      }
     }
   } catch { /* ignore */ }
   const preco = produto.PRECOVENDA ?? produto.PRECO ?? 0;

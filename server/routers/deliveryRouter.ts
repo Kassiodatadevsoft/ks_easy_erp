@@ -5,6 +5,10 @@
  *   KS0000.KS00009 = produtos
  *   KS0001.KS00001 = pedidos
  *   KS0001.KS00002 = itens do pedido
+ *
+ * Formato de PRECOS (novo): JSON array [{nome, preco, qtd}]
+ * Formato de PRECOS (legado): JSON objeto {tamanho: preco}
+ * O frontend (getSizes/getPrices em ProdutoCard.tsx) suporta ambos automaticamente.
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -64,6 +68,28 @@ const itemSchema = z.object({
   metade2Nome: z.string().optional(),
 });
 
+// ── Query base de produtos para o delivery ───────────────────────────────────
+async function queryProdutosDelivery(gent: string, extra: string) {
+  const { getSqlPool } = await import("../sqlserver");
+  const pool = await getSqlPool();
+  const where = `p.GUIDENTIDADE = '${gent}' AND p.SITUACAO = 'A' AND (p.DELIVERY IS NULL OR p.DELIVERY = 1)${extra}`;
+  const result = await pool.request().query(`
+    SELECT
+      p.CODPRODUTO, p.GUIDPRODUTO, p.PRODUTO, p.DESCRICAO,
+      p.CODCATEGORIA, c.CATEGORIA,
+      p.PRECOS, p.TAMANHOSDISP, p.PRECO, p.PRECOVENDA,
+      p.IMAGEURL, p.DESTAQUE, p.ORDEMEXIBICAO,
+      p.PERCDESCONTO, p.PRECOPROMO, p.DTINICIOPROMO, p.DTFIMPROMO,
+      p.BALANCA, p.SERVICO, p.FRACIONADO,
+      ISNULL(p.ESTOQUE,0) AS ESTOQUE
+    FROM KS0000.KS00009 p
+    LEFT JOIN KS0000.KS00008 c ON c.CODCATEGORIA = p.CODCATEGORIA AND c.GUIDENTIDADE = p.GUIDENTIDADE
+    WHERE ${where}
+    ORDER BY p.ORDEMEXIBICAO, p.PRODUTO
+  `);
+  return result.recordset;
+}
+
 export const deliveryRouter = router({
 
   // ── Cardápio público ────────────────────────────────────────────────────────
@@ -94,26 +120,10 @@ export const deliveryRouter = router({
       const session = await getKsSession(ctx.req);
       const gent = input.guidentidade || session?.guidEntidade;
       if (!gent) return [];
-      const { getSqlPool } = await import("../sqlserver");
-      const pool = await getSqlPool();
-      let where = `p.GUIDENTIDADE = '${gent}' AND p.SITUACAO = 'A'`;
-      if (input.codCategoria) where += ` AND p.CODCATEGORIA = ${input.codCategoria}`;
-      if (input.destaque) where += ` AND p.DESTAQUE = 1`;
-      const result = await pool.request().query(`
-        SELECT
-          p.CODPRODUTO, p.GUIDPRODUTO, p.PRODUTO, p.DESCRICAO,
-          p.CODCATEGORIA, c.CATEGORIA,
-          p.PRECOS, p.TAMANHOSDISP, p.PRECO, p.PRECOVENDA,
-          p.IMAGEURL, p.DESTAQUE, p.ORDEMEXIBICAO,
-          p.PERCDESCONTO, p.PRECOPROMO, p.DTINICIOPROMO, p.DTFIMPROMO,
-          p.BALANCA, p.SERVICO, p.FRACIONADO,
-          ISNULL(p.ESTOQUE,0) AS ESTOQUE
-        FROM KS0000.KS00009 p
-        LEFT JOIN KS0000.KS00008 c ON c.CODCATEGORIA = p.CODCATEGORIA AND c.GUIDENTIDADE = p.GUIDENTIDADE
-        WHERE ${where}
-        ORDER BY p.ORDEMEXIBICAO, p.PRODUTO
-      `);
-      return result.recordset;
+      let extra = "";
+      if (input.codCategoria) extra += ` AND p.CODCATEGORIA = ${input.codCategoria}`;
+      if (input.destaque) extra += ` AND p.DESTAQUE = 1`;
+      return queryProdutosDelivery(gent, extra);
     }),
 
   produtoDestaque: publicProcedure
@@ -131,7 +141,8 @@ export const deliveryRouter = router({
           p.IMAGEURL, p.DESTAQUE, p.CODCATEGORIA,
           p.PERCDESCONTO, p.PRECOPROMO, p.DTINICIOPROMO, p.DTFIMPROMO
         FROM KS0000.KS00009 p
-        WHERE p.GUIDENTIDADE = '${gent}' AND p.SITUACAO = 'A' AND p.DESTAQUE = 1
+        WHERE p.GUIDENTIDADE = '${gent}' AND p.SITUACAO = 'A'
+          AND p.DESTAQUE = 1 AND (p.DELIVERY IS NULL OR p.DELIVERY = 1)
         ORDER BY p.ORDEMEXIBICAO, p.PRODUTO
       `);
       return result.recordset;
