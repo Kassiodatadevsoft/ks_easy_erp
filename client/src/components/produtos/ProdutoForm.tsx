@@ -310,6 +310,14 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
     const juros = custo * (parseFloat(form.percJurosForm || "0") / 100);
     return custo + icms - red + frete + juros;
   }
+  function calcLucro(): { reais: number; perc: number } {
+    const venda = parseFloat(form.precoVenda || "0");
+    const custo = calcTotalFormacao();
+    if (venda <= 0 || custo <= 0) return { reais: 0, perc: 0 };
+    const reais = venda - custo;
+    const perc = (reais / venda) * 100;
+    return { reais, perc };
+  }
 
   function validar(): boolean {
     const novosErros: Record<string, string> = {};
@@ -656,6 +664,27 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                       <span className="text-lg font-bold text-primary">R$ {calcTotalFormacao().toFixed(2)}</span>
                     </div>
                     <p className="text-xs text-muted-foreground">Custo + ICMS − Redução + Frete + Juros</p>
+                    {/* Lucro */}
+                    {parseFloat(form.precoVenda || "0") > 0 && (() => {
+                      const { reais, perc } = calcLucro();
+                      const positivo = reais >= 0;
+                      return (
+                        <div className={`flex items-center justify-between pt-2 border-t ${positivo ? "border-green-500/30" : "border-destructive/30"}`}>
+                          <div>
+                            <span className="text-sm font-medium">Lucro sobre o Preço de Venda</span>
+                            <p className="text-xs text-muted-foreground">Preço de Venda − Total calculado</p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`text-lg font-bold ${positivo ? "text-green-500" : "text-destructive"}`}>
+                              {positivo ? "+" : ""}{reais.toFixed(2)} R$
+                            </p>
+                            <p className={`text-sm font-semibold ${positivo ? "text-green-500" : "text-destructive"}`}>
+                              {positivo ? "+" : ""}{perc.toFixed(1)}%
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               ) : (
