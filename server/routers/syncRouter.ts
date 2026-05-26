@@ -106,13 +106,13 @@ export const syncRouter = router({
     }),
 
   /**
-   * Enviar dados do Delphi para o servidor (vendas, movimentações).
-   * Será expandido conforme os módulos forem criados.
+   * Enviar dados do Delphi para o servidor (pessoas, cargos).
+   * Realiza MERGE (INSERT ou UPDATE) por GUID para sincronização bidirecional.
    */
   enviar: publicProcedure
     .input(z.object({
       guidentidade: z.string().uuid(),
-      tabela: z.string(),
+      tabela: z.enum(["pessoas", "cargos"]),
       registros: z.array(z.record(z.string(), z.unknown())),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -120,11 +120,98 @@ export const syncRouter = router({
       if (session.GUIDENTIDADE !== input.guidentidade) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
       }
-      // TODO: implementar MERGE por tabela conforme módulos forem criados
+
+      const pool = await (await import("../sqlserver")).getSqlPool();
+      let processados = 0;
+      let erros: string[] = [];
+
+      if (input.tabela === "pessoas") {
+        for (const reg of input.registros) {
+          try {
+            const r = reg as Record<string, unknown>;
+            await pool.request()
+              .input("GUIDPESSOA",      sql.UniqueIdentifier, r.GUIDPESSOA)
+              .input("GUIDENTIDADE",    sql.UniqueIdentifier, input.guidentidade)
+              .input("CODIGO",          sql.Int,              Number(r.CODIGO ?? 0))
+              .input("NOME",            sql.VarChar(100),     String(r.NOME ?? "").toUpperCase())
+              .input("FANTASIA",        sql.VarChar(60),      r.FANTASIA ? String(r.FANTASIA).toUpperCase() : null)
+              .input("DOCUMENTO",       sql.VarChar(20),      String(r.DOCUMENTO ?? ""))
+              .input("CODTIPODOCUMENTO",sql.Char(1),          String(r.CODTIPODOCUMENTO ?? "J"))
+              .input("TELEFONE",        sql.VarChar(15),      r.TELEFONE ? String(r.TELEFONE) : null)
+              .input("CELULAR",         sql.VarChar(15),      r.CELULAR ? String(r.CELULAR) : null)
+              .input("EMAIL",           sql.VarChar(100),     r.EMAIL ? String(r.EMAIL) : null)
+              .input("SITUACAO",        sql.Char(1),          String(r.SITUACAO ?? "A"))
+              .input("CADCLIENTE",      sql.TinyInt,          r.CADCLIENTE ? 1 : 0)
+              .input("CADFORNECEDOR",   sql.TinyInt,          r.CADFORNECEDOR ? 1 : 0)
+              .input("CADUSUARIO",      sql.TinyInt,          r.CADUSUARIO ? 1 : 0)
+              .input("CADTRANSPORTADORA",sql.TinyInt,         r.CADTRANSPORTADORA ? 1 : 0)
+              .input("CADEMPRESA",      sql.TinyInt,          r.CADEMPRESA ? 1 : 0)
+              .input("ULTIMAALTERACAO", sql.DateTime,         r.ULTIMAALTERACAO ? new Date(String(r.ULTIMAALTERACAO)) : new Date())
+              .query(`
+                MERGE KS0002.KS00001 AS tgt
+                USING (SELECT @GUIDPESSOA AS GUIDPESSOA) AS src ON tgt.GUIDPESSOA = src.GUIDPESSOA
+                WHEN MATCHED AND tgt.GUIDENTIDADE = @GUIDENTIDADE THEN
+                  UPDATE SET
+                    NOME=@NOME, FANTASIA=@FANTASIA, DOCUMENTO=@DOCUMENTO,
+                    CODTIPODOCUMENTO=@CODTIPODOCUMENTO, TELEFONE=@TELEFONE,
+                    CELULAR=@CELULAR, EMAIL=@EMAIL, SITUACAO=@SITUACAO,
+                    CADCLIENTE=@CADCLIENTE, CADFORNECEDOR=@CADFORNECEDOR,
+                    CADUSUARIO=@CADUSUARIO, CADTRANSPORTADORA=@CADTRANSPORTADORA,
+                    CADEMPRESA=@CADEMPRESA, ULTIMAALTERACAO=@ULTIMAALTERACAO
+                WHEN NOT MATCHED THEN
+                  INSERT (GUIDPESSOA,GUIDENTIDADE,CODIGO,NOME,FANTASIA,DOCUMENTO,
+                    CODTIPODOCUMENTO,TELEFONE,CELULAR,EMAIL,SITUACAO,
+                    CADCLIENTE,CADFORNECEDOR,CADUSUARIO,CADTRANSPORTADORA,CADEMPRESA,
+                    MANTERPROMOCOES,CONSTASPC,LIMITECOMPRA,DIAVENCIMENTO,CODLOCALIDADE,
+                    PRECIFICACAO,CODENTIDADE,CODVENDEDOR,ORGANIZACIONAL,GRADE,
+                    CADCADASTRO,MATRICULA,QUANTIDADE,COD_BAIRRO,ALIQUOTA,CREDITOCSOSN,
+                    MARGEMPADRAO,CODCARGO,ATUALIZARPRECOS,INDIEDEST,CRT,AMBIENTE,
+                    ALIQUOTAPIS,ALIQUOTACOFINS,JUROMENSAL,BANCO,
+                    DATACADASTRO,ULTIMAALTERACAO,ULTIMOACESSO)
+                  VALUES (@GUIDPESSOA,@GUIDENTIDADE,@CODIGO,@NOME,@FANTASIA,@DOCUMENTO,
+                    @CODTIPODOCUMENTO,@TELEFONE,@CELULAR,@EMAIL,@SITUACAO,
+                    @CADCLIENTE,@CADFORNECEDOR,@CADUSUARIO,@CADTRANSPORTADORA,@CADEMPRESA,
+                    1,0,0,0,0,'R',@CODIGO,0,0,0,0,0,0,0,0,0,0,0,1,9,1,0,0,0,0,0,
+                    GETDATE(),@ULTIMAALTERACAO,GETDATE());
+              `);
+            processados++;
+          } catch (e) {
+            erros.push(String((e as Error).message ?? e));
+          }
+        }
+      } else if (input.tabela === "cargos") {
+        for (const reg of input.registros) {
+          try {
+            const r = reg as Record<string, unknown>;
+            await pool.request()
+              .input("GUIDCARGO",     sql.UniqueIdentifier, r.GUIDCARGO)
+              .input("GUIDENTIDADE",  sql.UniqueIdentifier, input.guidentidade)
+              .input("CODCARGO",      sql.VarChar(10),      String(r.CODCARGO ?? "").toUpperCase())
+              .input("CARGO",         sql.VarChar(60),      String(r.CARGO ?? "").toUpperCase())
+              .input("SITUACAO",      sql.Char(1),          String(r.SITUACAO ?? "A"))
+              .input("ULTIMAALTERACAO",sql.DateTime,        r.ULTIMAALTERACAO ? new Date(String(r.ULTIMAALTERACAO)) : new Date())
+              .query(`
+                MERGE KS0000.KS00007 AS tgt
+                USING (SELECT @GUIDCARGO AS GUIDCARGO) AS src ON tgt.GUIDCARGO = src.GUIDCARGO
+                WHEN MATCHED AND tgt.GUIDENTIDADE = @GUIDENTIDADE THEN
+                  UPDATE SET CARGO=@CARGO, CODCARGO=@CODCARGO, SITUACAO=@SITUACAO, ULTIMAALTERACAO=@ULTIMAALTERACAO
+                WHEN NOT MATCHED THEN
+                  INSERT (GUIDCARGO,GUIDENTIDADE,CODCARGO,CARGO,SITUACAO,DESCONTOMAXIMO,CODTIPO,ALTERARPRECOPRODUTO,CODPAINEL,COMISSAO,PDV,DATACADASTRO,ULTIMAALTERACAO)
+                  VALUES (@GUIDCARGO,@GUIDENTIDADE,@CODCARGO,@CARGO,@SITUACAO,0,1,0,0,0,0,GETDATE(),@ULTIMAALTERACAO);
+              `);
+            processados++;
+          } catch (e) {
+            erros.push(String((e as Error).message ?? e));
+          }
+        }
+      }
+
       return {
-        success: true,
+        success: erros.length === 0,
         tabela: input.tabela,
         recebidos: input.registros.length,
+        processados,
+        erros: erros.slice(0, 10), // Limitar a 10 erros no retorno
         timestamp: new Date().toISOString(),
       };
     }),

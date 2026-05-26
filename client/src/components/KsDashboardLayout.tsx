@@ -52,6 +52,7 @@ const MENU_GROUPS = [
   {
     label: "Cadastros",
     items: [
+      { icon: Users,     label: "Entidades",       path: "/cadastros/entidades" },
       { icon: Users,     label: "Clientes",        path: "/cadastros/clientes" },
       { icon: Building2, label: "Fornecedores",     path: "/cadastros/fornecedores" },
       { icon: Users,     label: "Funcionários",     path: "/cadastros/funcionarios" },

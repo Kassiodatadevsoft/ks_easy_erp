@@ -13,6 +13,7 @@ import Empresas from "./pages/Empresas";
 import Cargos from "./pages/Cargos";
 import Funcionarios from "./pages/Funcionarios";
 import Transportadoras from "./pages/Transportadoras";
+import Entidades from "./pages/Entidades";
 import Categorias from "./pages/Categorias";
 import Produtos from "./pages/Produtos";
 import KsDashboardLayout from "./components/KsDashboardLayout";
@@ -72,6 +73,9 @@ function Router() {
       </Route>
 
       {/* Cadastros */}
+      <Route path="/cadastros/entidades">
+        <ProtectedRoute><Entidades /></ProtectedRoute>
+      </Route>
       <Route path="/cadastros/clientes">
         <ProtectedRoute><Clientes /></ProtectedRoute>
       </Route>

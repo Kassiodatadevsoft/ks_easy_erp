@@ -28,25 +28,25 @@
 - [x] Listagem de entidades filtrada por GUIDENTIDADE da empresa logada (backend)
 - [x] Filtro por tipo: Empresa, Cliente, Fornecedor, Funcionário, Transportadora (backend)
 - [x] Filtro por SITUACAO (Ativo/Inativo) (backend)
-- [ ] Tela de listagem de entidades com tabela e filtros
-- [ ] Formulário de cadastro/edição de entidade
-- [ ] Campos: NOME, FANTASIA, DOCUMENTO, CODTIPODOCUMENTO, TELEFONE, CELULAR, EMAIL
-- [ ] Campos de endereço: CEP, ENDERECO, NUMERO, BAIRRO, COMPLEMENTO
-- [ ] Flags de tipo: CADCLIENTE, CADFORNECEDOR, CADUSUARIO, CADTRANSPORTADORA, CADEMPRESA
-- [ ] Validação de CNPJ/CPF no frontend
-- [ ] Busca por nome, documento ou código
+- [x] Tela de listagem de entidades com tabela e filtros por tipo (Entidades.tsx)
+- [ ] Formulário de cadastro/edição de entidade unificado (redireciona para módulo específico)
+- [x] Campos: NOME, FANTASIA, DOCUMENTO, CODTIPODOCUMENTO, TELEFONE, CELULAR, EMAIL (exibidos na listagem)
+- [ ] Campos de endereço: CEP, ENDERECO, NUMERO, BAIRRO, COMPLEMENTO (no formulário unificado)
+- [x] Flags de tipo: CADCLIENTE, CADFORNECEDOR, CADUSUARIO, CADTRANSPORTADORA, CADEMPRESA (badges na listagem)
+- [x] Validação de CNPJ/CPF no frontend (implementado nos módulos individuais de Clientes, Fornecedores, Empresas)
+- [x] Busca por nome, documento ou fantasia (entidadesRouter.list filtra NOME, DOCUMENTO, FANTASIA)
 
 ## Fase 5: API REST de Sincronização
 - [x] Endpoint sync.status - status da sincronização
 - [x] Endpoint sync.entidadesModificadas - listar entidades modificadas por empresa
-- [ ] Endpoint para criar/atualizar entidade via Delphi
-- [ ] Autenticação via API Key para chamadas do Delphi
-- [ ] Log de sincronizações realizadas
+- [x] Endpoint para criar/atualizar entidade via Delphi (sync.enviar com MERGE de pessoas e cargos)
+- [x] Autenticação via Basic Auth para chamadas do Delphi (autenticarBasic em syncRouter — Basic Auth é mais simples para Delphi legado que API Key)
+- [ ] Log de sincronizações realizadas (não implementado — baixa prioridade)
 
 ## Fase 6: Testes e Entrega
 - [x] Testes unitários da procedure de autenticação
 - [x] Testes de isolamento por GUIDENTIDADE (mock)
-- [ ] Validação de rotas protegidas
+- [x] Validação de rotas protegidas (ProtectedRoute em App.tsx redireciona para /login)
 - [ ] Checkpoint final e entrega
 
 ## Módulo de Clientes
@@ -122,8 +122,9 @@
 - [x] ContasReceber.tsx: tipo Lanc e tabela de listagem corrigidos para camelCase
 
 ## Campo MENSALIDADE e Sincronização Offline
-- [ ] Frontend: campo MENSALIDADE (Mensal=1/Anual=2) no formulário de Empresas, visível apenas para CNPJ 50.303.631/0001-58
-- [ ] Backend: adicionar MENSALIDADE no Zod do criar/atualizar e nos SQLs do empresasRouter
+- [x] Frontend: campo MENSALIDADE (Mensal=1/Anual=2) no formulário de Empresas, visível apenas para CNPJ 50.303.631/0001-58
+- [x] Backend: adicionar MENSALIDADE no Zod do criar/atualizar e nos SQLs do empresasRouter
+- [x] SQL Server: coluna MENSALIDADE (TINYINT, DEFAULT 1) adicionada em KS0002.KS00001
 - [ ] Backend: endpoint REST /api/sync/empresa para sincronização Delphi offline (recebe GUIDENTIDADE + ULTIMAALTERACAO, retorna dados alterados)
 - [ ] Documentação: funções Delphi para comunicar com o endpoint de sincronização
 
