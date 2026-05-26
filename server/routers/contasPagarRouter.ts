@@ -260,4 +260,29 @@ export const contasPagarRouter = router({
       .query(`DELETE FROM KS0003.KS00004 WHERE GUIDLANCAMENTO=@guidlancamento AND GUIDENTIDADE=@guidentidade AND STATUS IN ('ABERTO','CANCELADO')`);
     return { success: true };
   }),
+
+  // Buscar fornecedores para autocomplete do campo Credor
+  buscarFornecedores: publicProcedure
+    .input(z.object({ busca: z.string().min(1) }))
+    .query(async ({ input, ctx }) => {
+      const session = await getKsSession(ctx.req);
+      if (!session) return [];
+      const pool = await getSqlPool();
+      const b = input.busca.replace(/'/g, "''");
+      const r = await pool.request()
+        .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
+        .query(`
+          SELECT TOP 10
+            CAST(GUIDPESSOA AS NVARCHAR(36)) AS guidPessoa,
+            ISNULL(FANTASIA, NOME) AS nome,
+            DOCUMENTO
+          FROM KS0002.KS00001
+          WHERE GUIDENTIDADE = @guidentidade
+            AND CADFORNECEDOR = 1
+            AND SITUACAO = 'A'
+            AND (NOME LIKE '%${b}%' OR FANTASIA LIKE '%${b}%' OR DOCUMENTO LIKE '%${b}%')
+          ORDER BY ISNULL(FANTASIA, NOME)
+        `);
+      return r.recordset as { guidPessoa: string; nome: string; documento: string }[];
+    }),
 });

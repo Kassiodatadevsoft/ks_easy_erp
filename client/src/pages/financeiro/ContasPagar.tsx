@@ -13,6 +13,7 @@ import { Plus, Search, Edit2, Trash2, CheckCircle, XCircle, TrendingDown, AlertT
 
 type Lanc = {
   CODLANCAMENTO: number; DESCRICAO: string; NOMECREDOR: string | null;
+  GUIDCREDOR: string | null;
   VALOR: number; VALORPAGO: number; DESCONTO: number; JUROS: number; MULTA: number;
   DTLANCAMENTO: string; DTVENCIMENTO: string; DTPAGAMENTO: string | null;
   NOMENATUREZA: string | null; NOMECENTRO: string | null;
@@ -20,6 +21,8 @@ type Lanc = {
   STATUS: string; FORMAPAGAMENTO: string | null; OBSERVACAO: string | null;
   GUIDLANCAMENTO: string;
 };
+
+type Fornecedor = { guidPessoa: string; nome: string; documento: string };
 
 function fmt(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0); }
 function fmtDate(d: string | null) { if (!d) return "—"; return new Date(d).toLocaleDateString("pt-BR"); }
@@ -35,12 +38,10 @@ const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
 };
 
 const FORM_INICIAL = {
-  descricao: "", codCredor: undefined as number|undefined, nomeCredor: "",
+  descricao: "", guidCredor: "" as string, nomeCredor: "",
   valor: 0, dtLancamento: hoje(), dtVencimento: hoje(),
-  codNatureza: undefined as number|undefined, nomeNatureza: "",
-  codCentro: undefined as number|undefined, nomeCentro: "",
-  codConta: undefined as number|undefined, numerodoc: "",
-  parcela: 1, totalParcelas: 1, observacao: "",
+  guidNatureza: "" as string, guidCentro: "" as string, guidConta: "" as string,
+  numerodoc: "", parcela: 1, totalParcelas: 1, observacao: "",
   gerarParcelas: false, intervaloDias: 30,
 };
 
@@ -60,6 +61,8 @@ export default function ContasPagar() {
   const [editando, setEditando] = useState<Lanc | null>(null);
   const [form, setForm] = useState(FORM_INICIAL);
   const [baixa, setBaixa] = useState(BAIXA_INICIAL);
+  const [buscaCredor, setBuscaCredor] = useState("");
+  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const utils = trpc.useUtils();
 
   const { data, isLoading } = trpc.contasPagar.listar.useQuery({ status: filtroStatus !== "todos" ? filtroStatus : undefined, dtInicio, dtFim, busca: busca || undefined, page: pagina, pageSize: 50 });
@@ -67,6 +70,10 @@ export default function ContasPagar() {
   const { data: naturezas = [] } = trpc.naturezaCaixa.listarTodas.useQuery({ tipo: "D" });
   const { data: centros = [] } = trpc.centroCusto.listarTodos.useQuery();
   const { data: contas = [] } = trpc.planoContas.listarTodas.useQuery();
+  const { data: fornecedoresSugestoes = [] } = trpc.contasPagar.buscarFornecedores.useQuery(
+    { busca: buscaCredor },
+    { enabled: buscaCredor.length >= 2 }
+  );
 
   const criar = trpc.contasPagar.criar.useMutation({ onSuccess: () => { utils.contasPagar.listar.invalidate(); toast.success("Lançamento criado!"); fecharModal(); } });
   const atualizar = trpc.contasPagar.atualizar.useMutation({ onSuccess: () => { utils.contasPagar.listar.invalidate(); toast.success("Lançamento atualizado!"); fecharModal(); } });
@@ -83,17 +90,19 @@ export default function ContasPagar() {
   function abrirNova() { setEditando(null); setForm(FORM_INICIAL); setModalAberto(true); }
   function abrirEditar(l: Lanc) {
     setEditando(l);
-    setForm({ ...FORM_INICIAL, descricao: l.DESCRICAO, nomeCredor: l.NOMECREDOR ?? "", valor: Number(l.VALOR), dtLancamento: l.DTLANCAMENTO?.slice(0,10) ?? hoje(), dtVencimento: l.DTVENCIMENTO?.slice(0,10) ?? hoje(), nomenatureza: l.NOMENATUREZA ?? "", numerodoc: l.NUMERODOC ?? "", parcela: l.PARCELA, totalParcelas: l.TOTALPARCELAS, observacao: l.OBSERVACAO ?? "" } as typeof FORM_INICIAL);
+    setBuscaCredor(l.NOMECREDOR ?? "");
+    setForm({ ...FORM_INICIAL, descricao: l.DESCRICAO, guidCredor: l.GUIDCREDOR ?? "", nomeCredor: l.NOMECREDOR ?? "", valor: Number(l.VALOR), dtLancamento: l.DTLANCAMENTO?.slice(0,10) ?? hoje(), dtVencimento: l.DTVENCIMENTO?.slice(0,10) ?? hoje(), numerodoc: l.NUMERODOC ?? "", parcela: l.PARCELA, totalParcelas: l.TOTALPARCELAS, observacao: l.OBSERVACAO ?? "" });
     setModalAberto(true);
   }
-  function fecharModal() { setModalAberto(false); setEditando(null); setForm(FORM_INICIAL); }
+  function fecharModal() { setModalAberto(false); setEditando(null); setForm(FORM_INICIAL); setBuscaCredor(""); setMostrarSugestoes(false); }
 
   function salvar() {
     if (!form.descricao.trim()) { toast.error("Informe a descrição"); return; }
     if (!form.valor || form.valor <= 0) { toast.error("Informe o valor"); return; }
     if (!form.dtVencimento) { toast.error("Informe o vencimento"); return; }
-    if (editando) atualizar.mutate({ ...form, guidLancamento: editando.GUIDLANCAMENTO });
-    else criar.mutate(form);
+    const payload = { ...form, guidCredor: form.guidCredor || undefined, guidNatureza: form.guidNatureza || undefined, guidCentro: form.guidCentro || undefined, guidConta: form.guidConta || undefined };
+    if (editando) atualizar.mutate({ ...payload, guidLancamento: editando.GUIDLANCAMENTO });
+    else criar.mutate(payload);
   }
 
   function registrarBaixa() {
@@ -244,9 +253,28 @@ export default function ContasPagar() {
                 <Label>Descrição *</Label>
                 <Input placeholder="EX: ALUGUEL OUTUBRO 2025" value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value.toUpperCase() }))} />
               </div>
-              <div className="space-y-1.5">
-                <Label>Credor (nome)</Label>
-                <Input placeholder="Nome do fornecedor/credor" value={form.nomeCredor} onChange={e => setForm(f => ({ ...f, nomeCredor: e.target.value }))} />
+              <div className="space-y-1.5 relative">
+                <Label>Credor (Fornecedor)</Label>
+                <div className="relative">
+                  <Input
+                    placeholder="Digite para buscar fornecedor..."
+                    value={buscaCredor}
+                    onChange={e => { setBuscaCredor(e.target.value); setMostrarSugestoes(true); setForm(f => ({ ...f, guidCredor: "", nomeCredor: e.target.value })); }}
+                    onFocus={() => setMostrarSugestoes(true)}
+                    onBlur={() => setTimeout(() => setMostrarSugestoes(false), 200)}
+                  />
+                  {form.guidCredor && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-emerald-400">✓</span>}
+                </div>
+                {mostrarSugestoes && buscaCredor.length >= 2 && (fornecedoresSugestoes as Fornecedor[]).length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 rounded-lg border border-white/10 bg-popover shadow-lg overflow-hidden">
+                    {(fornecedoresSugestoes as Fornecedor[]).map((f: Fornecedor) => (
+                      <button key={f.guidPessoa} type="button" className="w-full text-left px-3 py-2 hover:bg-white/10 transition-colors" onMouseDown={() => { setForm(fm => ({ ...fm, guidCredor: f.guidPessoa, nomeCredor: f.nome })); setBuscaCredor(f.nome); setMostrarSugestoes(false); }}>
+                        <p className="font-medium text-sm">{f.nome}</p>
+                        <p className="text-xs text-muted-foreground">{f.documento}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label>Nº Documento</Label>
@@ -266,21 +294,21 @@ export default function ContasPagar() {
               </div>
               <div className="space-y-1.5">
                 <Label>Natureza de Caixa</Label>
-                <Select value={form.codNatureza?.toString() ?? "none"} onValueChange={v => { const n = (naturezas as Array<{CODNATUREZA:number;NATUREZA:string}>).find(x => x.CODNATUREZA === Number(v)); setForm(f => ({ ...f, codNatureza: v === "none" ? undefined : Number(v), nomeNatureza: n?.NATUREZA ?? "" })); }}>
+<Select value={form.guidNatureza || "none"} onValueChange={v => setForm(f => ({ ...f, guidNatureza: v === "none" ? "" : v }))}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Nenhuma</SelectItem>
-                    {(naturezas as Array<{CODNATUREZA:number;NATUREZA:string}>).map(n => <SelectItem key={n.CODNATUREZA} value={String(n.CODNATUREZA)}>{n.NATUREZA}</SelectItem>)}
+                    {(naturezas as Array<{guidNatureza:string;NATUREZA:string}>).map(n => <SelectItem key={n.guidNatureza} value={n.guidNatureza}>{n.NATUREZA}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Centro de Custo</Label>
-                <Select value={form.codCentro?.toString() ?? "none"} onValueChange={v => { const c = (centros as Array<{CODCENTRO:number;CENTRO:string}>).find(x => x.CODCENTRO === Number(v)); setForm(f => ({ ...f, codCentro: v === "none" ? undefined : Number(v), nomeCentro: c?.CENTRO ?? "" })); }}>
+<Select value={form.guidCentro || "none"} onValueChange={v => setForm(f => ({ ...f, guidCentro: v === "none" ? "" : v }))}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Nenhum</SelectItem>
-                    {(centros as Array<{CODCENTRO:number;CENTRO:string}>).map(c => <SelectItem key={c.CODCENTRO} value={String(c.CODCENTRO)}>{c.CENTRO}</SelectItem>)}
+                    {(centros as Array<{guidCentro:string;CENTRO:string}>).map(c => <SelectItem key={c.guidCentro} value={c.guidCentro}>{c.CENTRO}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
