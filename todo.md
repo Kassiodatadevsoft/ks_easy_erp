@@ -172,12 +172,52 @@
 - [x] Menu lateral: grupo Delivery com item Pedidos Online
 
 ## Melhorias no Módulo de Produtos (v3)
-- [ ] SQL Server: adicionar colunas REFERENCIA, DELIVERY, ALIQICMSFORM, PERCREDUCAOFORM, PERCFRETEFORM, PERCJUROSFORM na KS0000.KS00009
-- [ ] SQL Server: alterar coluna PRECOS para suportar tamanhos dinâmicos com campo quantidade (JSON: [{nome, preco, qtd}])
-- [ ] Backend: atualizar produtosRouter com novos campos no Zod, SELECT, INSERT e UPDATE
-- [ ] Frontend: corrigir layout aba Fiscal — CFOP, Unidade Fiscal e Fracionado em grid responsivo sem sobreposição
-- [ ] Frontend: tornar NCM, CFOP, CSOSN e Nome do Produto campos obrigatórios com validação
-- [ ] Frontend: adicionar campo Referência (código interno/referência do produto)
-- [ ] Frontend: adicionar campo "Vai para o Delivery?" (switch) na aba Dados Gerais
-- [ ] Frontend: aba Preços — modo Por Tamanho com tamanhos dinâmicos (adicionar/remover) + campo Quantidade por tamanho
-- [ ] Frontend: aba Preços — modo Preço Único com campos de formação de preço (ICMS%, Redução%, Frete%, Juros%) e campo Total calculado automaticamente
+- [x] SQL Server: adicionar colunas REFERENCIA, DELIVERY, ALIQICMSFORM, PERCREDUCAOFORM, PERCFRETEFORM, PERCJUROSFORM na KS0000.KS00009
+- [x] SQL Server: alterar coluna PRECOS para suportar tamanhos dinâmicos com campo quantidade (JSON: [{nome, preco, qtd}])
+- [x] Backend: atualizar produtosRouter com novos campos no Zod, SELECT, INSERT e UPDATE
+- [x] Frontend: corrigir layout aba Fiscal — CFOP, Unidade Fiscal e Fracionado em grid responsivo sem sobreposição
+- [x] Frontend: tornar NCM, CFOP, CSOSN e Nome do Produto campos obrigatórios com validação
+- [x] Frontend: adicionar campo Referência (código interno/referência do produto)
+- [x] Frontend: adicionar campo "Vai para o Delivery?" (switch) na aba Dados Gerais
+- [x] Frontend: aba Preços — modo Por Tamanho com tamanhos dinâmicos (adicionar/remover) + campo Quantidade por tamanho
+- [x] Frontend: aba Preços — modo Preço Único com campos de formação de preço (ICMS%, Redução%, Frete%, Juros%) e campo Total calculado automaticamente
+
+## Módulo Financeiro
+
+### Plano de Contas (KS0003.KS00001)
+- [ ] SQL Server: criar tabela KS0003.KS00001 (CODCONTA, CONTA, DESCRICAO, TIPO (R/D/T), NIVEL, CODCONTAPAI, MASCARA, SITUACAO, GUIDCONTA, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
+- [ ] Backend: planoContasRouter com listar (árvore hierárquica), criar, atualizar, excluir
+- [ ] Frontend: PlanoContas.tsx com visualização em árvore hierárquica e formulário
+
+### Natureza de Caixa (KS0003.KS00002)
+- [ ] SQL Server: criar tabela KS0003.KS00002 (CODNATUREZA, NATUREZA, DESCRICAO, TIPO (R/D), CODCONTA, SITUACAO, GUIDNATUREZA, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
+- [ ] Backend: naturezaCaixaRouter com listar, criar, atualizar, excluir
+- [ ] Frontend: NaturezaCaixa.tsx com listagem, filtros e formulário
+
+### Contas a Pagar (KS0003.KS00003)
+- [ ] SQL Server: criar tabela KS0003.KS00003 (CODCONTA, DESCRICAO, CODCREDOR, NOMECREDORR, VALOR, VALORPAGO, DTLANCAMENTO, DTVENCIMENTO, DTPAGAMENTO, CODNATUREZA, CODCONTA_PLANO, NUMERODOC, PARCELA, TOTALPARCELAS, STATUS (ABERTO/PAGO/PARCIAL/CANCELADO), OBSERVACAO, GUIDLANCAMENTO, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
+- [ ] Backend: contasPagarRouter com listar (filtros status/período), criar, atualizar, baixar (registrar pagamento), cancelar, excluir
+- [ ] Frontend: ContasPagar.tsx com listagem, filtros, totalizadores e formulário de lançamento e baixa
+
+### Contas a Receber (KS0003.KS00004)
+- [ ] SQL Server: criar tabela KS0003.KS00004 (mesma estrutura de contas a pagar com CODDEVEDOR/NOMEDEVEDOR)
+- [ ] Backend: contasReceberRouter com listar, criar, atualizar, baixar, cancelar, excluir
+- [ ] Frontend: ContasReceber.tsx com listagem, filtros, totalizadores e formulário de lançamento e baixa
+
+### Fluxo de Caixa (KS0003.KS00005)
+- [ ] Backend: fluxoCaixaRouter com relatório de fluxo por período (entradas, saídas, saldo)
+- [ ] Frontend: FluxoCaixa.tsx com gráfico de barras (entradas vs saídas) e tabela por período
+
+### Integração e Menu
+- [ ] Registrar todos os routers no routers.ts principal
+- [ ] Registrar rotas no App.tsx (/financeiro/plano-contas, /financeiro/natureza-caixa, /financeiro/contas-pagar, /financeiro/contas-receber, /financeiro/fluxo-caixa)
+- [ ] Atualizar menu lateral com grupo Financeiro expandido
+
+## Módulo Financeiro — Formas de Pagamento
+
+- [ ] SQL Server: criar tabela KS0003.KS00006 (CODPAGAMENTO, PAGAMENTO, CODFISCAL, DESCRICAOFISCAL, INTEGRACAOTEF, BANDEIRA, CNPJTEF, AUTORIZADORA, SITUACAO, GUIDPAGAMENTO, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
+- [ ] SQL Server: popular tabela com os 14 códigos fiscais SEFAZ padrão (01-Dinheiro, 02-Cheque, 03-Cartão Crédito, 04-Cartão Débito, 05-Crédito Loja, 10-Vale Alimentação, 11-Vale Refeição, 12-Vale Presente, 13-Vale Combustível, 15-Boleto, 16-Depósito, 17-PIX, 18-Transferência/Carteira Digital, 90-Sem pagamento)
+- [ ] Backend: formasPagamentoRouter (listar paginado, listarTodas, criar, atualizar, excluir)
+- [ ] Frontend: FormasPagamento.tsx com tabela, badge código fiscal, toggle TEF e modal de cadastro
+- [ ] App.tsx: rota /financeiro/formas-pagamento
+- [ ] Menu: adicionar "Formas de Pagamento" na seção Financeiro

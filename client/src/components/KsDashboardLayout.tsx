@@ -29,6 +29,11 @@ import {
   Truck,
   Users,
   X,
+  BookOpen,
+  Target,
+  TrendingDown,
+  TrendingUp,
+  Activity,
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -65,8 +70,13 @@ const MENU_GROUPS = [
   {
     label: "Financeiro",
     items: [
-      { icon: CreditCard, label: "Contas a Pagar",   path: "/financeiro/pagar" },
-      { icon: CreditCard, label: "Contas a Receber", path: "/financeiro/receber" },
+      { icon: BookOpen,     label: "Plano de Contas",   path: "/financeiro/plano-contas" },
+      { icon: Target,       label: "Centro de Custo",   path: "/financeiro/centro-custo" },
+      { icon: Tag,          label: "Natureza de Caixa", path: "/financeiro/natureza-caixa" },
+      { icon: TrendingDown, label: "Contas a Pagar",    path: "/financeiro/pagar" },
+      { icon: TrendingUp,   label: "Contas a Receber",  path: "/financeiro/receber" },
+      { icon: Activity,     label: "Fluxo de Caixa",    path: "/financeiro/fluxo-caixa" },
+      { icon: CreditCard,   label: "Formas de Pagamento", path: "/financeiro/formas-pagamento" },
     ],
   },
   {

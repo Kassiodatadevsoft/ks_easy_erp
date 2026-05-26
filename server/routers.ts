@@ -14,6 +14,13 @@ import { transportadorasRouter } from "./routers/transportadorasRouter";
 import { categoriasRouter } from "./routers/categoriasRouter";
 import { produtosRouter } from "./routers/produtosRouter";
 import { deliveryRouter } from "./routers/deliveryRouter";
+import { planoContasRouter } from "./routers/planoContasRouter";
+import { centroCustoRouter } from "./routers/centroCustoRouter";
+import { naturezaCaixaRouter } from "./routers/naturezaCaixaRouter";
+import { contasPagarRouter } from "./routers/contasPagarRouter";
+import { contasReceberRouter } from "./routers/contasReceberRouter";
+import { fluxoCaixaRouter } from "./routers/fluxoCaixaRouter";
+import { formasPagamentoRouter } from "./routers/formasPagamentoRouter";
 
 export const appRouter = router({
   system: systemRouter,
@@ -60,6 +67,15 @@ export const appRouter = router({
 
   // Módulo de Delivery
   delivery: deliveryRouter,
+
+  // Módulo Financeiro
+  planoContas: planoContasRouter,
+  centroCusto: centroCustoRouter,
+  naturezaCaixa: naturezaCaixaRouter,
+  contasPagar: contasPagarRouter,
+  contasReceber: contasReceberRouter,
+  fluxoCaixa: fluxoCaixaRouter,
+  formasPagamento: formasPagamentoRouter,
 
   // Sincronização com sistema legado Delphi
   sync: syncRouter,

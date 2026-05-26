@@ -25,6 +25,14 @@ import Cardapio from "./pages/delivery/Cardapio";
 import CheckoutDelivery from "./pages/delivery/Checkout";
 import PedidoTracking from "./pages/delivery/PedidoTracking";
 import PedidosOnline from "./pages/delivery/PedidosOnline";
+// Financeiro
+import PlanoContas from "./pages/financeiro/PlanoContas";
+import CentroCusto from "./pages/financeiro/CentroCusto";
+import NaturezaCaixa from "./pages/financeiro/NaturezaCaixa";
+import ContasPagar from "./pages/financeiro/ContasPagar";
+import ContasReceber from "./pages/financeiro/ContasReceber";
+import FluxoCaixa from "./pages/financeiro/FluxoCaixa";
+import FormasPagamento from "./pages/financeiro/FormasPagamento";
 
 /**
  * Rota protegida: redireciona para /login se não houver sessão KS válida.
@@ -92,11 +100,26 @@ function Router() {
       </Route>
 
       {/* Financeiro */}
+      <Route path="/financeiro/plano-contas">
+        <ProtectedRoute><PlanoContas /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/centro-custo">
+        <ProtectedRoute><CentroCusto /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/natureza-caixa">
+        <ProtectedRoute><NaturezaCaixa /></ProtectedRoute>
+      </Route>
       <Route path="/financeiro/pagar">
-        <ProtectedRoute><ComingSoon title="Contas a Pagar" /></ProtectedRoute>
+        <ProtectedRoute><ContasPagar /></ProtectedRoute>
       </Route>
       <Route path="/financeiro/receber">
-        <ProtectedRoute><ComingSoon title="Contas a Receber" /></ProtectedRoute>
+        <ProtectedRoute><ContasReceber /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/fluxo-caixa">
+        <ProtectedRoute><FluxoCaixa /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/formas-pagamento">
+        <ProtectedRoute><FormasPagamento /></ProtectedRoute>
       </Route>
 
       {/* Estoque / Cardápio */}
