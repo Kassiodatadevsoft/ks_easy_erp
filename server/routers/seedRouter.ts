@@ -148,16 +148,15 @@ export const seedRouter = router({
         .input("descricao",    sql.NVarChar(200),    item.desc)
         .input("tipo",         sql.Char(1),          item.tipo)
         .input("nivel",        sql.TinyInt,          item.nivel)
-        .input("codcontapai",  sql.NVarChar(20),     item.pai ?? null)
         .input("guidcontapai", sql.UniqueIdentifier, guidPai)
         .input("mascara",      sql.NVarChar(30),     mascara)
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
         .query(`
           IF NOT EXISTS (SELECT 1 FROM KS0003.KS00001 WHERE CODCONTA=@codconta AND GUIDENTIDADE=@guidentidade)
           INSERT INTO KS0003.KS00001
-            (GUIDCONTA,CODCONTA,CONTA,DESCRICAO,TIPO,NIVEL,CODCONTAPAI,GUIDCONTAPAI,MASCARA,SITUACAO,GUIDENTIDADE)
+            (GUIDCONTA,CODCONTA,CONTA,DESCRICAO,TIPO,NIVEL,GUIDCONTAPAI,MASCARA,SITUACAO,GUIDENTIDADE)
           VALUES
-            (@guid,@codconta,@conta,@descricao,@tipo,@nivel,@codcontapai,@guidcontapai,@mascara,'A',@guidentidade)
+            (@guid,@codconta,@conta,@descricao,@tipo,@nivel,@guidcontapai,@mascara,'A',@guidentidade)
         `);
     }
     return { success: true, inseridos: PLANO_CONTAS_PADRAO.length };
@@ -237,13 +236,12 @@ export const seedRouter = router({
         .input("descricao", sql.NVarChar(200), item.desc)
         .input("tipo", sql.Char(1), item.tipo)
         .input("nivel", sql.TinyInt, item.nivel)
-        .input("codcontapai", sql.NVarChar(20), item.pai ?? null)
         .input("guidcontapai", sql.UniqueIdentifier, guidPai)
         .input("mascara", sql.NVarChar(30), item.cod)
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
         .query(`IF NOT EXISTS (SELECT 1 FROM KS0003.KS00001 WHERE CODCONTA=@codconta AND GUIDENTIDADE=@guidentidade)
-          INSERT INTO KS0003.KS00001 (GUIDCONTA,CODCONTA,CONTA,DESCRICAO,TIPO,NIVEL,CODCONTAPAI,GUIDCONTAPAI,MASCARA,SITUACAO,GUIDENTIDADE)
-          VALUES (@guid,@codconta,@conta,@descricao,@tipo,@nivel,@codcontapai,@guidcontapai,@mascara,'A',@guidentidade)`);
+          INSERT INTO KS0003.KS00001 (GUIDCONTA,CODCONTA,CONTA,DESCRICAO,TIPO,NIVEL,GUIDCONTAPAI,MASCARA,SITUACAO,GUIDENTIDADE)
+          VALUES (@guid,@codconta,@conta,@descricao,@tipo,@nivel,@guidcontapai,@mascara,'A',@guidentidade)`);
     }
 
     // Centro de Custo

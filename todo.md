@@ -125,8 +125,8 @@
 - [x] Frontend: campo MENSALIDADE (Mensal=1/Anual=2) no formulário de Empresas, visível apenas para CNPJ 50.303.631/0001-58
 - [x] Backend: adicionar MENSALIDADE no Zod do criar/atualizar e nos SQLs do empresasRouter
 - [x] SQL Server: coluna MENSALIDADE (TINYINT, DEFAULT 1) adicionada em KS0002.KS00001
-- [ ] Backend: endpoint REST /api/sync/empresa para sincronização Delphi offline (recebe GUIDENTIDADE + ULTIMAALTERACAO, retorna dados alterados)
-- [ ] Documentação: funções Delphi para comunicar com o endpoint de sincronização
+- [x] Backend: endpoint REST /api/trpc/syncDelphi.pull (recebe GUIDENTIDADE via Bearer token + dispositivo, retorna delta por ULTIMAALTERACAO — 8 entidades)
+- [x] Documentação: unit KSEasyERPSync.pas + INTEGRACAO_DELPHI.md com exemplos completos de push, pull, ack e sync automático com TTimer
 
 ## Módulo de Categorias (KS0000.KS00008)
 - [x] SQL Server: criar tabela KS0000.KS00008 (CODCATEGORIA, CATEGORIA, DESCRICAO, SLUG, ORDEMEXIBICAO, SITUACAO, GUIDCATEGORIA, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
