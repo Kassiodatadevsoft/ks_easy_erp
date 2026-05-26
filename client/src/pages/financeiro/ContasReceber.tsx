@@ -97,6 +97,7 @@ export default function ContasReceber() {
 
   function salvar() {
     if (!form.descricao.trim()) { toast.error("Informe a descrição"); return; }
+    if (!form.guidDevedor) { toast.error("Selecione um cliente cadastrado como Devedor"); return; }
     if (!form.valor || form.valor <= 0) { toast.error("Informe o valor"); return; }
     if (!form.dtVencimento) { toast.error("Informe o vencimento"); return; }
     const payload = { ...form, guidDevedor: form.guidDevedor || undefined, guidNatureza: form.guidNatureza || undefined, guidCentro: form.guidCentro || undefined };
@@ -247,25 +248,50 @@ export default function ContasReceber() {
                 <Input placeholder="EX: VENDA NF 001234" value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value.toUpperCase() }))} />
               </div>
               <div className="space-y-1.5 relative">
-                <Label>Devedor (Cliente)</Label>
+                <Label>Devedor (Cliente) *</Label>
                 <div className="relative">
                   <Input
-                    placeholder="Digite para buscar cliente..."
+                    placeholder="Digite o nome do cliente..."
                     value={buscaDevedor}
-                    onChange={e => { setBuscaDevedor(e.target.value); setMostrarSugestoes(true); setForm(f => ({ ...f, guidDevedor: "", nomeDevedor: e.target.value })); }}
+                    onChange={e => {
+                      setBuscaDevedor(e.target.value);
+                      setMostrarSugestoes(true);
+                      // Limpa o GUID quando o usuário digita — obriga a selecionar da lista
+                      setForm(f => ({ ...f, guidDevedor: "", nomeDevedor: "" }));
+                    }}
                     onFocus={() => setMostrarSugestoes(true)}
-                    onBlur={() => setTimeout(() => setMostrarSugestoes(false), 200)}
+                    onBlur={() => {
+                      setTimeout(() => {
+                        setMostrarSugestoes(false);
+                        // Se não selecionou da lista, limpa o campo
+                        if (!form.guidDevedor) setBuscaDevedor("");
+                      }, 200);
+                    }}
+                    className={!form.guidDevedor && buscaDevedor ? "border-red-500" : ""}
                   />
-                  {form.guidDevedor && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-emerald-400">✓</span>}
+                  {form.guidDevedor
+                    ? <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-emerald-400 font-semibold">✓ Selecionado</span>
+                    : buscaDevedor && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-red-400">Selecione da lista</span>
+                  }
                 </div>
-                {mostrarSugestoes && buscaDevedor.length >= 2 && (clientesSugestoes as Cliente[]).length > 0 && (
+                {mostrarSugestoes && buscaDevedor.length >= 2 && (
                   <div className="absolute z-50 w-full mt-1 rounded-lg border border-white/10 bg-popover shadow-lg overflow-hidden">
-                    {(clientesSugestoes as Cliente[]).map((c: Cliente) => (
-                      <button key={c.guidPessoa} type="button" className="w-full text-left px-3 py-2 hover:bg-white/10 transition-colors" onMouseDown={() => { setForm(fm => ({ ...fm, guidDevedor: c.guidPessoa, nomeDevedor: c.nome })); setBuscaDevedor(c.nome); setMostrarSugestoes(false); }}>
-                        <p className="font-medium text-sm">{c.nome}</p>
-                        <p className="text-xs text-muted-foreground">{c.documento}</p>
-                      </button>
-                    ))}
+                    {(clientesSugestoes as Cliente[]).length === 0 ? (
+                      <div className="px-3 py-3 text-sm text-muted-foreground">Nenhum cliente encontrado</div>
+                    ) : (
+                      (clientesSugestoes as Cliente[]).map((c: Cliente) => (
+                        <button key={c.guidPessoa} type="button"
+                          className="w-full text-left px-3 py-2.5 hover:bg-white/10 transition-colors border-b border-white/5 last:border-0"
+                          onMouseDown={() => {
+                            setForm(fm => ({ ...fm, guidDevedor: c.guidPessoa, nomeDevedor: c.nome }));
+                            setBuscaDevedor(c.nome);
+                            setMostrarSugestoes(false);
+                          }}>
+                          <p className="font-medium text-sm">{c.nome}</p>
+                          <p className="text-xs text-muted-foreground">{c.documento}</p>
+                        </button>
+                      ))
+                    )}
                   </div>
                 )}
               </div>

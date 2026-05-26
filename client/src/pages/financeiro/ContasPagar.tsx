@@ -98,6 +98,7 @@ export default function ContasPagar() {
 
   function salvar() {
     if (!form.descricao.trim()) { toast.error("Informe a descrição"); return; }
+    if (!form.guidCredor) { toast.error("Selecione um fornecedor cadastrado como Credor"); return; }
     if (!form.valor || form.valor <= 0) { toast.error("Informe o valor"); return; }
     if (!form.dtVencimento) { toast.error("Informe o vencimento"); return; }
     const payload = { ...form, guidCredor: form.guidCredor || undefined, guidNatureza: form.guidNatureza || undefined, guidCentro: form.guidCentro || undefined, guidConta: form.guidConta || undefined };
@@ -254,25 +255,50 @@ export default function ContasPagar() {
                 <Input placeholder="EX: ALUGUEL OUTUBRO 2025" value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value.toUpperCase() }))} />
               </div>
               <div className="space-y-1.5 relative">
-                <Label>Credor (Fornecedor)</Label>
+                <Label>Credor (Fornecedor) *</Label>
                 <div className="relative">
                   <Input
-                    placeholder="Digite para buscar fornecedor..."
+                    placeholder="Digite o nome do fornecedor..."
                     value={buscaCredor}
-                    onChange={e => { setBuscaCredor(e.target.value); setMostrarSugestoes(true); setForm(f => ({ ...f, guidCredor: "", nomeCredor: e.target.value })); }}
+                    onChange={e => {
+                      setBuscaCredor(e.target.value);
+                      setMostrarSugestoes(true);
+                      // Limpa o GUID quando o usuário digita — obriga a selecionar da lista
+                      setForm(f => ({ ...f, guidCredor: "", nomeCredor: "" }));
+                    }}
                     onFocus={() => setMostrarSugestoes(true)}
-                    onBlur={() => setTimeout(() => setMostrarSugestoes(false), 200)}
+                    onBlur={() => {
+                      setTimeout(() => {
+                        setMostrarSugestoes(false);
+                        // Se não selecionou da lista, limpa o campo
+                        if (!form.guidCredor) setBuscaCredor("");
+                      }, 200);
+                    }}
+                    className={!form.guidCredor && buscaCredor ? "border-red-500" : ""}
                   />
-                  {form.guidCredor && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-emerald-400">✓</span>}
+                  {form.guidCredor
+                    ? <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-emerald-400 font-semibold">✓ Selecionado</span>
+                    : buscaCredor && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-red-400">Selecione da lista</span>
+                  }
                 </div>
-                {mostrarSugestoes && buscaCredor.length >= 2 && (fornecedoresSugestoes as Fornecedor[]).length > 0 && (
+                {mostrarSugestoes && buscaCredor.length >= 2 && (
                   <div className="absolute z-50 w-full mt-1 rounded-lg border border-white/10 bg-popover shadow-lg overflow-hidden">
-                    {(fornecedoresSugestoes as Fornecedor[]).map((f: Fornecedor) => (
-                      <button key={f.guidPessoa} type="button" className="w-full text-left px-3 py-2 hover:bg-white/10 transition-colors" onMouseDown={() => { setForm(fm => ({ ...fm, guidCredor: f.guidPessoa, nomeCredor: f.nome })); setBuscaCredor(f.nome); setMostrarSugestoes(false); }}>
-                        <p className="font-medium text-sm">{f.nome}</p>
-                        <p className="text-xs text-muted-foreground">{f.documento}</p>
-                      </button>
-                    ))}
+                    {(fornecedoresSugestoes as Fornecedor[]).length === 0 ? (
+                      <div className="px-3 py-3 text-sm text-muted-foreground">Nenhum fornecedor encontrado</div>
+                    ) : (
+                      (fornecedoresSugestoes as Fornecedor[]).map((f: Fornecedor) => (
+                        <button key={f.guidPessoa} type="button"
+                          className="w-full text-left px-3 py-2.5 hover:bg-white/10 transition-colors border-b border-white/5 last:border-0"
+                          onMouseDown={() => {
+                            setForm(fm => ({ ...fm, guidCredor: f.guidPessoa, nomeCredor: f.nome }));
+                            setBuscaCredor(f.nome);
+                            setMostrarSugestoes(false);
+                          }}>
+                          <p className="font-medium text-sm">{f.nome}</p>
+                          <p className="text-xs text-muted-foreground">{f.documento}</p>
+                        </button>
+                      ))
+                    )}
                   </div>
                 )}
               </div>
