@@ -1,0 +1,10 @@
+import sql from 'mssql';
+const url = process.env.SQLSERVER_URL;
+const pool = await sql.connect(url);
+const r1 = await pool.request().query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='KS0003' AND TABLE_NAME='KS00007' ORDER BY ORDINAL_POSITION");
+console.log('KS0003.KS00007 (Centro Custo):', r1.recordset.map(c=>c.COLUMN_NAME).join(', '));
+const r2 = await pool.request().query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='KS0003' AND TABLE_NAME='KS00010' ORDER BY ORDINAL_POSITION");
+console.log('KS0003.KS00010 (Lancamentos):', r2.recordset.map(c=>c.COLUMN_NAME).join(', '));
+const r3 = await pool.request().query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='KS0003' AND TABLE_NAME='KS00002' ORDER BY ORDINAL_POSITION");
+console.log('KS0003.KS00002 (Natureza):', r3.recordset.map(c=>c.COLUMN_NAME).join(', '));
+await pool.close();

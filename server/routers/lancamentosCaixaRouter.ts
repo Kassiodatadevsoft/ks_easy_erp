@@ -67,8 +67,8 @@ export const lancamentosCaixaRouter = router({
           l.DATACADASTRO
         FROM KS0003.KS00010 l
         LEFT JOIN KS0003.KS00008 cb ON cb.GUIDCONTA    = l.GUIDCONTA
-        LEFT JOIN KS0003.KS00002 n  ON n.GUIDNATUREZA  = l.GUIDNATUREZA
-        LEFT JOIN KS0003.KS00007 cc ON cc.GUIDCENTRO   = l.GUIDCENTRO
+        LEFT JOIN KS0003.KS00003 n  ON n.GUIDNATUREZA  = l.GUIDNATUREZA
+        LEFT JOIN KS0003.KS00002 cc ON cc.GUIDCENTRO   = l.GUIDCENTRO
         WHERE ${where}
         ORDER BY l.DTLANCAMENTO DESC, l.DATACADASTRO DESC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -113,7 +113,7 @@ export const lancamentosCaixaRouter = router({
 
       await pool.request()
         .input("guid",         sql.UniqueIdentifier, guid)
-        .input("dtlancamento", sql.Date,             input.dtLancamento)
+        .input("dtlancamento", sql.NVarChar(10),       input.dtLancamento)
         .input("tipo",         sql.Char(1),          input.tipo)
         .input("valor",        sql.Decimal(15,2),    input.valor)
         .input("descricao",    sql.NVarChar(200),    input.descricao.toUpperCase())
@@ -187,8 +187,8 @@ export const lancamentosCaixaRouter = router({
       const pool = await getSqlPool();
       const req2 = pool.request()
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-        .input("dtInicio",     sql.Date,             input.dtInicio)
-        .input("dtFim",        sql.Date,             input.dtFim);
+        .input("dtInicio",     sql.NVarChar(10),     input.dtInicio)
+        .input("dtFim",        sql.NVarChar(10),     input.dtFim);
       const contaFilter = input.guidConta
         ? (req2.input("guidconta", sql.UniqueIdentifier, input.guidConta), "AND GUIDCONTA=@guidconta")
         : "";
@@ -200,10 +200,10 @@ export const lancamentosCaixaRouter = router({
           ISNULL(SUM(CASE WHEN TIPO='S' THEN VALOR ELSE 0 END),0) AS saidas
         FROM KS0003.KS00010
         WHERE GUIDENTIDADE=@guidentidade
-          AND DTLANCAMENTO BETWEEN @dtInicio AND @dtFim
+          AND CONVERT(DATE, DTLANCAMENTO) BETWEEN CONVERT(DATE, @dtInicio) AND CONVERT(DATE, @dtFim)
           ${contaFilter}
-        GROUP BY DTLANCAMENTO
-        ORDER BY DTLANCAMENTO
+        GROUP BY CONVERT(DATE, DTLANCAMENTO)
+        ORDER BY CONVERT(DATE, DTLANCAMENTO)
       `);
       return r.recordset;
     }),
