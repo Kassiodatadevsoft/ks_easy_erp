@@ -43,7 +43,7 @@ export default function FormasPagamento() {
 
   const utils = trpc.useUtils();
   const { data: sefazCodigos } = trpc.formasPagamento.codigosSefaz.useQuery();
-  const { data: formas = [], isLoading } = trpc.formasPagamento.listar.useQuery({ busca: busca || undefined, situacao: situacaoFiltro || undefined });
+  const { data: formas = [], isLoading } = trpc.formasPagamento.listar.useQuery({ busca: busca || undefined, situacao: situacaoFiltro !== "todos" ? situacaoFiltro : undefined });
 
   const criar = trpc.formasPagamento.criar.useMutation({
     onSuccess: () => { utils.formasPagamento.listar.invalidate(); toast.success("Forma de pagamento criada!"); fecharModal(); },
@@ -118,9 +118,9 @@ export default function FormasPagamento() {
         <Select value={situacaoFiltro} onValueChange={setSituacaoFiltro}>
           <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
+            <SelectItem value="todos">Todas</SelectItem>
             <SelectItem value="A">Ativas</SelectItem>
             <SelectItem value="I">Inativas</SelectItem>
-            <SelectItem value="">Todas</SelectItem>
           </SelectContent>
         </Select>
       </div>
