@@ -34,6 +34,10 @@ import {
   TrendingDown,
   TrendingUp,
   Activity,
+  Landmark,
+  ArrowRightLeft,
+  Wallet,
+  Scale,
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -78,6 +82,10 @@ const MENU_GROUPS = [
       { icon: TrendingUp,   label: "Contas a Receber",  path: "/financeiro/receber" },
       { icon: Activity,     label: "Fluxo de Caixa",    path: "/financeiro/fluxo-caixa" },
       { icon: CreditCard,   label: "Formas de Pagamento", path: "/financeiro/formas-pagamento" },
+      { icon: Landmark,     label: "Contas Bancárias",    path: "/financeiro/contas-bancarias" },
+      { icon: ArrowRightLeft, label: "Transferências",      path: "/financeiro/transferencias" },
+      { icon: Wallet,       label: "Lançamentos de Caixa", path: "/financeiro/lancamentos-caixa" },
+      { icon: Scale,        label: "Balanço Patrimonial",  path: "/financeiro/balanco-patrimonial" },
     ],
   },
   {

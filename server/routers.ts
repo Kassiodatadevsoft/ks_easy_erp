@@ -21,6 +21,10 @@ import { contasPagarRouter } from "./routers/contasPagarRouter";
 import { contasReceberRouter } from "./routers/contasReceberRouter";
 import { fluxoCaixaRouter } from "./routers/fluxoCaixaRouter";
 import { formasPagamentoRouter } from "./routers/formasPagamentoRouter";
+import { contasBancariasRouter } from "./routers/contasBancariasRouter";
+import { transferenciasRouter } from "./routers/transferenciasRouter";
+import { lancamentosCaixaRouter } from "./routers/lancamentosCaixaRouter";
+import { balancoPatrimonialRouter } from "./routers/balancoPatrimonialRouter";
 
 export const appRouter = router({
   system: systemRouter,
@@ -76,6 +80,10 @@ export const appRouter = router({
   contasReceber: contasReceberRouter,
   fluxoCaixa: fluxoCaixaRouter,
   formasPagamento: formasPagamentoRouter,
+  contasBancarias: contasBancariasRouter,
+  transferencias: transferenciasRouter,
+  lancamentosCaixa: lancamentosCaixaRouter,
+  balancoPatrimonial: balancoPatrimonialRouter,
 
   // Sincronização com sistema legado Delphi
   sync: syncRouter,

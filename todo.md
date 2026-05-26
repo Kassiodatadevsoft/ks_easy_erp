@@ -227,3 +227,23 @@
 - [x] Frontend: FormasPagamento.tsx com tabela, badge código SEFAZ, toggle TEF e modal de cadastro
 - [x] App.tsx: rota /financeiro/formas-pagamento
 - [x] Menu: "Formas de Pagamento" na seção Financeiro
+
+## Módulo Financeiro — Contas Bancárias (KS0003.KS00008)
+- [x] SQL Server: criar tabela KS0003.KS00008 (GUIDCONTA, CODCONTA, CONTA, BANCO, AGENCIA, NUMEROCONTA, TIPOCONTA, SALDOINICIAL, SALDOATUAL, SITUACAO, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
+- [x] Backend: contasBancariasRouter (listar, listarTodas, criar, atualizar, excluir, recalcularSaldo)
+- [x] Frontend: ContasBancarias.tsx com cards de saldo, listagem e formulário
+
+## Módulo Financeiro — Transferências entre Contas (KS0003.KS00009)
+- [x] SQL Server: criar tabela KS0003.KS00009 (GUIDTRANSFERENCIA, DTRANSFERENCIA, GUIDCONTAORIGEM, GUIDCONTADESTINO, VALOR, DESCRICAO, OBSERVACAO, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
+- [x] Backend: transferenciasRouter (listar, criar, excluir — excluir reverte saldos automaticamente)
+- [x] Frontend: Transferencias.tsx com listagem, filtros por período e formulário
+
+## Módulo Financeiro — Lançamentos de Caixa (KS0003.KS00010)
+- [x] SQL Server: criar tabela KS0003.KS00010 (GUIDLANCAMENTO, DTLANCAMENTO, TIPO (E/S), VALOR, DESCRICAO, GUIDCONTA, GUIDNATUREZA, GUIDCENTRO, NUMERODOC, OBSERVACAO, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
+- [x] Backend: lancamentosCaixaRouter (listar com filtros, criar, excluir, resumoDiario) — atualiza saldo da conta automático
+- [x] Frontend: LancamentosCaixa.tsx com extrato, totalizadores (Entradas/Saídas/Saldo) e formulário
+
+## Módulo Financeiro — Balanço Patrimonial
+- [x] Backend: balancoPatrimonialRouter com Ativo (Disponível + Contas a Receber), Passivo (Contas a Pagar) e Patrimônio Líquido
+- [x] Frontend: BalancoPatrimonial.tsx com estrutura Ativo/Passivo/PL, cards de resumo e gráfico de evolução mensal
+- [x] Integrar rotas e menu: /financeiro/contas-bancarias, /financeiro/transferencias, /financeiro/lancamentos-caixa, /financeiro/balanco-patrimonial

@@ -34,6 +34,10 @@ import ContasPagar from "./pages/financeiro/ContasPagar";
 import ContasReceber from "./pages/financeiro/ContasReceber";
 import FluxoCaixa from "./pages/financeiro/FluxoCaixa";
 import FormasPagamento from "./pages/financeiro/FormasPagamento";
+import ContasBancarias from "./pages/financeiro/ContasBancarias";
+import Transferencias from "./pages/financeiro/Transferencias";
+import LancamentosCaixa from "./pages/financeiro/LancamentosCaixa";
+import BalancoPatrimonial from "./pages/financeiro/BalancoPatrimonial";
 
 /**
  * Rota protegida: redireciona para /login se não houver sessão KS válida.
@@ -124,6 +128,18 @@ function Router() {
       </Route>
       <Route path="/financeiro/formas-pagamento">
         <ProtectedRoute><FormasPagamento /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/contas-bancarias">
+        <ProtectedRoute><ContasBancarias /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/transferencias">
+        <ProtectedRoute><Transferencias /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/lancamentos-caixa">
+        <ProtectedRoute><LancamentosCaixa /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/balanco-patrimonial">
+        <ProtectedRoute><BalancoPatrimonial /></ProtectedRoute>
       </Route>
 
       {/* Estoque / Cardápio */}
