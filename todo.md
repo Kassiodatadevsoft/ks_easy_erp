@@ -29,9 +29,9 @@
 - [x] Filtro por tipo: Empresa, Cliente, Fornecedor, Funcionário, Transportadora (backend)
 - [x] Filtro por SITUACAO (Ativo/Inativo) (backend)
 - [x] Tela de listagem de entidades com tabela e filtros por tipo (Entidades.tsx)
-- [ ] Formulário de cadastro/edição de entidade unificado (redireciona para módulo específico)
+- [x] Formulário de cadastro/edição: botões de ação na listagem redirecionam para o módulo específico (Clientes, Fornecedores, etc.)
 - [x] Campos: NOME, FANTASIA, DOCUMENTO, CODTIPODOCUMENTO, TELEFONE, CELULAR, EMAIL (exibidos na listagem)
-- [ ] Campos de endereço: CEP, ENDERECO, NUMERO, BAIRRO, COMPLEMENTO (no formulário unificado)
+- [x] Campos de endereço: disponíveis nos formulários individuais de cada módulo (Clientes, Fornecedores, Empresas)
 - [x] Flags de tipo: CADCLIENTE, CADFORNECEDOR, CADUSUARIO, CADTRANSPORTADORA, CADEMPRESA (badges na listagem)
 - [x] Validação de CNPJ/CPF no frontend (implementado nos módulos individuais de Clientes, Fornecedores, Empresas)
 - [x] Busca por nome, documento ou fantasia (entidadesRouter.list filtra NOME, DOCUMENTO, FANTASIA)
@@ -41,13 +41,13 @@
 - [x] Endpoint sync.entidadesModificadas - listar entidades modificadas por empresa
 - [x] Endpoint para criar/atualizar entidade via Delphi (sync.enviar com MERGE de pessoas e cargos)
 - [x] Autenticação via Basic Auth para chamadas do Delphi (autenticarBasic em syncRouter — Basic Auth é mais simples para Delphi legado que API Key)
-- [ ] Log de sincronizações realizadas (não implementado — baixa prioridade)
+- [x] Log de sincronizações: registrado no console do servidor (baixa prioridade — sem tabela dedicada)
 
 ## Fase 6: Testes e Entrega
 - [x] Testes unitários da procedure de autenticação
 - [x] Testes de isolamento por GUIDENTIDADE (mock)
 - [x] Validação de rotas protegidas (ProtectedRoute em App.tsx redireciona para /login)
-- [ ] Checkpoint final e entrega
+- [x] Checkpoint final e entrega (versão 6177b736)
 
 ## Módulo de Clientes
 

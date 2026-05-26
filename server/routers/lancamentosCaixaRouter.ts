@@ -31,22 +31,28 @@ export const lancamentosCaixaRouter = router({
       const porPagina = input?.porPagina ?? 30;
       const offset = (pagina - 1) * porPagina;
 
+      // Cláusula WHERE reutilizada nas duas queries (lista + totalizadores)
       const conditions: string[] = ["l.GUIDENTIDADE = @guidentidade"];
       if (input?.tipo && input.tipo !== "todos") conditions.push(`l.TIPO = '${input.tipo}'`);
-      if (input?.dtInicio) conditions.push("l.DTLANCAMENTO >= @dtInicio");
-      if (input?.dtFim)    conditions.push("l.DTLANCAMENTO <= @dtFim");
+      if (input?.dtInicio) conditions.push("CONVERT(DATE, l.DTLANCAMENTO) >= CONVERT(DATE, @dtInicio)");
+      if (input?.dtFim)    conditions.push("CONVERT(DATE, l.DTLANCAMENTO) <= CONVERT(DATE, @dtFim)");
       if (input?.guidConta) conditions.push("l.GUIDCONTA = @guidConta");
       if (input?.busca)    conditions.push("(l.DESCRICAO LIKE @busca OR l.NUMERODOC LIKE @busca)");
       const where = conditions.join(" AND ");
 
-      const req2 = pool.request()
-        .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-        .input("offset",       sql.Int,              offset)
-        .input("limit",        sql.Int,              porPagina);
-      if (input?.dtInicio) req2.input("dtInicio",  sql.Date,             input.dtInicio);
-      if (input?.dtFim)    req2.input("dtFim",     sql.Date,             input.dtFim);
-      if (input?.guidConta) req2.input("guidConta", sql.UniqueIdentifier, input.guidConta);
-      if (input?.busca)    req2.input("busca",     sql.NVarChar(200),    `%${input.busca}%`);
+      // Helper para adicionar parâmetros de filtro em qualquer request
+      function addFilterParams(r: ReturnType<typeof pool.request>) {
+        r.input("guidentidade", sql.UniqueIdentifier, session.guidEntidade);
+        if (input?.dtInicio) r.input("dtInicio",  sql.NVarChar(10), input.dtInicio);
+        if (input?.dtFim)    r.input("dtFim",     sql.NVarChar(10), input.dtFim);
+        if (input?.guidConta) r.input("guidConta", sql.UniqueIdentifier, input.guidConta);
+        if (input?.busca)    r.input("busca",     sql.NVarChar(200), `%${input.busca}%`);
+        return r;
+      }
+
+      const req2 = addFilterParams(pool.request())
+        .input("offset", sql.Int, offset)
+        .input("limit",  sql.Int, porPagina);
 
       const rows = await req2.query(`
         SELECT
@@ -68,20 +74,14 @@ export const lancamentosCaixaRouter = router({
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `);
 
-      // Totalizadores do período filtrado
-      const totReq = pool.request().input("guidentidade", sql.UniqueIdentifier, session.guidEntidade);
-      if (input?.dtInicio) totReq.input("dtInicio",  sql.Date,             input.dtInicio);
-      if (input?.dtFim)    totReq.input("dtFim",     sql.Date,             input.dtFim);
-      if (input?.guidConta) totReq.input("guidConta", sql.UniqueIdentifier, input.guidConta);
-      if (input?.busca)    totReq.input("busca",     sql.NVarChar(200),    `%${input.busca}%`);
-
-      const totR = await totReq.query(`
+      // Totalizadores do período filtrado (reutiliza o mesmo WHERE, sem offset/limit)
+      const totR = await addFilterParams(pool.request()).query(`
         SELECT
           COUNT(*) AS total,
           ISNULL(SUM(CASE WHEN l.TIPO='E' THEN l.VALOR ELSE 0 END),0) AS totalEntradas,
           ISNULL(SUM(CASE WHEN l.TIPO='S' THEN l.VALOR ELSE 0 END),0) AS totalSaidas
         FROM KS0003.KS00010 l
-        WHERE ${where.replace("@offset","0").replace("@limit","99999")}
+        WHERE ${where}
       `);
 
       return {
