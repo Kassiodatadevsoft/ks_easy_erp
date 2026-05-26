@@ -12,9 +12,8 @@ import { Plus, Search, Edit2, Trash2, Target } from "lucide-react";
 
 type Centro = {
   CODCENTRO: string; CENTRO: string; DESCRICAO: string | null;
-  guidCentroPai: string | null; NIVEL: number; MASCARA: string | null;
-  RESPONSAVEL: string | null; ORCAMENTO: number; SITUACAO: string;
-  GUIDCENTRO?: string; guidCentro?: string;
+  guidCentro: string; guidCentroPai: string | null; NIVEL: number;
+  MASCARA: string | null; RESPONSAVEL: string | null; ORCAMENTO: number; SITUACAO: string;
 };
 
 const FORM_INICIAL = { codCentro: "", centro: "", descricao: "", guidCentroPai: undefined as string|undefined, nivel: 1, orcamento: 0, situacao: "A" as "A"|"I" };
@@ -33,7 +32,7 @@ export default function CentroCusto() {
   const atualizar = trpc.centroCusto.atualizar.useMutation({ onSuccess: () => { utils.centroCusto.listar.invalidate(); toast.success("Centro atualizado!"); fecharModal(); } });
   const excluir = trpc.centroCusto.excluir.useMutation({ onSuccess: () => { utils.centroCusto.listar.invalidate(); toast.success("Centro inativado!"); } });
 
-  const filtrados = centros.filter((c: Centro) => !busca || c.CENTRO.toLowerCase().includes(busca.toLowerCase()) || (c.RESPONSAVEL ?? "").toLowerCase().includes(busca.toLowerCase()));
+  const filtrados = (centros as Centro[]).filter((c) => !busca || c.CENTRO.toLowerCase().includes(busca.toLowerCase()) || (c.RESPONSAVEL ?? "").toLowerCase().includes(busca.toLowerCase()));
 
   function abrirNova() { setEditando(null); setForm(FORM_INICIAL); setModalAberto(true); }
   function abrirEditar(c: Centro) {
@@ -45,7 +44,7 @@ export default function CentroCusto() {
   function salvar() {
     if (!form.centro.trim()) { toast.error("Informe o nome do centro"); return; }
     if (!form.codCentro.trim()) { toast.error("Informe o código do centro"); return; }
-    const guidC = editando?.GUIDCENTRO ?? editando?.guidCentro;
+    const guidC = editando?.guidCentro;
     if (editando && guidC) atualizar.mutate({ ...form, guidCentro: guidC });
     else criar.mutate(form);
   }
@@ -92,8 +91,8 @@ export default function CentroCusto() {
                 <p className="text-muted-foreground">Nenhum centro cadastrado</p>
                 <Button variant="outline" className="mt-4" onClick={abrirNova}><Plus className="h-4 w-4 mr-2" /> Criar primeiro centro</Button>
               </td></tr>
-            ) : filtrados.map((c: Centro) => (
-              <tr key={c.GUIDCENTRO} className="hover:bg-white/5 transition-colors group">
+            ) : filtrados.map((c) => (
+              <tr key={c.guidCentro} className="hover:bg-white/5 transition-colors group">
                 <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{c.MASCARA ?? c.CODCENTRO}</td>
                 <td className="px-4 py-3 font-medium" style={{ paddingLeft: `${(c.NIVEL - 1) * 16 + 16}px` }}>{c.CENTRO}</td>
                 <td className="px-4 py-3 text-muted-foreground">{c.RESPONSAVEL ?? "—"}</td>
@@ -103,7 +102,7 @@ export default function CentroCusto() {
                 <td className="px-4 py-3">
                   <div className="flex gap-1 justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => abrirEditar(c)}><Edit2 className="h-3.5 w-3.5" /></Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400 hover:text-red-300" onClick={() => excluir.mutate({ guidCentro: c.GUIDCENTRO ?? c.guidCentro ?? "" })}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400 hover:text-red-300" onClick={() => excluir.mutate({ guidCentro: c.guidCentro })}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>
                 </td>
               </tr>
@@ -140,7 +139,7 @@ export default function CentroCusto() {
                     <SelectTrigger><SelectValue placeholder="Nenhum (raiz)" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Nenhum (raiz)</SelectItem>
-                      {centrosPai.map((c: Centro) => { const g = c.GUIDCENTRO ?? c.guidCentro ?? ""; return <SelectItem key={g} value={g}>{c.MASCARA ? `${c.MASCARA} — ` : ""}{c.CENTRO}</SelectItem>; })}
+                      {centrosPai.map((c: Centro) => <SelectItem key={c.guidCentro} value={c.guidCentro}>{c.MASCARA ? `${c.MASCARA} — ` : ""}{c.CENTRO}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
