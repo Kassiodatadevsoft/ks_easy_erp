@@ -40,6 +40,10 @@ import LancamentosCaixa from "./pages/financeiro/LancamentosCaixa";
 import BalancoPatrimonial from "./pages/financeiro/BalancoPatrimonial";
 // Vendas
 import DashboardVendas from "./pages/vendas/DashboardVendas";
+// Estoque ERP
+import EstoqueDashboard from "./pages/estoque/EstoqueDashboard";
+import ProdutosErp from "./pages/estoque/ProdutosErp";
+import MovimentacoesEstoque from "./pages/estoque/MovimentacoesEstoque";
 
 /**
  * Rota protegida: redireciona para /login se não houver sessão KS válida.
@@ -153,6 +157,17 @@ function Router() {
       </Route>
       <Route path="/estoque/produtos">
         <ProtectedRoute><Produtos /></ProtectedRoute>
+      </Route>
+
+      {/* Estoque ERP */}
+      <Route path="/estoque/dashboard">
+        <ProtectedRoute><EstoqueDashboard /></ProtectedRoute>
+      </Route>
+      <Route path="/estoque/produtos-erp">
+        <ProtectedRoute><ProdutosErp /></ProtectedRoute>
+      </Route>
+      <Route path="/estoque/movimentacoes">
+        <ProtectedRoute><MovimentacoesEstoque /></ProtectedRoute>
       </Route>
 
       {/* Delivery — admin */}

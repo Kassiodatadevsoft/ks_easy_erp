@@ -28,6 +28,9 @@ import { lancamentosCaixaRouter } from "./routers/lancamentosCaixaRouter";
 import { balancoPatrimonialRouter } from "./routers/balancoPatrimonialRouter";
 import { seedRouter } from "./routers/seedRouter";
 import { vendasDashboardRouter } from "./routers/vendasDashboardRouter";
+import { categoriasEstoqueRouter } from "./routers/categoriasEstoqueRouter";
+import { produtosErpRouter } from "./routers/produtosErpRouter";
+import { movimentacoesEstoqueRouter } from "./routers/movimentacoesEstoqueRouter";
 
 export const appRouter = router({
   system: systemRouter,
@@ -87,6 +90,11 @@ export const appRouter = router({
   transferencias: transferenciasRouter,
   lancamentosCaixa: lancamentosCaixaRouter,
   balancoPatrimonial: balancoPatrimonialRouter,
+
+  // Módulo de Estoque ERP
+  categoriasEstoque: categoriasEstoqueRouter,
+  produtosErp: produtosErpRouter,
+  movimentacoesEstoque: movimentacoesEstoqueRouter,
 
   // Dashboard de Vendas
   vendasDashboard: vendasDashboardRouter,

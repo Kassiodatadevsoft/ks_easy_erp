@@ -274,3 +274,25 @@
 - [x] Tabela de controle KS0002.KS00010 criada automaticamente (GUIDSYNC, GUIDENTIDADE, DISPOSITIVO, timestamps)
 - [x] Documentação: unit Delphi KSEasyERPSync.pas com TKSEasyERPSync class completa
 - [x] Documentação: INTEGRACAO_DELPHI.md com exemplos de push, pull, ack e sync automático com TTimer
+
+## Módulo de Estoque (KS0004)
+
+### Tabelas SQL
+- [x] KS0004.KS00002: Categorias de Produto criada
+- [x] KS0004.KS00001: Produtos ERP criada com todos os campos (TAMANHO1-7, FRACIONADO, NCM, CEST, CFOP, CSOSN, alíquotas, preços, estoque)
+- [x] KS0004.KS00003: Movimentações de Estoque criada
+
+### Backend
+- [x] categoriasEstoqueRouter (KS0004.KS00002): listar, listarTodas, criar, atualizar, excluir
+- [x] produtosErpRouter (KS0004.KS00001): listar paginado, buscar autocomplete, criar, atualizar, excluir, resumoEstoque
+- [x] movimentacoesEstoqueRouter (KS0004.KS00003): listar filtros, criar (atualiza estoque), excluir (reverte), totais, top10Produtos
+
+### Frontend
+- [x] ProdutosErp.tsx: listagem com estoque atual, badge situação, filtros, formulário completo com abas (Geral, Tributação, Estoque, Preços)
+- [x] MovimentacoesEstoque.tsx: extrato de movimentações, totalizadores entradas/saídas/ajustes/saldo, busca autocomplete de produto, formulário de lançamento
+- [x] EstoqueDashboard.tsx: cards KPI (total produtos, valor em estoque, abaixo mínimo, movimentações do mês), gráfico mensal, produtos críticos, top 10 por valor
+
+### Integração
+- [x] Registrar routers no routers.ts (categoriasEstoque, produtosErp, movimentacoesEstoque)
+- [x] Rotas no App.tsx: /estoque/dashboard, /estoque/produtos-erp, /estoque/movimentacoes
+- [x] Menu lateral: grupo "Estoque ERP" com Dashboard, Produtos ERP, Movimentações

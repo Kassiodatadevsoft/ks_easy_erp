@@ -39,6 +39,8 @@ import {
   Wallet,
   Scale,
   BarChart2,
+  LayoutGrid,
+  ArrowUpDown,
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -95,6 +97,14 @@ const MENU_GROUPS = [
     items: [
       { icon: Tag,     label: "Categorias", path: "/estoque/categorias" },
       { icon: Package, label: "Produtos",   path: "/estoque/produtos" },
+    ],
+  },
+  {
+    label: "Estoque ERP",
+    items: [
+      { icon: LayoutGrid,  label: "Dashboard",       path: "/estoque/dashboard" },
+      { icon: Package,     label: "Produtos ERP",    path: "/estoque/produtos-erp" },
+      { icon: ArrowUpDown, label: "Movimentações",    path: "/estoque/movimentacoes" },
     ],
   },
   {
