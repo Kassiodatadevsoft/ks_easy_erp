@@ -131,8 +131,8 @@ export const centroCustoRouter = router({
       const pool = await getSqlPool();
       const r = await pool.request()
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-        .input("dtInicio",     sql.Date,             input.dtInicio)
-        .input("dtFim",        sql.Date,             input.dtFim)
+        .input("dtInicio",     sql.NVarChar(10),             input.dtInicio)
+        .input("dtFim",        sql.NVarChar(10),             input.dtFim)
         .query(`
           SELECT
             cc.CODCENTRO, cc.CENTRO, cc.ORCAMENTO,

@@ -42,7 +42,7 @@ export const balancoPatrimonialRouter = router({
 
       const req2 = pool.request()
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-        .input("dtRef",        sql.Date,             dtRef);
+        .input("dtRef",        sql.NVarChar(10),     dtRef);
 
       // 1. Disponível: saldo das contas bancárias ativas
       const disponR = await req2.query(`
@@ -58,22 +58,22 @@ export const balancoPatrimonialRouter = router({
       const receberR = await req2.query(`
         SELECT
           ISNULL(SUM(VALOR - ISNULL(VALORRECEBIDO,0)), 0) AS totalAberto,
-          ISNULL(SUM(CASE WHEN DTVENCIMENTO < @dtRef THEN VALOR - ISNULL(VALORRECEBIDO,0) ELSE 0 END), 0) AS totalVencido
+          ISNULL(SUM(CASE WHEN CONVERT(DATE,DTVENCIMENTO) < CONVERT(DATE,@dtRef) THEN VALOR - ISNULL(VALORRECEBIDO,0) ELSE 0 END), 0) AS totalVencido
         FROM KS0003.KS00005
         WHERE GUIDENTIDADE = @guidentidade
           AND STATUS IN ('ABERTO','PARCIAL')
-          AND DTLANCAMENTO <= @dtRef
+          AND CONVERT(DATE,DTLANCAMENTO) <= CONVERT(DATE,@dtRef)
       `);
 
       // 3. Contas a Pagar em aberto
       const pagarR = await req2.query(`
         SELECT
           ISNULL(SUM(VALOR - ISNULL(VALORPAGO,0)), 0) AS totalAberto,
-          ISNULL(SUM(CASE WHEN DTVENCIMENTO < @dtRef THEN VALOR - ISNULL(VALORPAGO,0) ELSE 0 END), 0) AS totalVencido
+          ISNULL(SUM(CASE WHEN CONVERT(DATE,DTVENCIMENTO) < CONVERT(DATE,@dtRef) THEN VALOR - ISNULL(VALORPAGO,0) ELSE 0 END), 0) AS totalVencido
         FROM KS0003.KS00004
         WHERE GUIDENTIDADE = @guidentidade
           AND STATUS IN ('ABERTO','PARCIAL')
-          AND DTLANCAMENTO <= @dtRef
+          AND CONVERT(DATE,DTLANCAMENTO) <= CONVERT(DATE,@dtRef)
       `);
 
       // 4. Receitas e Despesas acumuladas (DRE simplificado para PL)
@@ -83,7 +83,7 @@ export const balancoPatrimonialRouter = router({
           ISNULL(SUM(CASE WHEN TIPO='S' THEN VALOR ELSE 0 END),0) AS totalDespesas
         FROM KS0003.KS00010
         WHERE GUIDENTIDADE = @guidentidade
-          AND DTLANCAMENTO <= @dtRef
+          AND CONVERT(DATE,DTLANCAMENTO) <= CONVERT(DATE,@dtRef)
       `);
 
       const contas = disponR.recordset as Array<{

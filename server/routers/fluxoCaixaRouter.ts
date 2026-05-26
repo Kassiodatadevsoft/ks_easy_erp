@@ -18,8 +18,8 @@ export const fluxoCaixaRouter = router({
       const pool = await getSqlPool();
       const r = await pool.request()
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-        .input("dtInicio",     sql.Date,             input.dtInicio)
-        .input("dtFim",        sql.Date,             input.dtFim)
+        .input("dtInicio",     sql.NVarChar(10),             input.dtInicio)
+        .input("dtFim",        sql.NVarChar(10),             input.dtFim)
         .query(`
           SELECT
             CONVERT(NVARCHAR(10), DATA, 23) AS DT,
@@ -42,8 +42,8 @@ export const fluxoCaixaRouter = router({
       const pool = await getSqlPool();
       const r = await pool.request()
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-        .input("dtInicio",     sql.Date,             input.dtInicio)
-        .input("dtFim",        sql.Date,             input.dtFim)
+        .input("dtInicio",     sql.NVarChar(10),             input.dtInicio)
+        .input("dtFim",        sql.NVarChar(10),             input.dtFim)
         .query(`
           SELECT
             ISNULL(SUM(CASE WHEN TIPO='R' THEN VALOR ELSE 0 END), 0) AS TOTAL_ENTRADAS,
@@ -67,8 +67,8 @@ export const fluxoCaixaRouter = router({
       if (input.tipo) where += ` AND m.TIPO='${input.tipo}'`;
       const r = await pool.request()
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-        .input("dtInicio",     sql.Date,             input.dtInicio)
-        .input("dtFim",        sql.Date,             input.dtFim)
+        .input("dtInicio",     sql.NVarChar(10),             input.dtInicio)
+        .input("dtFim",        sql.NVarChar(10),             input.dtFim)
         .query(`
           SELECT
             m.TIPO,
@@ -92,8 +92,8 @@ export const fluxoCaixaRouter = router({
       const pool = await getSqlPool();
       const r = await pool.request()
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-        .input("dtInicio",     sql.Date,             input.dtInicio)
-        .input("dtFim",        sql.Date,             input.dtFim)
+        .input("dtInicio",     sql.NVarChar(10),             input.dtInicio)
+        .input("dtFim",        sql.NVarChar(10),             input.dtFim)
         .query(`
           SELECT
             ISNULL(cc.CENTRO, 'Sem Centro') AS CENTRO,
@@ -118,8 +118,8 @@ export const fluxoCaixaRouter = router({
       const [recR, despR] = await Promise.all([
         pool.request()
           .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-          .input("dtInicio",     sql.Date,             input.dtInicio)
-          .input("dtFim",        sql.Date,             input.dtFim)
+          .input("dtInicio",     sql.NVarChar(10),             input.dtInicio)
+          .input("dtFim",        sql.NVarChar(10),             input.dtFim)
           .query(`
             SELECT ISNULL(n.NATUREZA,'Sem Natureza') AS NATUREZA, SUM(cr.VALORRECEBIDO) AS TOTAL
             FROM KS0003.KS00005 cr
@@ -130,8 +130,8 @@ export const fluxoCaixaRouter = router({
           `),
         pool.request()
           .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-          .input("dtInicio",     sql.Date,             input.dtInicio)
-          .input("dtFim",        sql.Date,             input.dtFim)
+          .input("dtInicio",     sql.NVarChar(10),             input.dtInicio)
+          .input("dtFim",        sql.NVarChar(10),             input.dtFim)
           .query(`
             SELECT ISNULL(n.NATUREZA,'Sem Natureza') AS NATUREZA, SUM(cp.VALORPAGO) AS TOTAL
             FROM KS0003.KS00004 cp
@@ -159,8 +159,8 @@ export const fluxoCaixaRouter = router({
       const [pagarR, receberR] = await Promise.all([
         pool.request()
           .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-          .input("hoje",         sql.Date,             hoje)
-          .input("futuro",       sql.Date,             futuro)
+          .input("hoje",         sql.NVarChar(10),             hoje)
+          .input("futuro",       sql.NVarChar(10),             futuro)
           .query(`
             SELECT cp.DESCRICAO, cp.NOMECREDOR, cp.VALOR, cp.VALORPAGO,
                    CONVERT(NVARCHAR(10), cp.DTVENCIMENTO, 23) AS DTVENCIMENTO,
@@ -173,8 +173,8 @@ export const fluxoCaixaRouter = router({
           `),
         pool.request()
           .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-          .input("hoje",         sql.Date,             hoje)
-          .input("futuro",       sql.Date,             futuro)
+          .input("hoje",         sql.NVarChar(10),             hoje)
+          .input("futuro",       sql.NVarChar(10),             futuro)
           .query(`
             SELECT cr.DESCRICAO, cr.NOMEDEVEDOR, cr.VALOR, cr.VALORRECEBIDO,
                    CONVERT(NVARCHAR(10), cr.DTVENCIMENTO, 23) AS DTVENCIMENTO,
@@ -207,8 +207,8 @@ export const fluxoCaixaRouter = router({
       const [dataR, countR] = await Promise.all([
         pool.request()
           .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-          .input("dtInicio",     sql.Date,             input.dtInicio)
-          .input("dtFim",        sql.Date,             input.dtFim)
+          .input("dtInicio",     sql.NVarChar(10),             input.dtInicio)
+          .input("dtFim",        sql.NVarChar(10),             input.dtFim)
           .input("offset",       sql.Int,              offset)
           .input("pageSize",     sql.Int,              input.pageSize)
           .query(`
@@ -233,8 +233,8 @@ export const fluxoCaixaRouter = router({
           `),
         pool.request()
           .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-          .input("dtInicio",     sql.Date,             input.dtInicio)
-          .input("dtFim",        sql.Date,             input.dtFim)
+          .input("dtInicio",     sql.NVarChar(10),             input.dtInicio)
+          .input("dtFim",        sql.NVarChar(10),             input.dtFim)
           .query(`SELECT COUNT(*) AS TOTAL FROM KS0003.KS00007 m WHERE ${where}`),
       ]);
       return { items: dataR.recordset, total: (countR.recordset[0] as { TOTAL: number }).TOTAL };

@@ -38,8 +38,8 @@ export const transferenciasRouter = router({
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
         .input("offset",       sql.Int,              offset)
         .input("limit",        sql.Int,              porPagina);
-      if (input?.dtInicio) req2.input("dtInicio", sql.Date, input.dtInicio);
-      if (input?.dtFim)    req2.input("dtFim",    sql.Date, input.dtFim);
+      if (input?.dtInicio) req2.input("dtInicio", sql.NVarChar(10), input.dtInicio);
+      if (input?.dtFim)    req2.input("dtFim",    sql.NVarChar(10), input.dtFim);
       if (input?.guidConta) req2.input("guidConta", sql.UniqueIdentifier, input.guidConta);
 
       const [rows, countR] = await Promise.all([
@@ -102,7 +102,7 @@ export const transferenciasRouter = router({
       const guid = crypto.randomUUID();
       await pool.request()
         .input("guid",            sql.UniqueIdentifier, guid)
-        .input("dtransferencia",  sql.Date,             input.dtransferencia)
+        .input("dtransferencia",  sql.NVarChar(10),             input.dtransferencia)
         .input("guidorigem",      sql.UniqueIdentifier, input.guidContaOrigem)
         .input("guiddestino",     sql.UniqueIdentifier, input.guidContaDestino)
         .input("valor",           sql.Decimal(15,2),    input.valor)
