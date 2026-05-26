@@ -190,39 +190,39 @@
 ## Módulo Financeiro
 
 ### Plano de Contas (KS0003.KS00001)
-- [ ] SQL Server: criar tabela KS0003.KS00001 (CODCONTA, CONTA, DESCRICAO, TIPO (R/D/T), NIVEL, CODCONTAPAI, MASCARA, SITUACAO, GUIDCONTA, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
-- [ ] Backend: planoContasRouter com listar (árvore hierárquica), criar, atualizar, excluir
-- [ ] Frontend: PlanoContas.tsx com visualização em árvore hierárquica e formulário
+- [x] SQL Server: criar tabela KS0003.KS00001 (CODCONTA, CONTA, DESCRICAO, TIPO (R/D/T), NIVEL, CODCONTAPAI, MASCARA, SITUACAO, GUIDCONTA, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
+- [x] Backend: planoContasRouter com listar (árvore hierárquica), criar, atualizar, excluir
+- [x] Frontend: PlanoContas.tsx com visualização em árvore hierárquica e formulário
 
 ### Natureza de Caixa (KS0003.KS00002)
-- [ ] SQL Server: criar tabela KS0003.KS00002 (CODNATUREZA, NATUREZA, DESCRICAO, TIPO (R/D), CODCONTA, SITUACAO, GUIDNATUREZA, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
-- [ ] Backend: naturezaCaixaRouter com listar, criar, atualizar, excluir
-- [ ] Frontend: NaturezaCaixa.tsx com listagem, filtros e formulário
+- [x] SQL Server: criar tabela KS0003.KS00002 (CODNATUREZA, NATUREZA, DESCRICAO, TIPO (R/D), CODCONTA, SITUACAO, GUIDNATUREZA, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
+- [x] Backend: naturezaCaixaRouter com listar, criar, atualizar, excluir
+- [x] Frontend: NaturezaCaixa.tsx com listagem, filtros e formulário
 
-### Contas a Pagar (KS0003.KS00003)
-- [ ] SQL Server: criar tabela KS0003.KS00003 (CODCONTA, DESCRICAO, CODCREDOR, NOMECREDORR, VALOR, VALORPAGO, DTLANCAMENTO, DTVENCIMENTO, DTPAGAMENTO, CODNATUREZA, CODCONTA_PLANO, NUMERODOC, PARCELA, TOTALPARCELAS, STATUS (ABERTO/PAGO/PARCIAL/CANCELADO), OBSERVACAO, GUIDLANCAMENTO, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
-- [ ] Backend: contasPagarRouter com listar (filtros status/período), criar, atualizar, baixar (registrar pagamento), cancelar, excluir
-- [ ] Frontend: ContasPagar.tsx com listagem, filtros, totalizadores e formulário de lançamento e baixa
+### Contas a Pagar (KS0003.KS00004)
+- [x] SQL Server: criar tabela KS0003.KS00004 (GUIDLANCAMENTO, DESCRICAO, GUIDCREDOR, NOMECREDOR, VALOR, VALORPAGO, DTLANCAMENTO, DTVENCIMENTO, DTPAGAMENTO, GUIDNATUREZA, GUIDCENTRO, NUMERODOC, PARCELA, TOTALPARCELAS, STATUS, OBSERVACAO, GUIDENTIDADE)
+- [x] Backend: contasPagarRouter com listar (filtros status/período), criar, atualizar, baixar, cancelar, excluir, buscarFornecedores
+- [x] Frontend: ContasPagar.tsx com listagem, filtros, totalizadores, formulário e baixa (credor obrigatório via autocomplete)
 
-### Contas a Receber (KS0003.KS00004)
-- [ ] SQL Server: criar tabela KS0003.KS00004 (mesma estrutura de contas a pagar com CODDEVEDOR/NOMEDEVEDOR)
-- [ ] Backend: contasReceberRouter com listar, criar, atualizar, baixar, cancelar, excluir
-- [ ] Frontend: ContasReceber.tsx com listagem, filtros, totalizadores e formulário de lançamento e baixa
+### Contas a Receber (KS0003.KS00005)
+- [x] SQL Server: criar tabela KS0003.KS00005 (GUIDLANCAMENTO, DESCRICAO, GUIDDEVEDOR, NOMEDEVEDOR, VALOR, VALORRECEBIDO, DTLANCAMENTO, DTVENCIMENTO, DTRECEBIMENTO, GUIDNATUREZA, GUIDCENTRO, NUMERODOC, PARCELA, TOTALPARCELAS, STATUS, OBSERVACAO, GUIDENTIDADE)
+- [x] Backend: contasReceberRouter com listar, criar, atualizar, baixar, cancelar, excluir, buscarClientes
+- [x] Frontend: ContasReceber.tsx com listagem, filtros, totalizadores, formulário e baixa (devedor obrigatório via autocomplete)
 
-### Fluxo de Caixa (KS0003.KS00005)
-- [ ] Backend: fluxoCaixaRouter com relatório de fluxo por período (entradas, saídas, saldo)
-- [ ] Frontend: FluxoCaixa.tsx com gráfico de barras (entradas vs saídas) e tabela por período
+### Fluxo de Caixa (KS0003.KS00007)
+- [x] Backend: fluxoCaixaRouter com relatório de fluxo por período (entradas, saídas, saldo), DRE simplificado
+- [x] Frontend: FluxoCaixa.tsx com gráfico de barras (entradas vs saídas), DRE e tabela de movimentações
 
 ### Integração e Menu
-- [ ] Registrar todos os routers no routers.ts principal
-- [ ] Registrar rotas no App.tsx (/financeiro/plano-contas, /financeiro/natureza-caixa, /financeiro/contas-pagar, /financeiro/contas-receber, /financeiro/fluxo-caixa)
-- [ ] Atualizar menu lateral com grupo Financeiro expandido
+- [x] Registrar todos os routers no routers.ts principal
+- [x] Registrar rotas no App.tsx (/financeiro/plano-contas, /financeiro/natureza-caixa, /financeiro/contas-pagar, /financeiro/contas-receber, /financeiro/fluxo-caixa, /financeiro/formas-pagamento)
+- [x] Atualizar menu lateral com grupo Financeiro expandido
 
 ## Módulo Financeiro — Formas de Pagamento
 
-- [ ] SQL Server: criar tabela KS0003.KS00006 (CODPAGAMENTO, PAGAMENTO, CODFISCAL, DESCRICAOFISCAL, INTEGRACAOTEF, BANDEIRA, CNPJTEF, AUTORIZADORA, SITUACAO, GUIDPAGAMENTO, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
-- [ ] SQL Server: popular tabela com os 14 códigos fiscais SEFAZ padrão (01-Dinheiro, 02-Cheque, 03-Cartão Crédito, 04-Cartão Débito, 05-Crédito Loja, 10-Vale Alimentação, 11-Vale Refeição, 12-Vale Presente, 13-Vale Combustível, 15-Boleto, 16-Depósito, 17-PIX, 18-Transferência/Carteira Digital, 90-Sem pagamento)
-- [ ] Backend: formasPagamentoRouter (listar paginado, listarTodas, criar, atualizar, excluir)
-- [ ] Frontend: FormasPagamento.tsx com tabela, badge código fiscal, toggle TEF e modal de cadastro
-- [ ] App.tsx: rota /financeiro/formas-pagamento
-- [ ] Menu: adicionar "Formas de Pagamento" na seção Financeiro
+- [x] SQL Server: criar tabela KS0003.KS00006 com campos CODIGOSEFAZ, INTEGRATEF, BANDEIRATEF, ACEITATROCO
+- [x] SQL Server: popular tabela com 17 formas de pagamento SEFAZ padrão (01-90)
+- [x] Backend: formasPagamentoRouter (listar paginado, listarTodas, criar, atualizar, excluir)
+- [x] Frontend: FormasPagamento.tsx com tabela, badge código SEFAZ, toggle TEF e modal de cadastro
+- [x] App.tsx: rota /financeiro/formas-pagamento
+- [x] Menu: "Formas de Pagamento" na seção Financeiro

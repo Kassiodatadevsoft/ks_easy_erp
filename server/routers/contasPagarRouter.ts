@@ -68,7 +68,9 @@ export const contasPagarRouter = router({
         .query(`
           SELECT
             CAST(cp.GUIDLANCAMENTO AS NVARCHAR(36)) AS guidLancamento,
-            cp.DESCRICAO, cp.NOMECREDOR, cp.VALOR, cp.VALORPAGO,
+            cp.DESCRICAO, cp.NOMECREDOR,
+            CAST(cp.GUIDCREDOR AS NVARCHAR(36)) AS guidCredor,
+            cp.VALOR, cp.VALORPAGO,
             CONVERT(NVARCHAR(10), cp.DTLANCAMENTO, 23)  AS dtLancamento,
             CONVERT(NVARCHAR(10), cp.DTVENCIMENTO, 23)  AS dtVencimento,
             CONVERT(NVARCHAR(10), cp.DTPAGAMENTO, 23)   AS dtPagamento,

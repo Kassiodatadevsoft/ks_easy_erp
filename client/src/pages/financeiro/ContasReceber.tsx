@@ -15,6 +15,7 @@ type Lanc = {
   guidLancamento: string;
   DESCRICAO: string;
   NOMEDEVEDOR: string | null;
+  guidDevedor: string | null;
   VALOR: number;
   VALORRECEBIDO: number;
   dtLancamento: string;
@@ -100,7 +101,7 @@ export default function ContasReceber() {
   function abrirEditar(l: Lanc) {
     setEditando(l);
     setBuscaDevedor(l.NOMEDEVEDOR ?? "");
-    setForm({ ...FORM_INICIAL, descricao: l.DESCRICAO, guidDevedor: "", nomeDevedor: l.NOMEDEVEDOR ?? "", valor: Number(l.VALOR), dtLancamento: l.dtLancamento?.slice(0,10) ?? hoje(), dtVencimento: l.dtVencimento?.slice(0,10) ?? hoje(), guidNatureza: l.guidNatureza ?? "", guidCentro: l.guidCentro ?? "", numerodoc: l.NUMERODOC ?? "", parcela: l.PARCELA, totalParcelas: l.TOTALPARCELAS, observacao: l.OBSERVACAO ?? "" });
+    setForm({ ...FORM_INICIAL, descricao: l.DESCRICAO, guidDevedor: l.guidDevedor ?? "", nomeDevedor: l.NOMEDEVEDOR ?? "", valor: Number(l.VALOR), dtLancamento: l.dtLancamento?.slice(0,10) ?? hoje(), dtVencimento: l.dtVencimento?.slice(0,10) ?? hoje(), guidNatureza: l.guidNatureza ?? "", guidCentro: l.guidCentro ?? "", numerodoc: l.NUMERODOC ?? "", parcela: l.PARCELA, totalParcelas: l.TOTALPARCELAS, observacao: l.OBSERVACAO ?? "" });
     setModalAberto(true);
   }
   function fecharModal() { setModalAberto(false); setEditando(null); setForm(FORM_INICIAL); setBuscaDevedor(""); setMostrarSugestoes(false); }

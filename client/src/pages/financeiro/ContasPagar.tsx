@@ -15,6 +15,7 @@ type Lanc = {
   guidLancamento: string;
   DESCRICAO: string;
   NOMECREDOR: string | null;
+  guidCredor: string | null;
   VALOR: number;
   VALORPAGO: number;
   dtLancamento: string;
@@ -101,7 +102,7 @@ export default function ContasPagar() {
   function abrirEditar(l: Lanc) {
     setEditando(l);
     setBuscaCredor(l.NOMECREDOR ?? "");
-    setForm({ ...FORM_INICIAL, descricao: l.DESCRICAO, guidCredor: "", nomeCredor: l.NOMECREDOR ?? "", valor: Number(l.VALOR), dtLancamento: l.dtLancamento?.slice(0,10) ?? hoje(), dtVencimento: l.dtVencimento?.slice(0,10) ?? hoje(), guidNatureza: l.guidNatureza ?? "", guidCentro: l.guidCentro ?? "", numerodoc: l.NUMERODOC ?? "", parcela: l.PARCELA, totalParcelas: l.TOTALPARCELAS, observacao: l.OBSERVACAO ?? "" });
+    setForm({ ...FORM_INICIAL, descricao: l.DESCRICAO, guidCredor: l.guidCredor ?? "", nomeCredor: l.NOMECREDOR ?? "", valor: Number(l.VALOR), dtLancamento: l.dtLancamento?.slice(0,10) ?? hoje(), dtVencimento: l.dtVencimento?.slice(0,10) ?? hoje(), guidNatureza: l.guidNatureza ?? "", guidCentro: l.guidCentro ?? "", numerodoc: l.NUMERODOC ?? "", parcela: l.PARCELA, totalParcelas: l.TOTALPARCELAS, observacao: l.OBSERVACAO ?? "" });
     setModalAberto(true);
   }
   function fecharModal() { setModalAberto(false); setEditando(null); setForm(FORM_INICIAL); setBuscaCredor(""); setMostrarSugestoes(false); }

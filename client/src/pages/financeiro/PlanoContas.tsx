@@ -43,11 +43,13 @@ const FORM_INICIAL = {
   situacao: "A" as "A" | "I",
 };
 
-function ContaNode({ conta, filhos, nivel, busca, onEdit, onDelete }: {
-  conta: Conta; filhos: Conta[]; nivel: number; busca: string;
+function ContaNode({ conta, todasContas, nivel, busca, onEdit, onDelete }: {
+  conta: Conta; todasContas: Conta[]; nivel: number; busca: string;
   onEdit: (c: Conta) => void; onDelete: (c: Conta) => void;
 }) {
   const [aberto, setAberto] = useState(nivel < 2);
+  const guidC = conta.GUIDCONTA ?? conta.guidConta;
+  const filhos = todasContas.filter(f => (f.GUIDCONTAPAI ?? f.guidContaPai) === guidC);
   const temFilhos = filhos.length > 0;
   const match = !busca || conta.CONTA.toLowerCase().includes(busca.toLowerCase()) || conta.CODCONTA.toLowerCase().includes(busca.toLowerCase());
   if (!match && !temFilhos) return null;
@@ -70,7 +72,7 @@ function ContaNode({ conta, filhos, nivel, busca, onEdit, onDelete }: {
         </div>
       </div>
       {aberto && filhos.map(f => (
-        <ContaNode key={f.GUIDCONTA ?? f.guidConta} conta={f} filhos={[]} nivel={nivel + 1} busca={busca} onEdit={onEdit} onDelete={onDelete} />
+        <ContaNode key={f.GUIDCONTA ?? f.guidConta} conta={f} todasContas={todasContas} nivel={nivel + 1} busca={busca} onEdit={onEdit} onDelete={onDelete} />
       ))}
     </div>
   );
@@ -182,21 +184,17 @@ export default function PlanoContas() {
           </div>
         ) : (
           <div className="divide-y divide-white/5">
-            {arvore.map((c: Conta) => {
-              const guidC = c.GUIDCONTA ?? c.guidConta;
-              const filhos = (contas as Conta[]).filter(f => (f.GUIDCONTAPAI ?? f.guidContaPai) === guidC);
-              return (
-                <ContaNode
-                  key={guidC}
-                  conta={c}
-                  filhos={filhos}
-                  nivel={1}
-                  busca={busca}
-                  onEdit={abrirEditar}
-                  onDelete={(ct) => excluir.mutate({ guidConta: ct.GUIDCONTA ?? ct.guidConta })}
-                />
-              );
-            })}
+            {arvore.map((c: Conta) => (
+              <ContaNode
+                key={c.GUIDCONTA ?? c.guidConta}
+                conta={c}
+                todasContas={contas as Conta[]}
+                nivel={1}
+                busca={busca}
+                onEdit={abrirEditar}
+                onDelete={(ct) => excluir.mutate({ guidConta: ct.GUIDCONTA ?? ct.guidConta })}
+              />
+            ))}
           </div>
         )}
       </div>
