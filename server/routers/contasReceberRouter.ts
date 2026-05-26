@@ -47,24 +47,29 @@ export const contasReceberRouter = router({
       const pageSize = input?.pageSize ?? 20;
       const offset = (page - 1) * pageSize;
 
-      let where = "cr.GUIDENTIDADE = @guidentidade";
-      if (input?.status) where += ` AND cr.STATUS = '${input.status}'`;
-      if (input?.dtInicio) where += ` AND cr.DTVENCIMENTO >= '${input.dtInicio}'`;
-      if (input?.dtFim) where += ` AND cr.DTVENCIMENTO <= '${input.dtFim}'`;
-      if (input?.busca) {
-        const b = input.busca.replace(/'/g, "''");
-        where += ` AND (cr.DESCRICAO LIKE '%${b}%' OR cr.NOMEDEVEDOR LIKE '%${b}%' OR cr.NUMERODOC LIKE '%${b}%')`;
+      const conditions: string[] = ["cr.GUIDENTIDADE = @guidentidade"];
+      if (input?.status) conditions.push(`cr.STATUS = '${input.status.replace(/'/g, "''")}' `);
+      if (input?.dtInicio) conditions.push("CONVERT(DATE, cr.DTVENCIMENTO) >= CONVERT(DATE, @dtInicio)");
+      if (input?.dtFim) conditions.push("CONVERT(DATE, cr.DTVENCIMENTO) <= CONVERT(DATE, @dtFim)");
+      if (input?.busca) conditions.push("(cr.DESCRICAO LIKE @busca OR cr.NOMEDEVEDOR LIKE @busca OR cr.NUMERODOC LIKE @busca)");
+      const where = conditions.join(" AND ");
+
+      const guidEnt = session.guidEntidade;
+      function addParams(req: ReturnType<typeof pool.request>) {
+        req.input("guidentidade", sql.UniqueIdentifier, guidEnt);
+        if (input?.dtInicio) req.input("dtInicio", sql.NVarChar(10), input.dtInicio);
+        if (input?.dtFim)    req.input("dtFim",    sql.NVarChar(10), input.dtFim);
+        if (input?.busca)    req.input("busca",    sql.NVarChar(200), `%${input.busca}%`);
+        return req;
       }
 
-      const countR = await pool.request()
-        .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
+      const countR = await addParams(pool.request())
         .query(`SELECT COUNT(*) AS TOTAL FROM KS0003.KS00005 cr WHERE ${where}`);
       const total = (countR.recordset[0] as { TOTAL: number }).TOTAL;
 
-      const r = await pool.request()
-        .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-        .input("offset",       sql.Int,              offset)
-        .input("pageSize",     sql.Int,              pageSize)
+      const r = await addParams(pool.request())
+        .input("offset",   sql.Int, offset)
+        .input("pageSize", sql.Int, pageSize)
         .query(`
           SELECT
             CAST(cr.GUIDLANCAMENTO AS NVARCHAR(36)) AS guidLancamento,
@@ -100,18 +105,21 @@ export const contasReceberRouter = router({
       const session = await getKsSession(ctx.req);
       if (!session) return { aberto: 0, recebido: 0, vencido: 0, total: 0 };
       const pool = await getSqlPool();
-      let where = "GUIDENTIDADE = @guidentidade";
-      if (input?.dtInicio) where += ` AND DTVENCIMENTO >= '${input.dtInicio}'`;
-      if (input?.dtFim) where += ` AND DTVENCIMENTO <= '${input.dtFim}'`;
+      const conds2: string[] = ["GUIDENTIDADE = @guidentidade"];
+      if (input?.dtInicio) conds2.push("CONVERT(DATE, DTVENCIMENTO) >= CONVERT(DATE, @dtInicio)");
+      if (input?.dtFim)    conds2.push("CONVERT(DATE, DTVENCIMENTO) <= CONVERT(DATE, @dtFim)");
+      const where2 = conds2.join(" AND ");
       const r = await pool.request()
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
+        .input("dtInicio", sql.NVarChar(10), input?.dtInicio ?? null)
+        .input("dtFim",    sql.NVarChar(10), input?.dtFim ?? null)
         .query(`
           SELECT
             ISNULL(SUM(CASE WHEN STATUS IN ('ABERTO','PARCIAL') AND DTVENCIMENTO >= CAST(GETDATE() AS DATE) THEN VALOR - VALORRECEBIDO ELSE 0 END), 0) AS ABERTO,
             ISNULL(SUM(CASE WHEN STATUS = 'PAGO' THEN VALORRECEBIDO ELSE 0 END), 0) AS RECEBIDO,
             ISNULL(SUM(CASE WHEN STATUS IN ('ABERTO','PARCIAL') AND DTVENCIMENTO < CAST(GETDATE() AS DATE) THEN VALOR - VALORRECEBIDO ELSE 0 END), 0) AS VENCIDO,
             ISNULL(SUM(VALOR), 0) AS TOTAL
-          FROM KS0003.KS00005 WHERE ${where}
+          FROM KS0003.KS00005 WHERE ${where2}
         `);
       const row = r.recordset[0] as { ABERTO: number; RECEBIDO: number; VENCIDO: number; TOTAL: number };
       return { aberto: row.ABERTO, recebido: row.RECEBIDO, vencido: row.VENCIDO, total: row.TOTAL };
