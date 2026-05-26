@@ -48,12 +48,12 @@ export const transportadorasRouter = router({
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rows = await querySql<{
-        CODPESSOA: number; GUIDPESSOA: string; NOME: string; FANTASIA: string | null;
+        CODIGO: number; GUIDPESSOA: string; NOME: string; FANTASIA: string | null;
         DOCUMENTO: string; TELEFONE: string | null; CELULAR: string | null;
         EMAIL: string | null; CIDADE: string | null; UF: string | null;
         SITUACAO: string; CADCLIENTE: boolean; CADFORNECEDOR: boolean;
       }>(
-        `SELECT c.CODPESSOA, c.GUIDPESSOA, c.NOME, c.FANTASIA, c.DOCUMENTO,
+        `SELECT c.CODIGO, c.GUIDPESSOA, c.NOME, c.FANTASIA, c.DOCUMENTO,
                 c.TELEFONE, c.CELULAR, c.EMAIL, c.SITUACAO,
                 c.CADCLIENTE, c.CADFORNECEDOR,
                 ci.CIDADE, ci.UF
@@ -181,16 +181,16 @@ export const transportadorasRouter = router({
     .mutation(async ({ input, ctx }) => {
       const session = await getKsSession(ctx.req);
 
-      // Gerar próximo CODPESSOA
+      // Gerar próximo CODIGO
       const maxRows = await querySql<{ MAXCOD: number }>(
-        `SELECT ISNULL(MAX(CODPESSOA), 0) + 1 AS MAXCOD FROM KS0002.KS00001`,
-        {}
+        `SELECT ISNULL(MAX(CODIGO), 0) + 1 AS MAXCOD FROM KS0002.KS00001 WHERE GUIDENTIDADE = @GUIDENTIDADE`,
+        { GUIDENTIDADE: { type: sql.UniqueIdentifier, value: session.guidEntidade } }
       );
       const novoCodigo = maxRows?.[0]?.MAXCOD ?? 1;
 
       await querySql(
         `INSERT INTO KS0002.KS00001 (
-          CODPESSOA, GUIDPESSOA, GUIDENTIDADE,
+          CODIGO, GUIDPESSOA, GUIDENTIDADE,
           NOME, FANTASIA, DOCUMENTO, CODTIPODOCUMENTO,
           TELEFONE, CELULAR, WHATSAPP, EMAIL, IE, INDIEDEST,
           DATANASCIMENTO, CEP, ENDERECO, NUMERO, COMPLEMENTO, BAIRRO, CODCIDADE,
@@ -198,7 +198,7 @@ export const transportadorasRouter = router({
           CADTRANSPORTADORA, CADCLIENTE, CADFORNECEDOR, CONSTASPC, OBSERVACAO,
           DATACADASTRO, ULTIMAALTERACAO
         ) VALUES (
-          @CODPESSOA, NEWID(), @GUIDENTIDADE,
+          @CODIGO, NEWID(), @GUIDENTIDADE,
           @NOME, @FANTASIA, @DOCUMENTO, @CODTIPODOCUMENTO,
           @TELEFONE, @CELULAR, @WHATSAPP, @EMAIL, @IE, @INDIEDEST,
           @DATANASCIMENTO, @CEP, @ENDERECO, @NUMERO, @COMPLEMENTO, @BAIRRO, @CODCIDADE,
@@ -207,7 +207,7 @@ export const transportadorasRouter = router({
           GETDATE(), GETDATE()
         )`,
         {
-          CODPESSOA: { type: sql.Int, value: novoCodigo },
+          CODIGO: { type: sql.Int, value: novoCodigo },
           GUIDENTIDADE: { type: sql.UniqueIdentifier, value: session.guidEntidade },
           NOME: { type: sql.VarChar(100), value: input.nome },
           FANTASIA: { type: sql.VarChar(60), value: input.fantasia ?? null },

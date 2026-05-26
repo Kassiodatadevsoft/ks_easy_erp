@@ -150,7 +150,7 @@ export default function Transportadoras() {
               ) : (
                 items.map((item) => (
                   <tr key={item.GUIDPESSOA} className="border-b border-gray-100 hover:bg-orange-50/40 transition-colors">
-                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">{item.CODPESSOA}</td>
+                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">{item.CODIGO}</td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-900">{item.NOME}</div>
                       {item.FANTASIA && <div className="text-xs text-gray-400">{item.FANTASIA}</div>}
