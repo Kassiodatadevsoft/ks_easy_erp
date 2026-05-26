@@ -38,6 +38,7 @@ import {
   ArrowRightLeft,
   Wallet,
   Scale,
+  BarChart2,
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -68,8 +69,9 @@ const MENU_GROUPS = [
   {
     label: "Comercial",
     items: [
-      { icon: ShoppingCart, label: "Vendas",   path: "/vendas" },
-      { icon: FileText,     label: "Pedidos",  path: "/pedidos" },
+      { icon: BarChart2,    label: "Dashboard",  path: "/vendas/dashboard" },
+      { icon: ShoppingCart, label: "Vendas",     path: "/vendas" },
+      { icon: FileText,     label: "Pedidos",    path: "/pedidos" },
     ],
   },
   {

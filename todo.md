@@ -247,3 +247,30 @@
 - [x] Backend: balancoPatrimonialRouter com Ativo (Disponível + Contas a Receber), Passivo (Contas a Pagar) e Patrimônio Líquido
 - [x] Frontend: BalancoPatrimonial.tsx com estrutura Ativo/Passivo/PL, cards de resumo e gráfico de evolução mensal
 - [x] Integrar rotas e menu: /financeiro/contas-bancarias, /financeiro/transferencias, /financeiro/lancamentos-caixa, /financeiro/balanco-patrimonial
+
+## Seed de Dados Padrão
+
+- [x] Backend: seedRouter com popularPlanoContas (5 grupos), popularCentroCusto (4 centros), popularNaturezaCaixa (20 naturezas), status
+- [x] Backend: seedRouter popular Centro de Custo padrão (4 centros: Administrativo, Comercial, Operacional, Financeiro)
+- [x] Backend: seedRouter popular Natureza de Caixa padrão (20 naturezas: vendas, compras, salários, impostos, etc.)
+- [x] Frontend: botão "Dados Padrão" (amber) nas páginas PlanoContas.tsx, CentroCusto.tsx e NaturezaCaixa.tsx (só aparece quando tabela está vazia)
+
+## Dashboard de Vendas
+
+- [x] Backend: vendasDashboardRouter com KPIs (faturamento, ticket médio, qtd pedidos, clientes ativos), comparação com período anterior
+- [x] Backend: faturamentoMensal (12 meses), topClientes (top 10), receitasPorNatureza (pizza), statusReceber (alertas)
+- [x] Frontend: DashboardVendas.tsx com cards KPI, gráfico de barras mensal, pizza por natureza, top clientes com barra de progresso, painel A Receber
+- [x] App.tsx: rota /vendas e /vendas/dashboard
+- [x] Menu: item "Dashboard" em Comercial (BarChart2)
+
+## API de Sincronização Delphi (Bidirecional)
+
+- [x] Backend: syncDelphiRouter com info, push, pull, ack
+- [x] Endpoint GET /api/trpc/syncDelphi.info — metadados e timestamps da empresa
+- [x] Endpoint POST /api/trpc/syncDelphi.push — upsert de pessoas, contasReceber, contasPagar, lancamentosCaixa via MERGE
+- [x] Endpoint GET /api/trpc/syncDelphi.pull — delta incremental por ULTIMAALTERACAO (8 entidades)
+- [x] Endpoint POST /api/trpc/syncDelphi.ack — confirma recebimento e atualiza lastSyncAt
+- [x] Autenticação via Bearer token (campo APIKEY da tabela KS0002.KS00001)
+- [x] Tabela de controle KS0002.KS00010 criada automaticamente (GUIDSYNC, GUIDENTIDADE, DISPOSITIVO, timestamps)
+- [x] Documentação: unit Delphi KSEasyERPSync.pas com TKSEasyERPSync class completa
+- [x] Documentação: INTEGRACAO_DELPHI.md com exemplos de push, pull, ack e sync automático com TTimer

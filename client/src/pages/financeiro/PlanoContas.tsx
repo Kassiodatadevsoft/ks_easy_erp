@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Search, ChevronRight, ChevronDown, Edit2, Trash2, BookOpen } from "lucide-react";
+import { Plus, Search, ChevronRight, ChevronDown, Edit2, Trash2, BookOpen, Sparkles } from "lucide-react";
 
 type Conta = {
   CODCONTA: string;
@@ -103,6 +103,11 @@ export default function PlanoContas() {
     onSuccess: () => { utils.planoContas.listar.invalidate(); toast.success("Conta inativada!"); },
     onError: (e) => toast.error(e.message),
   });
+  const seedStatus = trpc.seed.status.useQuery();
+  const popularPlano = trpc.seed.popularPlanoContas.useMutation({
+    onSuccess: (r) => { utils.planoContas.listar.invalidate(); seedStatus.refetch(); toast.success(`${r.inseridos} contas padrão inseridas!`); },
+    onError: (e) => toast.error(e.message),
+  });
 
   const arvore = useMemo(() => {
     return (contas as Conta[]).filter(c => !c.GUIDCONTAPAI && !c.guidContaPai);
@@ -147,7 +152,14 @@ export default function PlanoContas() {
             <p className="text-sm text-muted-foreground">Estrutura hierárquica de contas contábeis</p>
           </div>
         </div>
-        <Button onClick={abrirNova} className="gap-2"><Plus className="h-4 w-4" /> Nova Conta</Button>
+        <div className="flex gap-2">
+          {(seedStatus.data?.planoContas ?? 0) === 0 && (
+            <Button variant="outline" onClick={() => popularPlano.mutate()} disabled={popularPlano.isPending} className="gap-2 border-amber-500/30 text-amber-400 hover:bg-amber-500/10">
+              <Sparkles className="h-4 w-4" /> {popularPlano.isPending ? "Inserindo..." : "Dados Padrão"}
+            </Button>
+          )}
+          <Button onClick={abrirNova} className="gap-2"><Plus className="h-4 w-4" /> Nova Conta</Button>
+        </div>
       </div>
 
       <div className="flex gap-3">

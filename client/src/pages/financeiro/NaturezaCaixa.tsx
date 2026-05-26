@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Search, Edit2, Trash2, Tag } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Tag, Sparkles } from "lucide-react";
 
 type Natureza = {
   NATUREZA: string; DESCRICAO: string | null;
@@ -36,6 +36,11 @@ export default function NaturezaCaixa() {
   const criar = trpc.naturezaCaixa.criar.useMutation({ onSuccess: () => { utils.naturezaCaixa.listar.invalidate(); toast.success("Natureza criada!"); fecharModal(); } });
   const atualizar = trpc.naturezaCaixa.atualizar.useMutation({ onSuccess: () => { utils.naturezaCaixa.listar.invalidate(); toast.success("Natureza atualizada!"); fecharModal(); } });
   const excluir = trpc.naturezaCaixa.excluir.useMutation({ onSuccess: () => { utils.naturezaCaixa.listar.invalidate(); toast.success("Natureza inativada!"); } });
+  const seedStatus = trpc.seed.status.useQuery();
+  const popularNat = trpc.seed.popularNaturezaCaixa.useMutation({
+    onSuccess: (r) => { utils.naturezaCaixa.listar.invalidate(); seedStatus.refetch(); toast.success(`${r.inseridos} naturezas padrão inseridas!`); },
+    onError: (e) => toast.error(e.message),
+  });
 
   function abrirNova() { setEditando(null); setForm(FORM_INICIAL); setModalAberto(true); }
   function abrirEditar(n: Natureza) {
@@ -85,7 +90,14 @@ export default function NaturezaCaixa() {
             <p className="text-sm text-muted-foreground">Classificação de receitas e despesas</p>
           </div>
         </div>
-        <Button onClick={abrirNova} className="gap-2"><Plus className="h-4 w-4" /> Nova Natureza</Button>
+        <div className="flex gap-2">
+          {(seedStatus.data?.naturezaCaixa ?? 0) === 0 && (
+            <Button variant="outline" onClick={() => popularNat.mutate()} disabled={popularNat.isPending} className="gap-2 border-amber-500/30 text-amber-400 hover:bg-amber-500/10">
+              <Sparkles className="h-4 w-4" /> {popularNat.isPending ? "Inserindo..." : "Dados Padrão"}
+            </Button>
+          )}
+          <Button onClick={abrirNova} className="gap-2"><Plus className="h-4 w-4" /> Nova Natureza</Button>
+        </div>
       </div>
 
       <div className="flex gap-3">

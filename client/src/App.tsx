@@ -38,6 +38,8 @@ import ContasBancarias from "./pages/financeiro/ContasBancarias";
 import Transferencias from "./pages/financeiro/Transferencias";
 import LancamentosCaixa from "./pages/financeiro/LancamentosCaixa";
 import BalancoPatrimonial from "./pages/financeiro/BalancoPatrimonial";
+// Vendas
+import DashboardVendas from "./pages/vendas/DashboardVendas";
 
 /**
  * Rota protegida: redireciona para /login se não houver sessão KS válida.
@@ -101,7 +103,10 @@ function Router() {
 
       {/* Comercial */}
       <Route path="/vendas">
-        <ProtectedRoute><ComingSoon title="Módulo de Vendas" /></ProtectedRoute>
+        <ProtectedRoute><DashboardVendas /></ProtectedRoute>
+      </Route>
+      <Route path="/vendas/dashboard">
+        <ProtectedRoute><DashboardVendas /></ProtectedRoute>
       </Route>
       <Route path="/pedidos">
         <ProtectedRoute><ComingSoon title="Módulo de Pedidos" /></ProtectedRoute>

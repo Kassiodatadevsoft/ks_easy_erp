@@ -5,6 +5,7 @@ import { publicProcedure, router } from "./_core/trpc";
 import { ksAuthRouter } from "./routers/ksAuthRouter";
 import { entidadesRouter } from "./routers/entidadesRouter";
 import { syncRouter } from "./routers/syncRouter";
+import { syncDelphiRouter } from "./routers/syncDelphiRouter";
 import { clientesRouter } from "./routers/clientesRouter";
 import { fornecedoresRouter } from "./routers/fornecedoresRouter";
 import { empresasRouter } from "./routers/empresasRouter";
@@ -25,6 +26,8 @@ import { contasBancariasRouter } from "./routers/contasBancariasRouter";
 import { transferenciasRouter } from "./routers/transferenciasRouter";
 import { lancamentosCaixaRouter } from "./routers/lancamentosCaixaRouter";
 import { balancoPatrimonialRouter } from "./routers/balancoPatrimonialRouter";
+import { seedRouter } from "./routers/seedRouter";
+import { vendasDashboardRouter } from "./routers/vendasDashboardRouter";
 
 export const appRouter = router({
   system: systemRouter,
@@ -85,8 +88,15 @@ export const appRouter = router({
   lancamentosCaixa: lancamentosCaixaRouter,
   balancoPatrimonial: balancoPatrimonialRouter,
 
+  // Dashboard de Vendas
+  vendasDashboard: vendasDashboardRouter,
+
+  // Seed de dados padrão
+  seed: seedRouter,
+
   // Sincronização com sistema legado Delphi
   sync: syncRouter,
+  syncDelphi: syncDelphiRouter,
 });
 
 export type AppRouter = typeof appRouter;
