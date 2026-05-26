@@ -116,6 +116,11 @@
 - [x] Frontend: registrar rota /cadastros/transportadoras no App.tsx
 - [x] Frontend: adicionar item Transportadoras no menu do KsDashboardLayout
 
+## Correção de Campos camelCase no Módulo Financeiro
+- [x] ContasPagar.tsx: tipo Lanc atualizado para camelCase (guidLancamento, dtVencimento, nomeNatureza, etc.)
+- [x] ContasPagar.tsx: tabela de listagem corrigida para usar campos camelCase do router
+- [x] ContasReceber.tsx: tipo Lanc e tabela de listagem corrigidos para camelCase
+
 ## Campo MENSALIDADE e Sincronização Offline
 - [ ] Frontend: campo MENSALIDADE (Mensal=1/Anual=2) no formulário de Empresas, visível apenas para CNPJ 50.303.631/0001-58
 - [ ] Backend: adicionar MENSALIDADE no Zod do criar/atualizar e nos SQLs do empresasRouter

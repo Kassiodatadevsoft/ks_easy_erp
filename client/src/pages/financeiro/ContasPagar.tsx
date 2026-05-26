@@ -12,14 +12,24 @@ import { toast } from "sonner";
 import { Plus, Search, Edit2, Trash2, CheckCircle, XCircle, TrendingDown, AlertTriangle, Clock } from "lucide-react";
 
 type Lanc = {
-  CODLANCAMENTO: number; DESCRICAO: string; NOMECREDOR: string | null;
-  GUIDCREDOR: string | null;
-  VALOR: number; VALORPAGO: number; DESCONTO: number; JUROS: number; MULTA: number;
-  DTLANCAMENTO: string; DTVENCIMENTO: string; DTPAGAMENTO: string | null;
-  NOMENATUREZA: string | null; NOMECENTRO: string | null;
-  NUMERODOC: string | null; PARCELA: number; TOTALPARCELAS: number;
-  STATUS: string; FORMAPAGAMENTO: string | null; OBSERVACAO: string | null;
-  GUIDLANCAMENTO: string;
+  guidLancamento: string;
+  DESCRICAO: string;
+  NOMECREDOR: string | null;
+  VALOR: number;
+  VALORPAGO: number;
+  dtLancamento: string;
+  dtVencimento: string;
+  dtPagamento: string | null;
+  nomeNatureza: string | null;
+  nomeCentro: string | null;
+  NUMERODOC: string | null;
+  PARCELA: number;
+  TOTALPARCELAS: number;
+  STATUS: string;
+  nomePagamento: string | null;
+  OBSERVACAO: string | null;
+  guidNatureza: string | null;
+  guidCentro: string | null;
 };
 
 type Fornecedor = { guidPessoa: string; nome: string; documento: string };
@@ -85,13 +95,13 @@ export default function ContasPagar() {
   const total = (data as { total?: number } | undefined)?.total ?? 0;
   const tots = totaisData;
 
-  function isVencido(l: Lanc) { return l.STATUS === "ABERTO" && new Date(l.DTVENCIMENTO) < new Date(hoje()); }
+  function isVencido(l: Lanc) { return l.STATUS === "ABERTO" && new Date(l.dtVencimento) < new Date(hoje()); }
 
   function abrirNova() { setEditando(null); setForm(FORM_INICIAL); setModalAberto(true); }
   function abrirEditar(l: Lanc) {
     setEditando(l);
     setBuscaCredor(l.NOMECREDOR ?? "");
-    setForm({ ...FORM_INICIAL, descricao: l.DESCRICAO, guidCredor: l.GUIDCREDOR ?? "", nomeCredor: l.NOMECREDOR ?? "", valor: Number(l.VALOR), dtLancamento: l.DTLANCAMENTO?.slice(0,10) ?? hoje(), dtVencimento: l.DTVENCIMENTO?.slice(0,10) ?? hoje(), numerodoc: l.NUMERODOC ?? "", parcela: l.PARCELA, totalParcelas: l.TOTALPARCELAS, observacao: l.OBSERVACAO ?? "" });
+    setForm({ ...FORM_INICIAL, descricao: l.DESCRICAO, guidCredor: "", nomeCredor: l.NOMECREDOR ?? "", valor: Number(l.VALOR), dtLancamento: l.dtLancamento?.slice(0,10) ?? hoje(), dtVencimento: l.dtVencimento?.slice(0,10) ?? hoje(), guidNatureza: l.guidNatureza ?? "", guidCentro: l.guidCentro ?? "", numerodoc: l.NUMERODOC ?? "", parcela: l.PARCELA, totalParcelas: l.TOTALPARCELAS, observacao: l.OBSERVACAO ?? "" });
     setModalAberto(true);
   }
   function fecharModal() { setModalAberto(false); setEditando(null); setForm(FORM_INICIAL); setBuscaCredor(""); setMostrarSugestoes(false); }
@@ -102,14 +112,14 @@ export default function ContasPagar() {
     if (!form.valor || form.valor <= 0) { toast.error("Informe o valor"); return; }
     if (!form.dtVencimento) { toast.error("Informe o vencimento"); return; }
     const payload = { ...form, guidCredor: form.guidCredor || undefined, guidNatureza: form.guidNatureza || undefined, guidCentro: form.guidCentro || undefined, guidConta: form.guidConta || undefined };
-    if (editando) atualizar.mutate({ ...payload, guidLancamento: editando.GUIDLANCAMENTO });
+    if (editando) atualizar.mutate({ ...payload, guidLancamento: editando.guidLancamento });
     else criar.mutate(payload);
   }
 
   function registrarBaixa() {
     if (!modalBaixa) return;
     if (!baixa.valorPago || baixa.valorPago <= 0) { toast.error("Informe o valor pago"); return; }
-    baixarMut.mutate({ guidLancamento: modalBaixa.GUIDLANCAMENTO, ...baixa });
+    baixarMut.mutate({ guidLancamento: modalBaixa.guidLancamento, ...baixa });
   }
 
   const totalPaginas = Math.ceil(total / 50);
@@ -194,18 +204,18 @@ export default function ContasPagar() {
                   <Button variant="outline" className="mt-4" onClick={abrirNova}><Plus className="h-4 w-4 mr-2" /> Novo Lançamento</Button>
                 </td></tr>
               ) : itens.map((l: Lanc) => (
-                <tr key={l.GUIDLANCAMENTO} className={`hover:bg-white/5 transition-colors group ${isVencido(l) ? "bg-red-500/5" : ""}`}>
+                <tr key={l.guidLancamento} className={`hover:bg-white/5 transition-colors group ${isVencido(l) ? "bg-red-500/5" : ""}`}>
                   <td className="px-4 py-3">
                     <p className="font-medium">{l.DESCRICAO}</p>
                     {l.NUMERODOC && <p className="text-xs text-muted-foreground">Doc: {l.NUMERODOC}</p>}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{l.NOMECREDOR ?? "—"}</td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{l.NOMENATUREZA ?? "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">{l.nomeNatureza ?? "—"}</td>
                   <td className="px-4 py-3 text-right font-mono">{fmt(l.VALOR)}</td>
                   <td className="px-4 py-3 text-right font-mono text-emerald-400">{l.VALORPAGO > 0 ? fmt(l.VALORPAGO) : "—"}</td>
                   <td className={`px-4 py-3 text-center text-xs ${isVencido(l) ? "text-red-400 font-semibold" : ""}`}>
                     {isVencido(l) && <AlertTriangle className="h-3 w-3 inline mr-1" />}
-                    {fmtDate(l.DTVENCIMENTO)}
+                    {fmtDate(l.dtVencimento)}
                   </td>
                   <td className="px-4 py-3 text-center text-xs text-muted-foreground">{l.TOTALPARCELAS > 1 ? `${l.PARCELA}/${l.TOTALPARCELAS}` : "—"}</td>
                   <td className="px-4 py-3 text-center">
@@ -220,10 +230,10 @@ export default function ContasPagar() {
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => abrirEditar(l)}><Edit2 className="h-3.5 w-3.5" /></Button>
                       )}
                       {l.STATUS === "ABERTO" && (
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-orange-400 hover:text-orange-300" title="Cancelar" onClick={() => cancelar.mutate({ guidLancamento: l.GUIDLANCAMENTO })}><XCircle className="h-3.5 w-3.5" /></Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-orange-400 hover:text-orange-300" title="Cancelar" onClick={() => cancelar.mutate({ guidLancamento: l.guidLancamento })}><XCircle className="h-3.5 w-3.5" /></Button>
                       )}
                       {(l.STATUS === "ABERTO" || l.STATUS === "CANCELADO") && (
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400 hover:text-red-300" onClick={() => excluir.mutate({ guidLancamento: l.GUIDLANCAMENTO })}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400 hover:text-red-300" onClick={() => excluir.mutate({ guidLancamento: l.guidLancamento })}><Trash2 className="h-3.5 w-3.5" /></Button>
                       )}
                     </div>
                   </td>
