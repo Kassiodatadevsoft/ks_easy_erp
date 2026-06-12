@@ -263,7 +263,7 @@
 - [x] App.tsx: rota /vendas e /vendas/dashboard
 - [x] Menu: item "Dashboard" em Comercial (BarChart2)
 
-## API de Sincronização Delphi (Bidirecional)
+## API de Sincronização  (Bidirecional)
 
 - [x] Backend: syncDelphiRouter com info, push, pull, ack
 - [x] Endpoint GET /api/trpc/syncDelphi.info — metadados e timestamps da empresa

@@ -1,11 +1,14 @@
 import { z } from "zod";
 import { router, publicProcedure } from "../_core/trpc";
 import { getSqlPool, sql } from "../sqlserver";
+import { COOKIE_NAME } from "@shared/const";
 import { verifyKsSession } from "./ksAuthRouter";
 
 async function getKsSession(req: { headers: { cookie?: string } }) {
   const cookies = req.headers.cookie ?? "";
-  const match = cookies.match(/ks_session=([^;]+)/);
+  const match = cookies.match(
+  new RegExp(`${COOKIE_NAME}=([^;]+)`)
+);
   return await verifyKsSession(match?.[1]);
 }
 
@@ -20,6 +23,20 @@ const contaBase = z.object({
   situacao:     z.enum(["A", "I"]).default("A"),
 });
 
+const cancelarContaProcedure = publicProcedure.input(z.object({ guidConta: z.string().uuid() })).mutation(async ({ input, ctx }) => {
+  const session = await getKsSession(ctx.req);
+  if (!session) throw new Error("Não autenticado");
+  const pool = await getSqlPool();
+  await pool.request()
+    .input("guidconta",    sql.UniqueIdentifier, input.guidConta)
+    .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
+    .query(`
+      UPDATE KS0003.KS00001 SET SITUACAO='I', ULTIMAALTERACAO=GETDATE()
+      WHERE GUIDCONTA=@guidconta AND GUIDENTIDADE=@guidentidade
+    `);
+  return { success: true, action: "cancelado" as const };
+});
+
 export const planoContasRouter = router({
   listar: publicProcedure
     .input(z.object({ tipo: z.string().optional(), situacao: z.string().optional() }).optional())
@@ -29,8 +46,14 @@ export const planoContasRouter = router({
       const pool = await getSqlPool();
       const req2 = pool.request().input("guidentidade", sql.UniqueIdentifier, session.guidEntidade);
       let where = "c.GUIDENTIDADE = @guidentidade";
-      if (input?.tipo) where += ` AND c.TIPO = '${input.tipo}'`;
-      if (input?.situacao) where += ` AND c.SITUACAO = '${input.situacao}'`;
+      if (input?.tipo) {
+        req2.input("tipo", sql.Char(1), input.tipo);
+        where += " AND c.TIPO = @tipo";
+      }
+      if (input?.situacao) {
+        req2.input("situacao", sql.Char(1), input.situacao);
+        where += " AND c.SITUACAO = @situacao";
+      }
       const r = await req2.query(`
         SELECT
           CAST(c.GUIDCONTA AS NVARCHAR(36))    AS guidConta,
@@ -40,7 +63,7 @@ export const planoContasRouter = router({
           c.MASCARA, c.SITUACAO,
           c.DATACADASTRO, c.ULTIMAALTERACAO
         FROM KS0003.KS00001 c
-        LEFT JOIN KS0003.KS00001 p ON p.GUIDCONTA = c.GUIDCONTAPAI
+        LEFT JOIN KS0003.KS00001 p ON p.GUIDCONTA = c.GUIDCONTAPAI AND p.GUIDENTIDADE = c.GUIDENTIDADE
         WHERE ${where}
         ORDER BY c.CODCONTA
       `);
@@ -112,17 +135,6 @@ export const planoContasRouter = router({
     return { success: true };
   }),
 
-  excluir: publicProcedure.input(z.object({ guidConta: z.string().uuid() })).mutation(async ({ input, ctx }) => {
-    const session = await getKsSession(ctx.req);
-    if (!session) throw new Error("Não autenticado");
-    const pool = await getSqlPool();
-    await pool.request()
-      .input("guidconta",    sql.UniqueIdentifier, input.guidConta)
-      .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-      .query(`
-        UPDATE KS0003.KS00001 SET SITUACAO='I', ULTIMAALTERACAO=GETDATE()
-        WHERE GUIDCONTA=@guidconta AND GUIDENTIDADE=@guidentidade
-      `);
-    return { success: true };
-  }),
+  cancelar: cancelarContaProcedure,
+  excluir: cancelarContaProcedure,
 });

@@ -1,12 +1,102 @@
 import { z } from "zod";
 import { router, publicProcedure } from "../_core/trpc";
 import { getSqlPool, sql } from "../sqlserver";
+import { COOKIE_NAME } from "@shared/const";
 import { verifyKsSession } from "./ksAuthRouter";
+import { validarPagamentoAprovado } from "./cobrancaAprovacaoRouter";
 
 async function getKsSession(req: { headers: { cookie?: string } }) {
   const cookies = req.headers.cookie ?? "";
-  const match = cookies.match(/ks_session=([^;]+)/);
+  const match = cookies.match(
+  new RegExp(`${COOKIE_NAME}=([^;]+)`)
+);
   return await verifyKsSession(match?.[1]);
+}
+
+async function sincronizarStatusFechamentoFolha(
+  pool: Awaited<ReturnType<typeof getSqlPool>>,
+  guidLancamento: string,
+  guidEntidade: string
+) {
+  const fechamentoR = await pool.request()
+    .input("guidlancamento", sql.UniqueIdentifier, guidLancamento)
+    .input("guidentidade", sql.UniqueIdentifier, guidEntidade)
+    .query(`
+      SELECT TOP 1 i.GUIDFECHAMENTO
+      FROM KS0005.KS00003 i
+      INNER JOIN KS0005.KS00002 f ON f.GUIDFECHAMENTO = i.GUIDFECHAMENTO
+      WHERE i.GUIDLANCPAGAR = @guidlancamento
+        AND f.GUIDENTIDADE = @guidentidade
+    `);
+
+  const fechamento = fechamentoR.recordset[0] as { GUIDFECHAMENTO: string } | undefined;
+  if (!fechamento) return;
+
+  await pool.request()
+    .input("guidfechamento", sql.UniqueIdentifier, fechamento.GUIDFECHAMENTO)
+    .input("guidentidade", sql.UniqueIdentifier, guidEntidade)
+    .query(`
+      UPDATE f
+      SET
+        STATUS = CASE
+          WHEN s.total > 0 AND s.cancelados = s.total THEN 'CANCELADO'
+          WHEN s.total > 0 AND s.pagos = s.total THEN 'PAGO'
+          ELSE 'ABERTO'
+        END,
+        ULTIMAALTERACAO = GETDATE()
+      FROM KS0005.KS00002 f
+      CROSS APPLY (
+        SELECT
+          COUNT(*) AS total,
+          SUM(CASE WHEN cp.STATUS = 'CANCELADO' THEN 1 ELSE 0 END) AS cancelados,
+          SUM(CASE WHEN cp.STATUS = 'PAGO' THEN 1 ELSE 0 END) AS pagos
+        FROM KS0005.KS00003 i
+        LEFT JOIN KS0003.KS00004 cp ON cp.GUIDLANCAMENTO = i.GUIDLANCPAGAR
+        WHERE i.GUIDFECHAMENTO = f.GUIDFECHAMENTO
+      ) s
+      WHERE f.GUIDFECHAMENTO = @guidfechamento
+        AND f.GUIDENTIDADE = @guidentidade
+    `);
+}
+
+async function cancelarFechamentoFolhaPorLancamento(
+  pool: Awaited<ReturnType<typeof getSqlPool>>,
+  guidLancamento: string,
+  guidEntidade: string
+) {
+  const fechamentoR = await pool.request()
+    .input("guidlancamento", sql.UniqueIdentifier, guidLancamento)
+    .input("guidentidade", sql.UniqueIdentifier, guidEntidade)
+    .query(`
+      SELECT TOP 1 i.GUIDFECHAMENTO
+      FROM KS0005.KS00003 i
+      INNER JOIN KS0005.KS00002 f ON f.GUIDFECHAMENTO = i.GUIDFECHAMENTO
+      WHERE i.GUIDLANCPAGAR = @guidlancamento
+        AND f.GUIDENTIDADE = @guidentidade
+    `);
+
+  const fechamento = fechamentoR.recordset[0] as { GUIDFECHAMENTO: string } | undefined;
+  if (!fechamento) return;
+
+  await pool.request()
+    .input("guidfechamento", sql.UniqueIdentifier, fechamento.GUIDFECHAMENTO)
+    .input("guidentidade", sql.UniqueIdentifier, guidEntidade)
+    .query(`
+      UPDATE KS0005.KS00002
+      SET STATUS='CANCELADO', ULTIMAALTERACAO=GETDATE()
+      WHERE GUIDFECHAMENTO=@guidfechamento AND GUIDENTIDADE=@guidentidade
+    `);
+
+  await pool.request()
+    .input("guidfechamento", sql.UniqueIdentifier, fechamento.GUIDFECHAMENTO)
+    .input("guidentidade", sql.UniqueIdentifier, guidEntidade)
+    .query(`
+      UPDATE KS0005.KS00001
+      SET STATUS='ABERTO', GUIDFECHAMENTO=NULL, ULTIMAALTERACAO=GETDATE()
+      WHERE GUIDFECHAMENTO=@guidfechamento
+        AND GUIDENTIDADE=@guidentidade
+        AND STATUS='FECHADO'
+    `);
 }
 
 const lancBase = z.object({
@@ -17,9 +107,9 @@ const lancBase = z.object({
   valor:          z.number().min(0),
   dtLancamento:   z.string(),
   dtVencimento:   z.string(),
-  guidNatureza:   z.string().uuid().optional().nullable(),
-  guidConta:      z.string().uuid().optional().nullable(),
-  guidCentro:     z.string().uuid().optional().nullable(),
+  guidNatureza:   z.string().uuid("Natureza de caixa obrigatÃ³ria"),
+  guidConta:      z.string().uuid("Conta do plano de contas obrigatÃ³ria"),
+  guidCentro:     z.string().uuid("Centro de custo obrigatÃ³rio"),
   guidPagamento:  z.string().uuid().optional().nullable(),
   numeroDoc:      z.string().max(50).optional().nullable(),
   parcela:        z.number().int().min(1).default(1),
@@ -81,12 +171,13 @@ export const contasPagarRouter = router({
             CONVERT(NVARCHAR(10), cp.DTPAGAMENTO, 23)   AS dtPagamento,
             CAST(cp.GUIDNATUREZA AS NVARCHAR(36))   AS guidNatureza,
             n.NATUREZA                               AS nomeNatureza,
+            CAST(cp.GUIDCONTA AS NVARCHAR(36))       AS guidConta,
             CAST(cp.GUIDCENTRO AS NVARCHAR(36))     AS guidCentro,
             cc.CENTRO                                AS nomeCentro,
             CAST(cp.GUIDPAGAMENTO AS NVARCHAR(36))  AS guidPagamento,
             fp.PAGAMENTO                             AS nomePagamento,
             cp.NUMERODOC, cp.PARCELA, cp.TOTALPARCELAS,
-            cp.STATUS, cp.OBSERVACAO, cp.ORIGEM,
+            cp.STATUS, cp.OBSERVACAO, cp.MOTIVOCANCELAMENTO, cp.ORIGEM,
             cp.DATACADASTRO, cp.ULTIMAALTERACAO
           FROM KS0003.KS00004 cp
           LEFT JOIN KS0003.KS00003 n  ON n.GUIDNATUREZA   = cp.GUIDNATUREZA
@@ -202,12 +293,14 @@ export const contasPagarRouter = router({
       valorPago:      z.number().min(0),
       dtPagamento:    z.string(),
       guidPagamento:  z.string().uuid().optional().nullable(),
+      contaBancaria:  z.string().uuid("Conta/caixa do pagamento obrigatÃ³ria"),
       observacao:     z.string().optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       const session = await getKsSession(ctx.req);
       if (!session) throw new Error("Não autenticado");
       const pool = await getSqlPool();
+      await validarPagamentoAprovado(pool, input.guidLancamento, session.guidEntidade, session.guidPessoa);
       const lancR = await pool.request()
         .input("guidlancamento", sql.UniqueIdentifier, input.guidLancamento)
         .input("guidentidade",   sql.UniqueIdentifier, session.guidEntidade)
@@ -230,6 +323,16 @@ export const contasPagarRouter = router({
           WHERE GUIDLANCAMENTO=@guidlancamento AND GUIDENTIDADE=@guidentidade
         `);
       // Registrar movimentação de caixa
+      await pool.request()
+        .input("guidconta",    sql.UniqueIdentifier, input.contaBancaria)
+        .input("valor",        sql.Decimal(15, 2),   input.valorPago)
+        .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
+        .query(`
+          UPDATE KS0003.KS00008
+          SET SALDOATUAL = SALDOATUAL - @valor, ULTIMAALTERACAO = GETDATE()
+          WHERE GUIDCONTA=@guidconta AND GUIDENTIDADE=@guidentidade
+        `);
+
       const guidMov = crypto.randomUUID();
       await pool.request()
         .input("guidmovimento",  sql.UniqueIdentifier, guidMov)
@@ -247,17 +350,23 @@ export const contasPagarRouter = router({
           VALUES
             (@guidmovimento,@dtmov,'D',@descricao,@valor,@guidnatureza,@guidcentro,@guidpagamento,@guidlancpagar,'BAIXA',@guidentidade)
         `);
+      await sincronizarStatusFechamentoFolha(pool, input.guidLancamento, session.guidEntidade);
       return { success: true, status };
     }),
 
-  cancelar: publicProcedure.input(z.object({ guidLancamento: z.string().uuid() })).mutation(async ({ input, ctx }) => {
+  cancelar: publicProcedure.input(z.object({
+    guidLancamento: z.string().uuid(),
+    motivo: z.string().min(3).max(500),
+  })).mutation(async ({ input, ctx }) => {
     const session = await getKsSession(ctx.req);
     if (!session) throw new Error("Não autenticado");
     const pool = await getSqlPool();
     await pool.request()
       .input("guidlancamento", sql.UniqueIdentifier, input.guidLancamento)
       .input("guidentidade",   sql.UniqueIdentifier, session.guidEntidade)
-      .query(`UPDATE KS0003.KS00004 SET STATUS='CANCELADO', ULTIMAALTERACAO=GETDATE() WHERE GUIDLANCAMENTO=@guidlancamento AND GUIDENTIDADE=@guidentidade`);
+      .input("motivo",         sql.NVarChar(500),    input.motivo.toUpperCase())
+      .query(`UPDATE KS0003.KS00004 SET STATUS='CANCELADO', MOTIVOCANCELAMENTO=@motivo, ULTIMAALTERACAO=GETDATE() WHERE GUIDLANCAMENTO=@guidlancamento AND GUIDENTIDADE=@guidentidade AND STATUS='ABERTO'`);
+    await cancelarFechamentoFolhaPorLancamento(pool, input.guidLancamento, session.guidEntidade);
     return { success: true };
   }),
 
@@ -268,7 +377,8 @@ export const contasPagarRouter = router({
     await pool.request()
       .input("guidlancamento", sql.UniqueIdentifier, input.guidLancamento)
       .input("guidentidade",   sql.UniqueIdentifier, session.guidEntidade)
-      .query(`DELETE FROM KS0003.KS00004 WHERE GUIDLANCAMENTO=@guidlancamento AND GUIDENTIDADE=@guidentidade AND STATUS IN ('ABERTO','CANCELADO')`);
+      .query(`UPDATE KS0003.KS00004 SET STATUS='CANCELADO', ULTIMAALTERACAO=GETDATE() WHERE GUIDLANCAMENTO=@guidlancamento AND GUIDENTIDADE=@guidentidade AND STATUS='ABERTO'`);
+    await cancelarFechamentoFolhaPorLancamento(pool, input.guidLancamento, session.guidEntidade);
     return { success: true };
   }),
 

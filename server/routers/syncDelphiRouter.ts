@@ -19,6 +19,8 @@ import { TRPCError } from "@trpc/server";
 import { router, publicProcedure } from "../_core/trpc";
 import { getSqlPool, sql } from "../sqlserver";
 import crypto from "crypto";
+import { garantirTabelasConciliacao } from "./conciliacaoRouter";
+import { garantirTabelaProdutoUnidadePreco } from "../services/produtoUnidadePreco";
 
 // ─── Autenticação via API Key ──────────────────────────────────────────────
 async function autenticarApiKey(req: { headers: Record<string, string | string[] | undefined> }) {
@@ -44,6 +46,8 @@ async function autenticarApiKey(req: { headers: Record<string, string | string[]
 
 // ─── Garantir tabela de controle de sync ──────────────────────────────────
 async function garantirTabelaSync(pool: Awaited<ReturnType<typeof getSqlPool>>) {
+  await garantirTabelaProdutoUnidadePreco();
+
   await pool.request().query(`
     IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='KS0002' AND TABLE_NAME='KS00010')
     CREATE TABLE KS0002.KS00010 (
@@ -55,6 +59,193 @@ async function garantirTabelaSync(pool: Awaited<ReturnType<typeof getSqlPool>>) 
       LASTSYNC_PULL   DATETIME         NULL,
       VERSAO_DELPHI   NVARCHAR(20)     NULL,
       CONSTRAINT FK_SYNC_ENTIDADE FOREIGN KEY (GUIDENTIDADE) REFERENCES KS0002.KS00001(GUIDENTIDADE)
+    )
+  `);
+
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='KS0003' AND TABLE_NAME='KS00011')
+    CREATE TABLE KS0003.KS00011 (
+      GUIDBOLETO      UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+      GUIDLANCAMENTO  UNIQUEIDENTIFIER NOT NULL,
+      GUIDENTIDADE    UNIQUEIDENTIFIER NOT NULL,
+      BANCO           NVARCHAR(20)     NOT NULL,
+      VALOR           DECIMAL(15,2)    NOT NULL,
+      VENCIMENTO      DATE             NOT NULL,
+      STATUS          NVARCHAR(20)     NOT NULL DEFAULT 'PENDENTE',
+      NOSSONUMERO     NVARCHAR(80)     NULL,
+      LINHADIGITAVEL  NVARCHAR(160)    NULL,
+      CODIGOBARRAS    NVARCHAR(120)    NULL,
+      URLPDF          NVARCHAR(1000)   NULL,
+      EXTERNALID      NVARCHAR(160)    NULL,
+      MENSAGEMERRO    NVARCHAR(1000)   NULL,
+      DATACADASTRO    DATETIME         NOT NULL DEFAULT GETDATE(),
+      ULTIMAALTERACAO DATETIME         NOT NULL DEFAULT GETDATE()
+    )
+  `);
+
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='KS0003' AND TABLE_NAME='KS00012')
+    CREATE TABLE KS0003.KS00012 (
+      GUIDEVENTO      UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+      GUIDBOLETO      UNIQUEIDENTIFIER NOT NULL,
+      GUIDENTIDADE    UNIQUEIDENTIFIER NOT NULL,
+      TIPOEVENTO      NVARCHAR(40)     NOT NULL,
+      DESCRICAO       NVARCHAR(500)    NULL,
+      REQUESTJSON     NVARCHAR(MAX)    NULL,
+      RESPONSEJSON    NVARCHAR(MAX)    NULL,
+      DATACADASTRO    DATETIME         NOT NULL DEFAULT GETDATE(),
+      ULTIMAALTERACAO DATETIME         NOT NULL DEFAULT GETDATE()
+    )
+  `);
+
+  await garantirTabelasConciliacao(pool);
+
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='KS0003' AND TABLE_NAME='KS00016')
+    CREATE TABLE KS0003.KS00016 (
+      GUIDVENDA       UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+      GUIDENTIDADE    UNIQUEIDENTIFIER NOT NULL,
+      NUMEROVENDA     NVARCHAR(60)     NOT NULL,
+      CODFILIAL       INT              NULL,
+      GUIDCLIENTE     UNIQUEIDENTIFIER NULL,
+      CLIENTE         NVARCHAR(150)    NULL,
+      DOCUMENTO       NVARCHAR(20)     NULL,
+      DATAVENDA       DATETIME         NOT NULL,
+      STATUS          NVARCHAR(20)     NOT NULL DEFAULT 'ABERTA',
+      VALORPRODUTOS   DECIMAL(15,2)    NOT NULL DEFAULT 0,
+      VALORDESCONTO   DECIMAL(15,2)    NOT NULL DEFAULT 0,
+      VALORACRESCIMO  DECIMAL(15,2)    NOT NULL DEFAULT 0,
+      VALORTOTAL      DECIMAL(15,2)    NOT NULL DEFAULT 0,
+      NOTAMODELO      NVARCHAR(5)      NULL,
+      NOTASERIE       NVARCHAR(10)     NULL,
+      NOTANUMERO      NVARCHAR(20)     NULL,
+      NOTACHAVE       NVARCHAR(44)     NULL,
+      NOTAPROTOCOLO   NVARCHAR(60)     NULL,
+      NOTASTATUS      NVARCHAR(30)     NULL,
+      NOTADATAEMISSAO DATETIME         NULL,
+      NOTAXML         NVARCHAR(MAX)    NULL,
+      NOTADANFEURL    NVARCHAR(1000)   NULL,
+      NOTAMENSAGEMSEFAZ NVARCHAR(1000) NULL,
+      OBSERVACAO      NVARCHAR(500)    NULL,
+      DATACADASTRO    DATETIME         NOT NULL DEFAULT GETDATE(),
+      ULTIMAALTERACAO DATETIME         NOT NULL DEFAULT GETDATE()
+    )
+  `);
+
+  await pool.request().query(`
+    IF COL_LENGTH('KS0003.KS00016','NOTAMODELO') IS NULL ALTER TABLE KS0003.KS00016 ADD NOTAMODELO NVARCHAR(5) NULL;
+    IF COL_LENGTH('KS0003.KS00016','NOTASERIE') IS NULL ALTER TABLE KS0003.KS00016 ADD NOTASERIE NVARCHAR(10) NULL;
+    IF COL_LENGTH('KS0003.KS00016','NOTANUMERO') IS NULL ALTER TABLE KS0003.KS00016 ADD NOTANUMERO NVARCHAR(20) NULL;
+    IF COL_LENGTH('KS0003.KS00016','NOTACHAVE') IS NULL ALTER TABLE KS0003.KS00016 ADD NOTACHAVE NVARCHAR(44) NULL;
+    IF COL_LENGTH('KS0003.KS00016','NOTAPROTOCOLO') IS NULL ALTER TABLE KS0003.KS00016 ADD NOTAPROTOCOLO NVARCHAR(60) NULL;
+    IF COL_LENGTH('KS0003.KS00016','NOTASTATUS') IS NULL ALTER TABLE KS0003.KS00016 ADD NOTASTATUS NVARCHAR(30) NULL;
+    IF COL_LENGTH('KS0003.KS00016','NOTADATAEMISSAO') IS NULL ALTER TABLE KS0003.KS00016 ADD NOTADATAEMISSAO DATETIME NULL;
+    IF COL_LENGTH('KS0003.KS00016','NOTAXML') IS NULL ALTER TABLE KS0003.KS00016 ADD NOTAXML NVARCHAR(MAX) NULL;
+    IF COL_LENGTH('KS0003.KS00016','NOTADANFEURL') IS NULL ALTER TABLE KS0003.KS00016 ADD NOTADANFEURL NVARCHAR(1000) NULL;
+    IF COL_LENGTH('KS0003.KS00016','NOTAMENSAGEMSEFAZ') IS NULL ALTER TABLE KS0003.KS00016 ADD NOTAMENSAGEMSEFAZ NVARCHAR(1000) NULL;
+  `);
+
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='KS0003' AND TABLE_NAME='KS00017')
+    CREATE TABLE KS0003.KS00017 (
+      GUIDITEM        UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+      GUIDVENDA       UNIQUEIDENTIFIER NOT NULL,
+      GUIDENTIDADE    UNIQUEIDENTIFIER NOT NULL,
+      GUIDPRODUTO     UNIQUEIDENTIFIER NULL,
+      CODPRODUTO      NVARCHAR(60)     NULL,
+      PRODUTO         NVARCHAR(200)    NOT NULL,
+      UNIDADE         NVARCHAR(6)      NULL,
+      QUANTIDADE      DECIMAL(15,4)    NOT NULL,
+      VALORUNITARIO   DECIMAL(15,4)    NOT NULL,
+      VALORDESCONTO   DECIMAL(15,2)    NOT NULL DEFAULT 0,
+      VALORTOTAL      DECIMAL(15,2)    NOT NULL,
+      CFOP            NVARCHAR(10)     NULL,
+      CST             NVARCHAR(10)     NULL,
+      CSOSN           NVARCHAR(10)     NULL,
+      NCM             NVARCHAR(10)     NULL,
+      ULTIMAALTERACAO DATETIME         NOT NULL DEFAULT GETDATE()
+    )
+  `);
+
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='KS0003' AND TABLE_NAME='KS00018')
+    CREATE TABLE KS0003.KS00018 (
+      GUIDPAGAMENTO   UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+      GUIDVENDA       UNIQUEIDENTIFIER NOT NULL,
+      GUIDENTIDADE    UNIQUEIDENTIFIER NOT NULL,
+      GUIDFORMAPAGAMENTO UNIQUEIDENTIFIER NULL,
+      FORMAPAGAMENTO  NVARCHAR(100)    NOT NULL,
+      CODIGOSEFAZ     NVARCHAR(2)      NULL,
+      VALOR           DECIMAL(15,2)    NOT NULL,
+      PARCELAS        INT              NOT NULL DEFAULT 1,
+      NSU             NVARCHAR(80)     NULL,
+      AUTORIZACAO     NVARCHAR(80)     NULL,
+      BANDEIRA        NVARCHAR(60)     NULL,
+      ULTIMAALTERACAO DATETIME         NOT NULL DEFAULT GETDATE()
+    )
+  `);
+
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='KS0003' AND TABLE_NAME='KS00020')
+    CREATE TABLE KS0003.KS00020 (
+      GUIDEVENTO      UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+      GUIDVENDA       UNIQUEIDENTIFIER NOT NULL,
+      GUIDENTIDADE    UNIQUEIDENTIFIER NOT NULL,
+      TIPOEVENTO      NVARCHAR(40)     NOT NULL,
+      SEQUENCIA       INT              NOT NULL DEFAULT 1,
+      PROTOCOLO       NVARCHAR(60)     NULL,
+      JUSTIFICATIVA   NVARCHAR(500)    NULL,
+      XML             NVARCHAR(MAX)    NULL,
+      STATUS          NVARCHAR(30)     NOT NULL DEFAULT 'REGISTRADO',
+      MENSAGEMSEFAZ   NVARCHAR(1000)   NULL,
+      DATAEVENTO      DATETIME         NULL,
+      DATACADASTRO    DATETIME         NOT NULL DEFAULT GETDATE(),
+      ULTIMAALTERACAO DATETIME         NOT NULL DEFAULT GETDATE()
+    )
+  `);
+
+  await pool.request().query(`
+    IF COL_LENGTH('KS0003.KS00020','GUIDVENDA') IS NULL ALTER TABLE KS0003.KS00020 ADD GUIDVENDA UNIQUEIDENTIFIER NULL;
+  `);
+
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='KS0003' AND TABLE_NAME='KS00021')
+    CREATE TABLE KS0003.KS00021 (
+      GUIDFECHAMENTO  UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+      GUIDENTIDADE    UNIQUEIDENTIFIER NOT NULL,
+      DISPOSITIVO     NVARCHAR(100)    NOT NULL,
+      OPERADOR        NVARCHAR(100)    NULL,
+      DATAABERTURA    DATETIME         NULL,
+      DATAFECHAMENTO  DATETIME         NOT NULL,
+      STATUS          NVARCHAR(20)     NOT NULL DEFAULT 'FECHADO',
+      VALORABERTURA   DECIMAL(15,2)    NOT NULL DEFAULT 0,
+      TOTALVENDAS     DECIMAL(15,2)    NOT NULL DEFAULT 0,
+      TOTALSUPRIMENTO DECIMAL(15,2)    NOT NULL DEFAULT 0,
+      TOTALSANGRIA    DECIMAL(15,2)    NOT NULL DEFAULT 0,
+      TOTALINFORMADO  DECIMAL(15,2)    NOT NULL DEFAULT 0,
+      TOTALDIFERENCA  DECIMAL(15,2)    NOT NULL DEFAULT 0,
+      OBSERVACAO      NVARCHAR(500)    NULL,
+      DATACADASTRO    DATETIME         NOT NULL DEFAULT GETDATE(),
+      ULTIMAALTERACAO DATETIME         NOT NULL DEFAULT GETDATE()
+    )
+  `);
+
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='KS0003' AND TABLE_NAME='KS00022')
+    CREATE TABLE KS0003.KS00022 (
+      GUIDCONTROLE    UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+      GUIDFECHAMENTO  UNIQUEIDENTIFIER NOT NULL,
+      GUIDENTIDADE    UNIQUEIDENTIFIER NOT NULL,
+      GUIDFORMAPAGAMENTO UNIQUEIDENTIFIER NULL,
+      FORMAPAGAMENTO  NVARCHAR(100)    NOT NULL,
+      CODIGOSEFAZ     NVARCHAR(2)      NULL,
+      VALORSISTEMA    DECIMAL(15,2)    NOT NULL DEFAULT 0,
+      VALORINFORMADO  DECIMAL(15,2)    NOT NULL DEFAULT 0,
+      DIFERENCA       DECIMAL(15,2)    NOT NULL DEFAULT 0,
+      QUANTIDADE      INT              NOT NULL DEFAULT 0,
+      OBSERVACAO      NVARCHAR(500)    NULL,
+      DATACADASTRO    DATETIME         NOT NULL DEFAULT GETDATE(),
+      ULTIMAALTERACAO DATETIME         NOT NULL DEFAULT GETDATE()
     )
   `);
 }
@@ -115,6 +306,32 @@ const ContaPagarSchema = z.object({
   ultimaAlteracao: z.string().optional(),
 });
 
+const ContaReceberBoletoSchema = z.object({
+  guidBoleto:      z.string().uuid().optional(),
+  guidLancamento:  z.string().uuid(),
+  banco:           z.enum(["ITAU", "CORA"]),
+  valor:           z.number().positive(),
+  vencimento:      z.string(),
+  status:          z.enum(["NAO_EMITIDO","PENDENTE","REGISTRADO","PAGO","CANCELADO","VENCIDO","ERRO"]).optional(),
+  nossoNumero:     z.string().optional(),
+  linhaDigitavel:  z.string().optional(),
+  codigoBarras:    z.string().optional(),
+  urlPdf:          z.string().optional(),
+  externalId:      z.string().optional(),
+  mensagemErro:    z.string().optional(),
+  ultimaAlteracao: z.string().optional(),
+});
+
+const ContaReceberBoletoEventoSchema = z.object({
+  guidEvento:      z.string().uuid().optional(),
+  guidBoleto:      z.string().uuid(),
+  tipoEvento:      z.string().min(1).max(40),
+  descricao:       z.string().optional(),
+  requestJson:     z.string().optional(),
+  responseJson:    z.string().optional(),
+  ultimaAlteracao: z.string().optional(),
+});
+
 const LancamentoCaixaSchema = z.object({
   guidLancamento:  z.string().uuid().optional(),
   dtLancamento:    z.string(),
@@ -124,6 +341,165 @@ const LancamentoCaixaSchema = z.object({
   numerodoc:       z.string().optional(),
   observacao:      z.string().optional(),
   ultimaAlteracao: z.string().optional(),
+});
+
+const ConciliacaoPagamentoSchema = z.object({
+  guidPagamentoCartaoPix: z.string().uuid().optional(),
+  guidVenda:             z.string().uuid().optional(),
+  guidLancamento:        z.string().uuid().optional(),
+  guidPagamentoForma:    z.string().uuid().optional(),
+  codFilial:             z.number().int().optional(),
+  formaPagamento:        z.string().optional(),
+  cliente:               z.string().optional(),
+  numeroVenda:           z.string().optional(),
+  bandeira:              z.string().optional(),
+  tipo:                  z.enum(["CREDITO","DEBITO","PIX"]),
+  adquirente:            z.string().optional(),
+  nsu:                   z.string().optional(),
+  autorizacao:           z.string().optional(),
+  tid:                   z.string().optional(),
+  txid:                  z.string().optional(),
+  e2eId:                 z.string().optional(),
+  valorBruto:            z.number().positive(),
+  parcelas:              z.number().int().min(1).default(1),
+  dataVenda:             z.string(),
+  previsaoRecebimento:   z.string(),
+  status:                z.enum(["PENDENTE","CONCILIADO","DIVERGENTE","CANCELADO"]).optional(),
+  ultimaAlteracao:       z.string().optional(),
+});
+
+const ConciliacaoParcelaSchema = z.object({
+  guidParcela:           z.string().uuid().optional(),
+  guidPagamentoCartaoPix:z.string().uuid(),
+  numeroParcela:         z.number().int().min(1),
+  valorBruto:            z.number().positive(),
+  taxa:                  z.number().min(0).optional(),
+  valorLiquidoPrevisto:  z.number().min(0),
+  valorRecebido:         z.number().min(0).optional(),
+  diferenca:             z.number().optional(),
+  dtPrevista:            z.string(),
+  dtRecebimento:         z.string().optional(),
+  guidContaBancaria:    z.string().uuid().optional(),
+  status:                z.enum(["PENDENTE","CONCILIADO","DIVERGENTE","CANCELADO"]).optional(),
+  motivoDivergencia:     z.string().optional(),
+  observacao:            z.string().optional(),
+  ultimaAlteracao:       z.string().optional(),
+});
+
+const ConciliacaoEventoSchema = z.object({
+  guidEvento:            z.string().uuid().optional(),
+  guidPagamentoCartaoPix:z.string().uuid(),
+  guidParcela:           z.string().uuid().optional(),
+  tipoEvento:            z.string().min(1).max(40),
+  statusAnterior:        z.string().optional(),
+  statusNovo:            z.string().optional(),
+  descricao:             z.string().optional(),
+  observacao:            z.string().optional(),
+  ultimaAlteracao:       z.string().optional(),
+});
+
+const VendaSchema = z.object({
+  guidVenda:      z.string().uuid().optional(),
+  numeroVenda:    z.string().min(1).max(60),
+  codFilial:      z.number().int().optional(),
+  guidCliente:    z.string().uuid().optional(),
+  cliente:        z.string().optional(),
+  documento:      z.string().optional(),
+  dataVenda:      z.string(),
+  status:         z.enum(["ABERTA","FECHADA","CANCELADA","DEVOLVIDA"]).optional(),
+  valorProdutos:  z.number().min(0).default(0),
+  valorDesconto:  z.number().min(0).optional(),
+  valorAcrescimo: z.number().min(0).optional(),
+  valorTotal:     z.number().min(0),
+  notaModelo:     z.enum(["55","65","SAT","NFS"]).optional(),
+  notaSerie:      z.string().optional(),
+  notaNumero:     z.string().optional(),
+  notaChave:      z.string().optional(),
+  notaProtocolo:  z.string().optional(),
+  notaStatus:     z.enum(["PENDENTE","AUTORIZADA","REJEITADA","CANCELADA","DENEGADA","INUTILIZADA"]).optional(),
+  notaDataEmissao:z.string().optional(),
+  notaXml:        z.string().optional(),
+  notaDanfeUrl:   z.string().optional(),
+  notaMensagemSefaz: z.string().optional(),
+  observacao:     z.string().optional(),
+  ultimaAlteracao:z.string().optional(),
+});
+
+const VendaItemSchema = z.object({
+  guidItem:       z.string().uuid().optional(),
+  guidVenda:      z.string().uuid(),
+  guidProduto:    z.string().uuid().optional(),
+  codProduto:     z.string().optional(),
+  produto:        z.string().min(1),
+  unidade:        z.string().optional(),
+  quantidade:     z.number().positive(),
+  valorUnitario:  z.number().min(0),
+  valorDesconto:  z.number().min(0).optional(),
+  valorTotal:     z.number().min(0),
+  cfop:           z.string().optional(),
+  cst:            z.string().optional(),
+  csosn:          z.string().optional(),
+  ncm:            z.string().optional(),
+  ultimaAlteracao:z.string().optional(),
+});
+
+const VendaPagamentoSchema = z.object({
+  guidPagamento:      z.string().uuid().optional(),
+  guidVenda:          z.string().uuid(),
+  guidFormaPagamento: z.string().uuid().optional(),
+  formaPagamento:     z.string().min(1),
+  codigoSefaz:        z.string().max(2).optional(),
+  valor:              z.number().positive(),
+  parcelas:           z.number().int().min(1).optional(),
+  nsu:                z.string().optional(),
+  autorizacao:        z.string().optional(),
+  bandeira:           z.string().optional(),
+  ultimaAlteracao:    z.string().optional(),
+});
+
+const NotaFiscalEventoSchema = z.object({
+  guidEvento:     z.string().uuid().optional(),
+  guidVenda:      z.string().uuid(),
+  tipoEvento:     z.enum(["AUTORIZACAO","CANCELAMENTO","CARTA_CORRECAO","INUTILIZACAO","CONTINGENCIA","OUTRO"]),
+  sequencia:      z.number().int().min(1).optional(),
+  protocolo:      z.string().optional(),
+  justificativa:  z.string().optional(),
+  xml:            z.string().optional(),
+  status:         z.string().optional(),
+  mensagemSefaz:  z.string().optional(),
+  dataEvento:     z.string().optional(),
+  ultimaAlteracao:z.string().optional(),
+});
+
+const FechamentoCaixaSchema = z.object({
+  guidFechamento: z.string().uuid().optional(),
+  dispositivo:    z.string().min(1),
+  operador:       z.string().optional(),
+  dataAbertura:   z.string().optional(),
+  dataFechamento: z.string(),
+  status:         z.enum(["ABERTO","FECHADO","CONFERIDO","DIVERGENTE","CANCELADO"]).optional(),
+  valorAbertura:  z.number().min(0).optional(),
+  totalVendas:    z.number().min(0).optional(),
+  totalSuprimento:z.number().min(0).optional(),
+  totalSangria:   z.number().min(0).optional(),
+  totalInformado: z.number().min(0).optional(),
+  totalDiferenca: z.number().optional(),
+  observacao:     z.string().optional(),
+  ultimaAlteracao:z.string().optional(),
+});
+
+const FechamentoCaixaControleSchema = z.object({
+  guidControle:       z.string().uuid().optional(),
+  guidFechamento:     z.string().uuid(),
+  guidFormaPagamento: z.string().uuid().optional(),
+  formaPagamento:     z.string().min(1),
+  codigoSefaz:        z.string().max(2).optional(),
+  valorSistema:       z.number().min(0).optional(),
+  valorInformado:     z.number().min(0).optional(),
+  diferenca:          z.number().optional(),
+  quantidade:         z.number().int().min(0).optional(),
+  observacao:         z.string().optional(),
+  ultimaAlteracao:    z.string().optional(),
 });
 
 // ─── Router ───────────────────────────────────────────────────────────────
@@ -171,8 +547,19 @@ export const syncDelphiRouter = router({
       versaoDelphi:   z.string().optional(),
       pessoas:        z.array(PessoaSchema).optional(),
       contasReceber:  z.array(ContaReceberSchema).optional(),
+      contasReceberBoletos: z.array(ContaReceberBoletoSchema).optional(),
+      contasReceberBoletoEventos: z.array(ContaReceberBoletoEventoSchema).optional(),
       contasPagar:    z.array(ContaPagarSchema).optional(),
       lancamentosCaixa: z.array(LancamentoCaixaSchema).optional(),
+      conciliacaoPagamentos: z.array(ConciliacaoPagamentoSchema).optional(),
+      conciliacaoParcelas: z.array(ConciliacaoParcelaSchema).optional(),
+      conciliacaoEventos: z.array(ConciliacaoEventoSchema).optional(),
+      vendas: z.array(VendaSchema).optional(),
+      vendaItens: z.array(VendaItemSchema).optional(),
+      vendaPagamentos: z.array(VendaPagamentoSchema).optional(),
+      notaFiscalEventos: z.array(NotaFiscalEventoSchema).optional(),
+      fechamentosCaixa: z.array(FechamentoCaixaSchema).optional(),
+      fechamentosCaixaControle: z.array(FechamentoCaixaControleSchema).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const empresa = await autenticarApiKey(ctx.req);
@@ -182,8 +569,19 @@ export const syncDelphiRouter = router({
       const resultado = {
         pessoas:          { inseridos: 0, atualizados: 0, erros: [] as string[] },
         contasReceber:    { inseridos: 0, atualizados: 0, erros: [] as string[] },
+        contasReceberBoletos: { inseridos: 0, atualizados: 0, erros: [] as string[] },
+        contasReceberBoletoEventos: { inseridos: 0, atualizados: 0, erros: [] as string[] },
         contasPagar:      { inseridos: 0, atualizados: 0, erros: [] as string[] },
         lancamentosCaixa: { inseridos: 0, atualizados: 0, erros: [] as string[] },
+        conciliacaoPagamentos: { inseridos: 0, atualizados: 0, erros: [] as string[] },
+        conciliacaoParcelas: { inseridos: 0, atualizados: 0, erros: [] as string[] },
+        conciliacaoEventos: { inseridos: 0, atualizados: 0, erros: [] as string[] },
+        vendas: { inseridos: 0, atualizados: 0, erros: [] as string[] },
+        vendaItens: { inseridos: 0, atualizados: 0, erros: [] as string[] },
+        vendaPagamentos: { inseridos: 0, atualizados: 0, erros: [] as string[] },
+        notaFiscalEventos: { inseridos: 0, atualizados: 0, erros: [] as string[] },
+        fechamentosCaixa: { inseridos: 0, atualizados: 0, erros: [] as string[] },
+        fechamentosCaixaControle: { inseridos: 0, atualizados: 0, erros: [] as string[] },
       };
 
       // ── Pessoas ──
@@ -234,6 +632,74 @@ export const syncDelphiRouter = router({
           else resultado.pessoas.atualizados++;
         } catch (e: any) {
           resultado.pessoas.erros.push(`${p.nome}: ${e.message}`);
+        }
+      }
+
+      // ── Boletos de Contas a Receber ──
+      for (const b of input.contasReceberBoletos ?? []) {
+        try {
+          const guid = b.guidBoleto ?? crypto.randomUUID();
+          await pool.request()
+            .input("guidBoleto", sql.UniqueIdentifier, guid)
+            .input("guidLancamento", sql.UniqueIdentifier, b.guidLancamento)
+            .input("banco", sql.NVarChar(20), b.banco)
+            .input("valor", sql.Decimal(15,2), b.valor)
+            .input("vencimento", sql.NVarChar(10), b.vencimento)
+            .input("status", sql.NVarChar(20), b.status ?? "PENDENTE")
+            .input("nossoNumero", sql.NVarChar(80), b.nossoNumero ?? null)
+            .input("linhaDigitavel", sql.NVarChar(160), b.linhaDigitavel ?? null)
+            .input("codigoBarras", sql.NVarChar(120), b.codigoBarras ?? null)
+            .input("urlPdf", sql.NVarChar(1000), b.urlPdf ?? null)
+            .input("externalId", sql.NVarChar(160), b.externalId ?? null)
+            .input("mensagemErro", sql.NVarChar(1000), b.mensagemErro ?? null)
+            .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+            .query(`
+              MERGE KS0003.KS00011 AS t
+              USING (SELECT @guidBoleto AS g) AS s ON t.GUIDBOLETO = @guidBoleto
+              WHEN MATCHED THEN UPDATE SET
+                GUIDLANCAMENTO=@guidLancamento, BANCO=@banco, VALOR=@valor,
+                VENCIMENTO=CONVERT(DATE,@vencimento), STATUS=@status,
+                NOSSONUMERO=@nossoNumero, LINHADIGITAVEL=@linhaDigitavel,
+                CODIGOBARRAS=@codigoBarras, URLPDF=@urlPdf, EXTERNALID=@externalId,
+                MENSAGEMERRO=@mensagemErro, ULTIMAALTERACAO=GETDATE()
+              WHEN NOT MATCHED THEN INSERT
+                (GUIDBOLETO,GUIDLANCAMENTO,GUIDENTIDADE,BANCO,VALOR,VENCIMENTO,STATUS,
+                 NOSSONUMERO,LINHADIGITAVEL,CODIGOBARRAS,URLPDF,EXTERNALID,MENSAGEMERRO)
+              VALUES
+                (@guidBoleto,@guidLancamento,@guidentidade,@banco,@valor,CONVERT(DATE,@vencimento),@status,
+                 @nossoNumero,@linhaDigitavel,@codigoBarras,@urlPdf,@externalId,@mensagemErro)
+            `);
+          resultado.contasReceberBoletos.inseridos++;
+        } catch (e: any) {
+          resultado.contasReceberBoletos.erros.push(`${b.guidLancamento}: ${e.message}`);
+        }
+      }
+
+      for (const ev of input.contasReceberBoletoEventos ?? []) {
+        try {
+          const guid = ev.guidEvento ?? crypto.randomUUID();
+          await pool.request()
+            .input("guidEvento", sql.UniqueIdentifier, guid)
+            .input("guidBoleto", sql.UniqueIdentifier, ev.guidBoleto)
+            .input("tipoEvento", sql.NVarChar(40), ev.tipoEvento)
+            .input("descricao", sql.NVarChar(500), ev.descricao ?? null)
+            .input("requestJson", sql.NVarChar(sql.MAX), ev.requestJson ?? null)
+            .input("responseJson", sql.NVarChar(sql.MAX), ev.responseJson ?? null)
+            .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+            .query(`
+              MERGE KS0003.KS00012 AS t
+              USING (SELECT @guidEvento AS g) AS s ON t.GUIDEVENTO = @guidEvento
+              WHEN MATCHED THEN UPDATE SET
+                GUIDBOLETO=@guidBoleto, TIPOEVENTO=@tipoEvento, DESCRICAO=@descricao,
+                REQUESTJSON=@requestJson, RESPONSEJSON=@responseJson, ULTIMAALTERACAO=GETDATE()
+              WHEN NOT MATCHED THEN INSERT
+                (GUIDEVENTO,GUIDBOLETO,GUIDENTIDADE,TIPOEVENTO,DESCRICAO,REQUESTJSON,RESPONSEJSON)
+              VALUES
+                (@guidEvento,@guidBoleto,@guidentidade,@tipoEvento,@descricao,@requestJson,@responseJson)
+            `);
+          resultado.contasReceberBoletoEventos.inseridos++;
+        } catch (e: any) {
+          resultado.contasReceberBoletoEventos.erros.push(`${ev.guidBoleto}: ${e.message}`);
         }
       }
 
@@ -345,6 +811,381 @@ export const syncDelphiRouter = router({
         }
       }
 
+      // Conciliacao de cartoes/PIX - cabecalho
+      for (const p of input.conciliacaoPagamentos ?? []) {
+        try {
+          const guid = p.guidPagamentoCartaoPix ?? crypto.randomUUID();
+          await pool.request()
+            .input("guid", sql.UniqueIdentifier, guid)
+            .input("guidVenda", sql.UniqueIdentifier, p.guidVenda ?? null)
+            .input("guidLancamento", sql.UniqueIdentifier, p.guidLancamento ?? null)
+            .input("guidPagamentoForma", sql.UniqueIdentifier, p.guidPagamentoForma ?? null)
+            .input("codFilial", sql.Int, p.codFilial ?? null)
+            .input("formaPagamento", sql.NVarChar(100), p.formaPagamento ?? null)
+            .input("cliente", sql.NVarChar(150), p.cliente ?? null)
+            .input("numeroVenda", sql.NVarChar(60), p.numeroVenda ?? null)
+            .input("bandeira", sql.NVarChar(60), p.bandeira ?? null)
+            .input("tipo", sql.NVarChar(20), p.tipo)
+            .input("adquirente", sql.NVarChar(80), p.adquirente ?? null)
+            .input("nsu", sql.NVarChar(80), p.nsu ?? null)
+            .input("autorizacao", sql.NVarChar(80), p.autorizacao ?? null)
+            .input("tid", sql.NVarChar(120), p.tid ?? null)
+            .input("txid", sql.NVarChar(120), p.txid ?? null)
+            .input("e2eId", sql.NVarChar(120), p.e2eId ?? null)
+            .input("valorBruto", sql.Decimal(15,2), p.valorBruto)
+            .input("parcelas", sql.Int, p.parcelas)
+            .input("dataVenda", sql.NVarChar(30), p.dataVenda)
+            .input("previsaoRecebimento", sql.NVarChar(10), p.previsaoRecebimento)
+            .input("status", sql.NVarChar(20), p.status ?? "PENDENTE")
+            .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+            .query(`
+              MERGE KS0003.KS00013 AS t
+              USING (SELECT @guid AS g) AS s ON t.GUIDPAGAMENTO=@guid
+              WHEN MATCHED THEN UPDATE SET
+                GUIDVENDA=@guidVenda, GUIDLANCAMENTO=@guidLancamento, GUIDPAGAMENTOFORMA=@guidPagamentoForma,
+                CODFILIAL=@codFilial,
+                FORMAPAGAMENTO=@formaPagamento, CLIENTE=@cliente, NUMEROVENDA=@numeroVenda, BANDEIRA=@bandeira,
+                TIPO=@tipo, ADQUIRENTE=@adquirente, NSU=@nsu, AUTORIZACAO=@autorizacao, TID=@tid,
+                TXID=@txid, E2EID=@e2eId, VALORBRUTO=@valorBruto, PARCELAS=@parcelas,
+                DATAVENDA=CONVERT(DATETIME,@dataVenda), PREVISAORECEBIMENTO=CONVERT(DATE,@previsaoRecebimento),
+                STATUS=@status, ULTIMAALTERACAO=GETDATE()
+              WHEN NOT MATCHED THEN INSERT
+                (GUIDPAGAMENTO,GUIDENTIDADE,GUIDVENDA,GUIDLANCAMENTO,GUIDPAGAMENTOFORMA,CODFILIAL,FORMAPAGAMENTO,CLIENTE,NUMEROVENDA,
+                 BANDEIRA,TIPO,ADQUIRENTE,NSU,AUTORIZACAO,TID,TXID,E2EID,VALORBRUTO,PARCELAS,DATAVENDA,PREVISAORECEBIMENTO,STATUS)
+              VALUES
+                (@guid,@guidentidade,@guidVenda,@guidLancamento,@guidPagamentoForma,@codFilial,@formaPagamento,@cliente,@numeroVenda,
+                 @bandeira,@tipo,@adquirente,@nsu,@autorizacao,@tid,@txid,@e2eId,@valorBruto,@parcelas,CONVERT(DATETIME,@dataVenda),CONVERT(DATE,@previsaoRecebimento),@status)
+            `);
+          resultado.conciliacaoPagamentos.inseridos++;
+        } catch (e: any) {
+          resultado.conciliacaoPagamentos.erros.push(`${p.numeroVenda ?? p.tipo}: ${e.message}`);
+        }
+      }
+
+      // Conciliacao de cartoes/PIX - parcelas
+      for (const pa of input.conciliacaoParcelas ?? []) {
+        try {
+          const guid = pa.guidParcela ?? crypto.randomUUID();
+          await pool.request()
+            .input("guid", sql.UniqueIdentifier, guid)
+            .input("guidPagamento", sql.UniqueIdentifier, pa.guidPagamentoCartaoPix)
+            .input("numeroParcela", sql.Int, pa.numeroParcela)
+            .input("valorBruto", sql.Decimal(15,2), pa.valorBruto)
+            .input("taxa", sql.Decimal(15,2), pa.taxa ?? 0)
+            .input("valorLiquidoPrevisto", sql.Decimal(15,2), pa.valorLiquidoPrevisto)
+            .input("valorRecebido", sql.Decimal(15,2), pa.valorRecebido ?? null)
+            .input("diferenca", sql.Decimal(15,2), pa.diferenca ?? null)
+            .input("dtPrevista", sql.NVarChar(10), pa.dtPrevista)
+            .input("dtRecebimento", sql.NVarChar(10), pa.dtRecebimento ?? null)
+            .input("guidContaBancaria", sql.UniqueIdentifier, pa.guidContaBancaria ?? null)
+            .input("status", sql.NVarChar(20), pa.status ?? "PENDENTE")
+            .input("motivoDivergencia", sql.NVarChar(40), pa.motivoDivergencia ?? null)
+            .input("observacao", sql.NVarChar(500), pa.observacao ?? null)
+            .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+            .query(`
+              MERGE KS0003.KS00014 AS t
+              USING (SELECT @guid AS g) AS s ON t.GUIDPARCELA=@guid
+              WHEN MATCHED THEN UPDATE SET
+                GUIDPAGAMENTO=@guidPagamento, NUMEROPARCELA=@numeroParcela, VALORBRUTO=@valorBruto,
+                TAXA=@taxa, VALORLIQUIDOPREVISTO=@valorLiquidoPrevisto, VALORRECEBIDO=@valorRecebido,
+                DIFERENCA=@diferenca, DTPREVISTA=CONVERT(DATE,@dtPrevista),
+                DTRECEBIMENTO=CASE WHEN @dtRecebimento IS NULL THEN NULL ELSE CONVERT(DATE,@dtRecebimento) END,
+                GUIDCONTABANCARIA=@guidContaBancaria, STATUS=@status, MOTIVODIVERGENCIA=@motivoDivergencia,
+                OBSERVACAO=@observacao, ULTIMAALTERACAO=GETDATE()
+              WHEN NOT MATCHED THEN INSERT
+                (GUIDPARCELA,GUIDPAGAMENTO,GUIDENTIDADE,NUMEROPARCELA,VALORBRUTO,TAXA,VALORLIQUIDOPREVISTO,
+                 VALORRECEBIDO,DIFERENCA,DTPREVISTA,DTRECEBIMENTO,GUIDCONTABANCARIA,STATUS,MOTIVODIVERGENCIA,OBSERVACAO)
+              VALUES
+                (@guid,@guidPagamento,@guidentidade,@numeroParcela,@valorBruto,@taxa,@valorLiquidoPrevisto,
+                 @valorRecebido,@diferenca,CONVERT(DATE,@dtPrevista),CASE WHEN @dtRecebimento IS NULL THEN NULL ELSE CONVERT(DATE,@dtRecebimento) END,
+                 @guidContaBancaria,@status,@motivoDivergencia,@observacao)
+            `);
+          resultado.conciliacaoParcelas.inseridos++;
+        } catch (e: any) {
+          resultado.conciliacaoParcelas.erros.push(`${pa.guidPagamentoCartaoPix}: ${e.message}`);
+        }
+      }
+
+      for (const ev of input.conciliacaoEventos ?? []) {
+        try {
+          const guid = ev.guidEvento ?? crypto.randomUUID();
+          await pool.request()
+            .input("guid", sql.UniqueIdentifier, guid)
+            .input("guidPagamento", sql.UniqueIdentifier, ev.guidPagamentoCartaoPix)
+            .input("guidParcela", sql.UniqueIdentifier, ev.guidParcela ?? null)
+            .input("tipoEvento", sql.NVarChar(40), ev.tipoEvento)
+            .input("statusAnterior", sql.NVarChar(20), ev.statusAnterior ?? null)
+            .input("statusNovo", sql.NVarChar(20), ev.statusNovo ?? null)
+            .input("descricao", sql.NVarChar(500), ev.descricao ?? null)
+            .input("observacao", sql.NVarChar(500), ev.observacao ?? null)
+            .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+            .query(`
+              MERGE KS0003.KS00015 AS t
+              USING (SELECT @guid AS g) AS s ON t.GUIDEVENTO=@guid
+              WHEN MATCHED THEN UPDATE SET
+                GUIDPAGAMENTO=@guidPagamento, GUIDPARCELA=@guidParcela, TIPOEVENTO=@tipoEvento,
+                STATUSANTERIOR=@statusAnterior, STATUSNOVO=@statusNovo, DESCRICAO=@descricao,
+                OBSERVACAO=@observacao, ULTIMAALTERACAO=GETDATE()
+              WHEN NOT MATCHED THEN INSERT
+                (GUIDEVENTO,GUIDPAGAMENTO,GUIDPARCELA,GUIDENTIDADE,TIPOEVENTO,STATUSANTERIOR,STATUSNOVO,DESCRICAO,OBSERVACAO)
+              VALUES
+                (@guid,@guidPagamento,@guidParcela,@guidentidade,@tipoEvento,@statusAnterior,@statusNovo,@descricao,@observacao)
+            `);
+          resultado.conciliacaoEventos.inseridos++;
+        } catch (e: any) {
+          resultado.conciliacaoEventos.erros.push(`${ev.guidPagamentoCartaoPix}: ${e.message}`);
+        }
+      }
+
+      for (const v of input.vendas ?? []) {
+        try {
+          const guid = v.guidVenda ?? crypto.randomUUID();
+          await pool.request()
+            .input("guid", sql.UniqueIdentifier, guid)
+            .input("numeroVenda", sql.NVarChar(60), v.numeroVenda)
+            .input("codFilial", sql.Int, v.codFilial ?? null)
+            .input("guidCliente", sql.UniqueIdentifier, v.guidCliente ?? null)
+            .input("cliente", sql.NVarChar(150), v.cliente ?? null)
+            .input("documento", sql.NVarChar(20), v.documento ?? null)
+            .input("dataVenda", sql.NVarChar(30), v.dataVenda)
+            .input("status", sql.NVarChar(20), v.status ?? "FECHADA")
+            .input("valorProdutos", sql.Decimal(15,2), v.valorProdutos)
+            .input("valorDesconto", sql.Decimal(15,2), v.valorDesconto ?? 0)
+            .input("valorAcrescimo", sql.Decimal(15,2), v.valorAcrescimo ?? 0)
+            .input("valorTotal", sql.Decimal(15,2), v.valorTotal)
+            .input("notaModelo", sql.NVarChar(5), v.notaModelo ?? null)
+            .input("notaSerie", sql.NVarChar(10), v.notaSerie ?? null)
+            .input("notaNumero", sql.NVarChar(20), v.notaNumero ?? null)
+            .input("notaChave", sql.NVarChar(44), v.notaChave ?? null)
+            .input("notaProtocolo", sql.NVarChar(60), v.notaProtocolo ?? null)
+            .input("notaStatus", sql.NVarChar(30), v.notaStatus ?? null)
+            .input("notaDataEmissao", sql.NVarChar(30), v.notaDataEmissao ?? null)
+            .input("notaXml", sql.NVarChar(sql.MAX), v.notaXml ?? null)
+            .input("notaDanfeUrl", sql.NVarChar(1000), v.notaDanfeUrl ?? null)
+            .input("notaMensagemSefaz", sql.NVarChar(1000), v.notaMensagemSefaz ?? null)
+            .input("observacao", sql.NVarChar(500), v.observacao ?? null)
+            .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+            .query(`
+              MERGE KS0003.KS00016 AS t
+              USING (SELECT @guid AS g) AS s ON t.GUIDVENDA=@guid
+              WHEN MATCHED THEN UPDATE SET
+                NUMEROVENDA=@numeroVenda, CODFILIAL=@codFilial, GUIDCLIENTE=@guidCliente,
+                CLIENTE=@cliente, DOCUMENTO=@documento, DATAVENDA=CONVERT(DATETIME,@dataVenda),
+                STATUS=@status, VALORPRODUTOS=@valorProdutos, VALORDESCONTO=@valorDesconto,
+                VALORACRESCIMO=@valorAcrescimo, VALORTOTAL=@valorTotal,
+                NOTAMODELO=@notaModelo, NOTASERIE=@notaSerie, NOTANUMERO=@notaNumero,
+                NOTACHAVE=@notaChave, NOTAPROTOCOLO=@notaProtocolo, NOTASTATUS=@notaStatus,
+                NOTADATAEMISSAO=CASE WHEN @notaDataEmissao IS NULL THEN NULL ELSE CONVERT(DATETIME,@notaDataEmissao) END,
+                NOTAXML=@notaXml, NOTADANFEURL=@notaDanfeUrl, NOTAMENSAGEMSEFAZ=@notaMensagemSefaz,
+                OBSERVACAO=@observacao,
+                ULTIMAALTERACAO=GETDATE()
+              WHEN NOT MATCHED THEN INSERT
+                (GUIDVENDA,GUIDENTIDADE,NUMEROVENDA,CODFILIAL,GUIDCLIENTE,CLIENTE,DOCUMENTO,DATAVENDA,STATUS,
+                 VALORPRODUTOS,VALORDESCONTO,VALORACRESCIMO,VALORTOTAL,NOTAMODELO,NOTASERIE,NOTANUMERO,
+                 NOTACHAVE,NOTAPROTOCOLO,NOTASTATUS,NOTADATAEMISSAO,NOTAXML,NOTADANFEURL,NOTAMENSAGEMSEFAZ,OBSERVACAO)
+              VALUES
+                (@guid,@guidentidade,@numeroVenda,@codFilial,@guidCliente,@cliente,@documento,CONVERT(DATETIME,@dataVenda),@status,
+                 @valorProdutos,@valorDesconto,@valorAcrescimo,@valorTotal,@notaModelo,@notaSerie,@notaNumero,
+                 @notaChave,@notaProtocolo,@notaStatus,CASE WHEN @notaDataEmissao IS NULL THEN NULL ELSE CONVERT(DATETIME,@notaDataEmissao) END,
+                 @notaXml,@notaDanfeUrl,@notaMensagemSefaz,@observacao)
+            `);
+          resultado.vendas.inseridos++;
+        } catch (e: any) {
+          resultado.vendas.erros.push(`${v.numeroVenda}: ${e.message}`);
+        }
+      }
+
+      for (const item of input.vendaItens ?? []) {
+        try {
+          const guid = item.guidItem ?? crypto.randomUUID();
+          await pool.request()
+            .input("guid", sql.UniqueIdentifier, guid)
+            .input("guidVenda", sql.UniqueIdentifier, item.guidVenda)
+            .input("guidProduto", sql.UniqueIdentifier, item.guidProduto ?? null)
+            .input("codProduto", sql.NVarChar(60), item.codProduto ?? null)
+            .input("produto", sql.NVarChar(200), item.produto)
+            .input("unidade", sql.NVarChar(6), item.unidade ?? null)
+            .input("quantidade", sql.Decimal(15,4), item.quantidade)
+            .input("valorUnitario", sql.Decimal(15,4), item.valorUnitario)
+            .input("valorDesconto", sql.Decimal(15,2), item.valorDesconto ?? 0)
+            .input("valorTotal", sql.Decimal(15,2), item.valorTotal)
+            .input("cfop", sql.NVarChar(10), item.cfop ?? null)
+            .input("cst", sql.NVarChar(10), item.cst ?? null)
+            .input("csosn", sql.NVarChar(10), item.csosn ?? null)
+            .input("ncm", sql.NVarChar(10), item.ncm ?? null)
+            .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+            .query(`
+              MERGE KS0003.KS00017 AS t
+              USING (SELECT @guid AS g) AS s ON t.GUIDITEM=@guid
+              WHEN MATCHED THEN UPDATE SET
+                GUIDVENDA=@guidVenda, GUIDPRODUTO=@guidProduto, CODPRODUTO=@codProduto, PRODUTO=@produto,
+                UNIDADE=@unidade, QUANTIDADE=@quantidade, VALORUNITARIO=@valorUnitario,
+                VALORDESCONTO=@valorDesconto, VALORTOTAL=@valorTotal, CFOP=@cfop, CST=@cst,
+                CSOSN=@csosn, NCM=@ncm, ULTIMAALTERACAO=GETDATE()
+              WHEN NOT MATCHED THEN INSERT
+                (GUIDITEM,GUIDVENDA,GUIDENTIDADE,GUIDPRODUTO,CODPRODUTO,PRODUTO,UNIDADE,QUANTIDADE,
+                 VALORUNITARIO,VALORDESCONTO,VALORTOTAL,CFOP,CST,CSOSN,NCM)
+              VALUES
+                (@guid,@guidVenda,@guidentidade,@guidProduto,@codProduto,@produto,@unidade,@quantidade,
+                 @valorUnitario,@valorDesconto,@valorTotal,@cfop,@cst,@csosn,@ncm)
+            `);
+          resultado.vendaItens.inseridos++;
+        } catch (e: any) {
+          resultado.vendaItens.erros.push(`${item.produto}: ${e.message}`);
+        }
+      }
+
+      for (const pag of input.vendaPagamentos ?? []) {
+        try {
+          const guid = pag.guidPagamento ?? crypto.randomUUID();
+          await pool.request()
+            .input("guid", sql.UniqueIdentifier, guid)
+            .input("guidVenda", sql.UniqueIdentifier, pag.guidVenda)
+            .input("guidFormaPagamento", sql.UniqueIdentifier, pag.guidFormaPagamento ?? null)
+            .input("formaPagamento", sql.NVarChar(100), pag.formaPagamento)
+            .input("codigoSefaz", sql.NVarChar(2), pag.codigoSefaz ?? null)
+            .input("valor", sql.Decimal(15,2), pag.valor)
+            .input("parcelas", sql.Int, pag.parcelas ?? 1)
+            .input("nsu", sql.NVarChar(80), pag.nsu ?? null)
+            .input("autorizacao", sql.NVarChar(80), pag.autorizacao ?? null)
+            .input("bandeira", sql.NVarChar(60), pag.bandeira ?? null)
+            .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+            .query(`
+              MERGE KS0003.KS00018 AS t
+              USING (SELECT @guid AS g) AS s ON t.GUIDPAGAMENTO=@guid
+              WHEN MATCHED THEN UPDATE SET
+                GUIDVENDA=@guidVenda, GUIDFORMAPAGAMENTO=@guidFormaPagamento,
+                FORMAPAGAMENTO=@formaPagamento, CODIGOSEFAZ=@codigoSefaz, VALOR=@valor,
+                PARCELAS=@parcelas, NSU=@nsu, AUTORIZACAO=@autorizacao, BANDEIRA=@bandeira,
+                ULTIMAALTERACAO=GETDATE()
+              WHEN NOT MATCHED THEN INSERT
+                (GUIDPAGAMENTO,GUIDVENDA,GUIDENTIDADE,GUIDFORMAPAGAMENTO,FORMAPAGAMENTO,CODIGOSEFAZ,
+                 VALOR,PARCELAS,NSU,AUTORIZACAO,BANDEIRA)
+              VALUES
+                (@guid,@guidVenda,@guidentidade,@guidFormaPagamento,@formaPagamento,@codigoSefaz,
+                 @valor,@parcelas,@nsu,@autorizacao,@bandeira)
+            `);
+          resultado.vendaPagamentos.inseridos++;
+        } catch (e: any) {
+          resultado.vendaPagamentos.erros.push(`${pag.formaPagamento}: ${e.message}`);
+        }
+      }
+
+      for (const ev of input.notaFiscalEventos ?? []) {
+        try {
+          const guid = ev.guidEvento ?? crypto.randomUUID();
+          await pool.request()
+            .input("guid", sql.UniqueIdentifier, guid)
+            .input("guidVenda", sql.UniqueIdentifier, ev.guidVenda)
+            .input("tipoEvento", sql.NVarChar(40), ev.tipoEvento)
+            .input("sequencia", sql.Int, ev.sequencia ?? 1)
+            .input("protocolo", sql.NVarChar(60), ev.protocolo ?? null)
+            .input("justificativa", sql.NVarChar(500), ev.justificativa ?? null)
+            .input("xml", sql.NVarChar(sql.MAX), ev.xml ?? null)
+            .input("status", sql.NVarChar(30), ev.status ?? "REGISTRADO")
+            .input("mensagemSefaz", sql.NVarChar(1000), ev.mensagemSefaz ?? null)
+            .input("dataEvento", sql.NVarChar(30), ev.dataEvento ?? null)
+            .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+            .query(`
+              MERGE KS0003.KS00020 AS t
+              USING (SELECT @guid AS g) AS s ON t.GUIDEVENTO=@guid
+              WHEN MATCHED THEN UPDATE SET
+                GUIDVENDA=@guidVenda, TIPOEVENTO=@tipoEvento, SEQUENCIA=@sequencia, PROTOCOLO=@protocolo,
+                JUSTIFICATIVA=@justificativa, XML=@xml, STATUS=@status, MENSAGEMSEFAZ=@mensagemSefaz,
+                DATAEVENTO=CASE WHEN @dataEvento IS NULL THEN NULL ELSE CONVERT(DATETIME,@dataEvento) END,
+                ULTIMAALTERACAO=GETDATE()
+              WHEN NOT MATCHED THEN INSERT
+                (GUIDEVENTO,GUIDVENDA,GUIDENTIDADE,TIPOEVENTO,SEQUENCIA,PROTOCOLO,JUSTIFICATIVA,XML,STATUS,MENSAGEMSEFAZ,DATAEVENTO)
+              VALUES
+                (@guid,@guidVenda,@guidentidade,@tipoEvento,@sequencia,@protocolo,@justificativa,@xml,@status,@mensagemSefaz,
+                 CASE WHEN @dataEvento IS NULL THEN NULL ELSE CONVERT(DATETIME,@dataEvento) END)
+            `);
+          resultado.notaFiscalEventos.inseridos++;
+        } catch (e: any) {
+          resultado.notaFiscalEventos.erros.push(`${ev.tipoEvento}: ${e.message}`);
+        }
+      }
+
+      for (const f of input.fechamentosCaixa ?? []) {
+        try {
+          const guid = f.guidFechamento ?? crypto.randomUUID();
+          await pool.request()
+            .input("guid", sql.UniqueIdentifier, guid)
+            .input("dispositivo", sql.NVarChar(100), f.dispositivo)
+            .input("operador", sql.NVarChar(100), f.operador ?? null)
+            .input("dataAbertura", sql.NVarChar(30), f.dataAbertura ?? null)
+            .input("dataFechamento", sql.NVarChar(30), f.dataFechamento)
+            .input("status", sql.NVarChar(20), f.status ?? "FECHADO")
+            .input("valorAbertura", sql.Decimal(15,2), f.valorAbertura ?? 0)
+            .input("totalVendas", sql.Decimal(15,2), f.totalVendas ?? 0)
+            .input("totalSuprimento", sql.Decimal(15,2), f.totalSuprimento ?? 0)
+            .input("totalSangria", sql.Decimal(15,2), f.totalSangria ?? 0)
+            .input("totalInformado", sql.Decimal(15,2), f.totalInformado ?? 0)
+            .input("totalDiferenca", sql.Decimal(15,2), f.totalDiferenca ?? 0)
+            .input("observacao", sql.NVarChar(500), f.observacao ?? null)
+            .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+            .query(`
+              MERGE KS0003.KS00021 AS t
+              USING (SELECT @guid AS g) AS s ON t.GUIDFECHAMENTO=@guid
+              WHEN MATCHED THEN UPDATE SET
+                DISPOSITIVO=@dispositivo, OPERADOR=@operador,
+                DATAABERTURA=CASE WHEN @dataAbertura IS NULL THEN NULL ELSE CONVERT(DATETIME,@dataAbertura) END,
+                DATAFECHAMENTO=CONVERT(DATETIME,@dataFechamento), STATUS=@status, VALORABERTURA=@valorAbertura,
+                TOTALVENDAS=@totalVendas, TOTALSUPRIMENTO=@totalSuprimento, TOTALSANGRIA=@totalSangria,
+                TOTALINFORMADO=@totalInformado, TOTALDIFERENCA=@totalDiferenca, OBSERVACAO=@observacao,
+                ULTIMAALTERACAO=GETDATE()
+              WHEN NOT MATCHED THEN INSERT
+                (GUIDFECHAMENTO,GUIDENTIDADE,DISPOSITIVO,OPERADOR,DATAABERTURA,DATAFECHAMENTO,STATUS,
+                 VALORABERTURA,TOTALVENDAS,TOTALSUPRIMENTO,TOTALSANGRIA,TOTALINFORMADO,TOTALDIFERENCA,OBSERVACAO)
+              VALUES
+                (@guid,@guidentidade,@dispositivo,@operador,
+                 CASE WHEN @dataAbertura IS NULL THEN NULL ELSE CONVERT(DATETIME,@dataAbertura) END,
+                 CONVERT(DATETIME,@dataFechamento),@status,@valorAbertura,@totalVendas,@totalSuprimento,
+                 @totalSangria,@totalInformado,@totalDiferenca,@observacao)
+            `);
+          resultado.fechamentosCaixa.inseridos++;
+        } catch (e: any) {
+          resultado.fechamentosCaixa.erros.push(`${f.dispositivo}: ${e.message}`);
+        }
+      }
+
+      for (const c of input.fechamentosCaixaControle ?? []) {
+        try {
+          const guid = c.guidControle ?? crypto.randomUUID();
+          await pool.request()
+            .input("guid", sql.UniqueIdentifier, guid)
+            .input("guidFechamento", sql.UniqueIdentifier, c.guidFechamento)
+            .input("guidFormaPagamento", sql.UniqueIdentifier, c.guidFormaPagamento ?? null)
+            .input("formaPagamento", sql.NVarChar(100), c.formaPagamento)
+            .input("codigoSefaz", sql.NVarChar(2), c.codigoSefaz ?? null)
+            .input("valorSistema", sql.Decimal(15,2), c.valorSistema ?? 0)
+            .input("valorInformado", sql.Decimal(15,2), c.valorInformado ?? 0)
+            .input("diferenca", sql.Decimal(15,2), c.diferenca ?? 0)
+            .input("quantidade", sql.Int, c.quantidade ?? 0)
+            .input("observacao", sql.NVarChar(500), c.observacao ?? null)
+            .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+            .query(`
+              MERGE KS0003.KS00022 AS t
+              USING (SELECT @guid AS g) AS s ON t.GUIDCONTROLE=@guid
+              WHEN MATCHED THEN UPDATE SET
+                GUIDFECHAMENTO=@guidFechamento, GUIDFORMAPAGAMENTO=@guidFormaPagamento,
+                FORMAPAGAMENTO=@formaPagamento, CODIGOSEFAZ=@codigoSefaz,
+                VALORSISTEMA=@valorSistema, VALORINFORMADO=@valorInformado,
+                DIFERENCA=@diferenca, QUANTIDADE=@quantidade, OBSERVACAO=@observacao,
+                ULTIMAALTERACAO=GETDATE()
+              WHEN NOT MATCHED THEN INSERT
+                (GUIDCONTROLE,GUIDFECHAMENTO,GUIDENTIDADE,GUIDFORMAPAGAMENTO,FORMAPAGAMENTO,CODIGOSEFAZ,
+                 VALORSISTEMA,VALORINFORMADO,DIFERENCA,QUANTIDADE,OBSERVACAO)
+              VALUES
+                (@guid,@guidFechamento,@guidentidade,@guidFormaPagamento,@formaPagamento,@codigoSefaz,
+                 @valorSistema,@valorInformado,@diferenca,@quantidade,@observacao)
+            `);
+          resultado.fechamentosCaixaControle.inseridos++;
+        } catch (e: any) {
+          resultado.fechamentosCaixaControle.erros.push(`${c.formaPagamento}: ${e.message}`);
+        }
+      }
+
       // Atualizar timestamp de push
       await pool.request()
         .input("guidentidade",  sql.UniqueIdentifier, empresa.guidEntidade)
@@ -371,7 +1212,7 @@ export const syncDelphiRouter = router({
     .input(z.object({
       dispositivo: z.string().default("default"),
       dtDesde:     z.string().optional(), // ISO datetime, ex: "2026-05-01T00:00:00"
-      entidades:   z.array(z.enum(["pessoas","contasReceber","contasPagar","lancamentosCaixa","planoContas","centroCusto","naturezaCaixa","formasPagamento"])).optional(),
+      entidades:   z.array(z.enum(["pessoas","clientes","funcionarios","produtos","produtoUnidadePrecos","contasReceber","contasReceberBoletos","contasReceberBoletoEventos","contasPagar","lancamentosCaixa","conciliacaoPagamentos","conciliacaoParcelas","conciliacaoEventos","vendas","vendaItens","vendaPagamentos","notaFiscalEventos","fechamentosCaixa","fechamentosCaixaControle","planoContas","centroCusto","naturezaCaixa","formasPagamento"])).optional(),
     }).optional())
     .query(async ({ input, ctx }) => {
       const empresa = await autenticarApiKey(ctx.req);
@@ -386,7 +1227,7 @@ export const syncDelphiRouter = router({
         .query(`SELECT LASTSYNC_PULL FROM KS0002.KS00010 WHERE GUIDENTIDADE=@guidentidade AND DISPOSITIVO=@dispositivo`);
 
       const lastPull = input?.dtDesde ?? syncR.recordset[0]?.LASTSYNC_PULL ?? "2000-01-01T00:00:00";
-      const entidades = input?.entidades ?? ["pessoas","contasReceber","contasPagar","lancamentosCaixa"];
+      const entidades = input?.entidades ?? ["pessoas","clientes","funcionarios","produtos","produtoUnidadePrecos","contasReceber","contasReceberBoletos","contasReceberBoletoEventos","contasPagar","lancamentosCaixa","formasPagamento","planoContas","centroCusto","naturezaCaixa","conciliacaoPagamentos","conciliacaoParcelas","conciliacaoEventos","vendas","vendaItens","vendaPagamentos","notaFiscalEventos","fechamentosCaixa","fechamentosCaixaControle"];
 
       const delta: Record<string, unknown[]> = {};
 
@@ -409,6 +1250,114 @@ export const syncDelphiRouter = router({
         delta.pessoas = r.recordset;
       }
 
+      if (entidades.includes("clientes")) {
+        const r = await pool.request()
+          .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+          .input("desde",        sql.NVarChar(30),     lastPull)
+          .query(`
+            SELECT TOP 1000
+              CAST(GUIDPESSOA AS NVARCHAR(36)) AS guidPessoa,
+              CODIGO AS codigo, NOME AS nome, FANTASIA AS fantasia, DOCUMENTO AS documento,
+              CODTIPODOCUMENTO AS codTipoDocumento, TELEFONE AS telefone, CELULAR AS celular,
+              WHATSAPP AS whatsapp, EMAIL AS email, IE AS ie, INDIEDEST AS indIeDest,
+              FORMAT(DATANASCIMENTO,'yyyy-MM-dd') AS dataNascimento,
+              CEP AS cep, ENDERECO AS endereco, NUMERO AS numero, COMPLEMENTO AS complemento,
+              BAIRRO AS bairro, CODCIDADE AS codCidade, LIMITECOMPRA AS limiteCompra,
+              DIAVENCIMENTO AS diaVencimento, SITUACAO AS situacao,
+              CADCLIENTE AS cadCliente, CADFORNECEDOR AS cadFornecedor, CADUSUARIO AS cadUsuario,
+              MANTERPROMOCOES AS manterPromocoes, CONSTASPC AS constaSpc, OBSERVACAO AS observacao,
+              FORMAT(DATACADASTRO,'yyyy-MM-ddTHH:mm:ss') AS dataCadastro,
+              FORMAT(ULTIMAALTERACAO,'yyyy-MM-ddTHH:mm:ss') AS ultimaAlteracao
+            FROM KS0002.KS00001
+            WHERE GUIDENTIDADE = @guidentidade
+              AND CADCLIENTE = 1
+              AND ULTIMAALTERACAO > CONVERT(DATETIME,@desde)
+            ORDER BY ULTIMAALTERACAO DESC
+          `);
+        delta.clientes = r.recordset;
+      }
+
+      if (entidades.includes("funcionarios")) {
+        const r = await pool.request()
+          .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+          .input("desde",        sql.NVarChar(30),     lastPull)
+          .query(`
+            SELECT TOP 1000
+              CAST(GUIDPESSOA AS NVARCHAR(36)) AS guidPessoa,
+              CODIGO AS codigo, NOME AS nome, FANTASIA AS fantasia, DOCUMENTO AS documento,
+              CODTIPODOCUMENTO AS codTipoDocumento, TELEFONE AS telefone, CELULAR AS celular,
+              WHATSAPP AS whatsapp, EMAIL AS email, IE AS ie, INDIEDEST AS indIeDest,
+              FORMAT(DATANASCIMENTO,'yyyy-MM-dd') AS dataNascimento,
+              CEP AS cep, ENDERECO AS endereco, NUMERO AS numero, COMPLEMENTO AS complemento,
+              BAIRRO AS bairro, CODCIDADE AS codCidade, SITUACAO AS situacao,
+              USUARIO AS usuario, CODCARGO AS codCargo, OBSERVACAO AS observacao,
+              CADCLIENTE AS cadCliente, CADFORNECEDOR AS cadFornecedor, CADUSUARIO AS cadUsuario,
+              FORMAT(DATACADASTRO,'yyyy-MM-ddTHH:mm:ss') AS dataCadastro,
+              FORMAT(ULTIMAALTERACAO,'yyyy-MM-ddTHH:mm:ss') AS ultimaAlteracao
+            FROM KS0002.KS00001
+            WHERE GUIDENTIDADE = @guidentidade
+              AND CADUSUARIO = 1
+              AND ULTIMAALTERACAO > CONVERT(DATETIME,@desde)
+            ORDER BY ULTIMAALTERACAO DESC
+          `);
+        delta.funcionarios = r.recordset;
+      }
+
+      if (entidades.includes("produtos")) {
+        const r = await pool.request()
+          .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+          .input("desde",        sql.NVarChar(30),     lastPull)
+          .query(`
+            SELECT TOP 1000
+              CAST(p.GUIDPRODUTO AS NVARCHAR(36)) AS guidProduto,
+              p.CODPRODUTO AS codProduto, p.PRODUTO AS produto, p.DESCRICAO AS descricao,
+              CAST(p.GUIDCATEGORIA AS NVARCHAR(36)) AS guidCategoria,
+              c.CATEGORIA AS categoria, p.UNIDADE AS unidade, p.UNIDADEFISCAL AS unidadeFiscal,
+              p.CODBARRAS AS codBarras, p.REFERENCIA AS referencia,
+              p.NCM AS ncm, p.CEST AS cest, p.CFOP AS cfop, p.CSOSN AS csosn,
+              p.ALIQICMS AS aliqIcms, p.ALIQPIS AS aliqPis, p.ALIQCOFINS AS aliqCofins,
+              p.PRECO AS preco, p.PRECOVENDA AS precoVenda, p.PRECOMINIMO AS precoMinimo,
+              p.ESTOQUE AS estoque, p.ESTOQUEMINIMO AS estoqueMinimo,
+              p.TAMANHO1 AS tamanho1, p.TAMANHO2 AS tamanho2, p.TAMANHO3 AS tamanho3,
+              p.TAMANHO4 AS tamanho4, p.TAMANHO5 AS tamanho5, p.TAMANHO6 AS tamanho6,
+              p.TAMANHO7 AS tamanho7, p.FRACIONADO AS fracionado, p.SITUACAO AS situacao,
+              FORMAT(p.DATACADASTRO,'yyyy-MM-ddTHH:mm:ss') AS dataCadastro,
+              FORMAT(p.ULTIMAALTERACAO,'yyyy-MM-ddTHH:mm:ss') AS ultimaAlteracao
+            FROM KS0004.KS00001 p
+            LEFT JOIN KS0004.KS00002 c ON c.GUIDCATEGORIA = p.GUIDCATEGORIA
+            WHERE p.GUIDENTIDADE = @guidentidade
+              AND p.ULTIMAALTERACAO > CONVERT(DATETIME,@desde)
+            ORDER BY p.ULTIMAALTERACAO DESC
+          `);
+        delta.produtos = r.recordset;
+      }
+
+      if (entidades.includes("produtoUnidadePrecos")) {
+        const r = await pool.request()
+          .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+          .input("desde",        sql.NVarChar(30),     lastPull)
+          .query(`
+            SELECT TOP 1000
+              ID AS id,
+              CAST(GUIDPRECO AS NVARCHAR(36)) AS guidPreco,
+              CAST(GUIDPRODUTO AS NVARCHAR(36)) AS guidProduto,
+              CODPRODUTO AS codProduto,
+              UNIDADE AS unidade,
+              FATORCONVERSAO AS fatorConversao,
+              QUANTIDADEMINIMA AS quantidadeMinima,
+              DESCRICAOPRECO AS descricaoPreco,
+              PRECOVENDA AS precoVenda,
+              ATIVO AS ativo,
+              FORMAT(DATACADASTRO,'yyyy-MM-ddTHH:mm:ss') AS dataCadastro,
+              FORMAT(ULTIMAALTERACAO,'yyyy-MM-ddTHH:mm:ss') AS ultimaAlteracao
+            FROM KS0004.ProdutoUnidadePreco
+            WHERE GUIDENTIDADE = @guidentidade
+              AND ULTIMAALTERACAO > CONVERT(DATETIME,@desde)
+            ORDER BY ULTIMAALTERACAO DESC
+          `);
+        delta.produtoUnidadePrecos = r.recordset;
+      }
+
       if (entidades.includes("contasReceber")) {
         const r = await pool.request()
           .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
@@ -428,6 +1377,46 @@ export const syncDelphiRouter = router({
             ORDER BY ULTIMAALTERACAO DESC
           `);
         delta.contasReceber = r.recordset;
+      }
+
+      if (entidades.includes("contasReceberBoletos")) {
+        const r = await pool.request()
+          .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+          .input("desde",        sql.NVarChar(30),     lastPull)
+          .query(`
+            SELECT TOP 500
+              CAST(GUIDBOLETO AS NVARCHAR(36)) AS guidBoleto,
+              CAST(GUIDLANCAMENTO AS NVARCHAR(36)) AS guidLancamento,
+              BANCO AS banco, VALOR AS valor, FORMAT(VENCIMENTO,'yyyy-MM-dd') AS vencimento,
+              STATUS AS status, NOSSONUMERO AS nossoNumero, LINHADIGITAVEL AS linhaDigitavel,
+              CODIGOBARRAS AS codigoBarras, URLPDF AS urlPdf, EXTERNALID AS externalId,
+              MENSAGEMERRO AS mensagemErro,
+              FORMAT(ULTIMAALTERACAO,'yyyy-MM-ddTHH:mm:ss') AS ultimaAlteracao
+            FROM KS0003.KS00011
+            WHERE GUIDENTIDADE = @guidentidade
+              AND ULTIMAALTERACAO > CONVERT(DATETIME,@desde)
+            ORDER BY ULTIMAALTERACAO DESC
+          `);
+        delta.contasReceberBoletos = r.recordset;
+      }
+
+      if (entidades.includes("contasReceberBoletoEventos")) {
+        const r = await pool.request()
+          .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+          .input("desde",        sql.NVarChar(30),     lastPull)
+          .query(`
+            SELECT TOP 500
+              CAST(GUIDEVENTO AS NVARCHAR(36)) AS guidEvento,
+              CAST(GUIDBOLETO AS NVARCHAR(36)) AS guidBoleto,
+              TIPOEVENTO AS tipoEvento, DESCRICAO AS descricao,
+              REQUESTJSON AS requestJson, RESPONSEJSON AS responseJson,
+              FORMAT(ULTIMAALTERACAO,'yyyy-MM-ddTHH:mm:ss') AS ultimaAlteracao
+            FROM KS0003.KS00012
+            WHERE GUIDENTIDADE = @guidentidade
+              AND ULTIMAALTERACAO > CONVERT(DATETIME,@desde)
+            ORDER BY ULTIMAALTERACAO DESC
+          `);
+        delta.contasReceberBoletoEventos = r.recordset;
       }
 
       if (entidades.includes("contasPagar")) {
@@ -469,6 +1458,200 @@ export const syncDelphiRouter = router({
         delta.lancamentosCaixa = r.recordset;
       }
 
+      if (entidades.includes("conciliacaoPagamentos")) {
+        const r = await pool.request()
+          .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+          .input("desde",        sql.NVarChar(30),     lastPull)
+          .query(`
+            SELECT TOP 500
+              CAST(GUIDPAGAMENTO AS NVARCHAR(36)) AS guidPagamentoCartaoPix,
+              CAST(GUIDVENDA AS NVARCHAR(36)) AS guidVenda,
+              CAST(GUIDLANCAMENTO AS NVARCHAR(36)) AS guidLancamento,
+              CAST(GUIDPAGAMENTOFORMA AS NVARCHAR(36)) AS guidPagamentoForma,
+              CODFILIAL AS codFilial,
+              FORMAPAGAMENTO AS formaPagamento, CLIENTE AS cliente, NUMEROVENDA AS numeroVenda,
+              BANDEIRA AS bandeira, TIPO AS tipo, ADQUIRENTE AS adquirente, NSU AS nsu,
+              AUTORIZACAO AS autorizacao, TID AS tid, TXID AS txid, E2EID AS e2eId,
+              VALORBRUTO AS valorBruto, PARCELAS AS parcelas,
+              FORMAT(DATAVENDA,'yyyy-MM-ddTHH:mm:ss') AS dataVenda,
+              FORMAT(PREVISAORECEBIMENTO,'yyyy-MM-dd') AS previsaoRecebimento,
+              STATUS AS status, FORMAT(ULTIMAALTERACAO,'yyyy-MM-ddTHH:mm:ss') AS ultimaAlteracao
+            FROM KS0003.KS00013
+            WHERE GUIDENTIDADE=@guidentidade AND ULTIMAALTERACAO > CONVERT(DATETIME,@desde)
+            ORDER BY ULTIMAALTERACAO DESC
+          `);
+        delta.conciliacaoPagamentos = r.recordset;
+      }
+
+      if (entidades.includes("conciliacaoParcelas")) {
+        const r = await pool.request()
+          .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+          .input("desde",        sql.NVarChar(30),     lastPull)
+          .query(`
+            SELECT TOP 500
+              CAST(GUIDPARCELA AS NVARCHAR(36)) AS guidParcela,
+              CAST(GUIDPAGAMENTO AS NVARCHAR(36)) AS guidPagamentoCartaoPix,
+              NUMEROPARCELA AS numeroParcela, VALORBRUTO AS valorBruto, TAXA AS taxa,
+              VALORLIQUIDOPREVISTO AS valorLiquidoPrevisto, VALORRECEBIDO AS valorRecebido,
+              DIFERENCA AS diferenca, FORMAT(DTPREVISTA,'yyyy-MM-dd') AS dtPrevista,
+              FORMAT(DTRECEBIMENTO,'yyyy-MM-dd') AS dtRecebimento,
+              CAST(GUIDCONTABANCARIA AS NVARCHAR(36)) AS guidContaBancaria,
+              STATUS AS status, MOTIVODIVERGENCIA AS motivoDivergencia, OBSERVACAO AS observacao,
+              FORMAT(ULTIMAALTERACAO,'yyyy-MM-ddTHH:mm:ss') AS ultimaAlteracao
+            FROM KS0003.KS00014
+            WHERE GUIDENTIDADE=@guidentidade AND ULTIMAALTERACAO > CONVERT(DATETIME,@desde)
+            ORDER BY ULTIMAALTERACAO DESC
+          `);
+        delta.conciliacaoParcelas = r.recordset;
+      }
+
+      if (entidades.includes("conciliacaoEventos")) {
+        const r = await pool.request()
+          .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+          .input("desde",        sql.NVarChar(30),     lastPull)
+          .query(`
+            SELECT TOP 500
+              CAST(GUIDEVENTO AS NVARCHAR(36)) AS guidEvento,
+              CAST(GUIDPAGAMENTO AS NVARCHAR(36)) AS guidPagamentoCartaoPix,
+              CAST(GUIDPARCELA AS NVARCHAR(36)) AS guidParcela,
+              TIPOEVENTO AS tipoEvento, STATUSANTERIOR AS statusAnterior, STATUSNOVO AS statusNovo,
+              DESCRICAO AS descricao, OBSERVACAO AS observacao,
+              FORMAT(ULTIMAALTERACAO,'yyyy-MM-ddTHH:mm:ss') AS ultimaAlteracao
+            FROM KS0003.KS00015
+            WHERE GUIDENTIDADE=@guidentidade AND ULTIMAALTERACAO > CONVERT(DATETIME,@desde)
+            ORDER BY ULTIMAALTERACAO DESC
+          `);
+        delta.conciliacaoEventos = r.recordset;
+      }
+
+      if (entidades.includes("vendas")) {
+        const r = await pool.request()
+          .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+          .input("desde", sql.NVarChar(30), lastPull)
+          .query(`
+            SELECT TOP 500
+              CAST(GUIDVENDA AS NVARCHAR(36)) AS guidVenda, NUMEROVENDA AS numeroVenda,
+              CODFILIAL AS codFilial, CAST(GUIDCLIENTE AS NVARCHAR(36)) AS guidCliente,
+              CLIENTE AS cliente, DOCUMENTO AS documento,
+              FORMAT(DATAVENDA,'yyyy-MM-ddTHH:mm:ss') AS dataVenda,
+              STATUS AS status, VALORPRODUTOS AS valorProdutos, VALORDESCONTO AS valorDesconto,
+              VALORACRESCIMO AS valorAcrescimo, VALORTOTAL AS valorTotal,
+              NOTAMODELO AS notaModelo, NOTASERIE AS notaSerie, NOTANUMERO AS notaNumero,
+              NOTACHAVE AS notaChave, NOTAPROTOCOLO AS notaProtocolo, NOTASTATUS AS notaStatus,
+              FORMAT(NOTADATAEMISSAO,'yyyy-MM-ddTHH:mm:ss') AS notaDataEmissao,
+              NOTAXML AS notaXml, NOTADANFEURL AS notaDanfeUrl, NOTAMENSAGEMSEFAZ AS notaMensagemSefaz,
+              OBSERVACAO AS observacao,
+              FORMAT(ULTIMAALTERACAO,'yyyy-MM-ddTHH:mm:ss') AS ultimaAlteracao
+            FROM KS0003.KS00016
+            WHERE GUIDENTIDADE=@guidentidade AND ULTIMAALTERACAO > CONVERT(DATETIME,@desde)
+            ORDER BY ULTIMAALTERACAO DESC
+          `);
+        delta.vendas = r.recordset;
+      }
+
+      if (entidades.includes("vendaItens")) {
+        const r = await pool.request()
+          .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+          .input("desde", sql.NVarChar(30), lastPull)
+          .query(`
+            SELECT TOP 1000
+              CAST(GUIDITEM AS NVARCHAR(36)) AS guidItem,
+              CAST(GUIDVENDA AS NVARCHAR(36)) AS guidVenda,
+              CAST(GUIDPRODUTO AS NVARCHAR(36)) AS guidProduto,
+              CODPRODUTO AS codProduto, PRODUTO AS produto, UNIDADE AS unidade,
+              QUANTIDADE AS quantidade, VALORUNITARIO AS valorUnitario,
+              VALORDESCONTO AS valorDesconto, VALORTOTAL AS valorTotal,
+              CFOP AS cfop, CST AS cst, CSOSN AS csosn, NCM AS ncm,
+              FORMAT(ULTIMAALTERACAO,'yyyy-MM-ddTHH:mm:ss') AS ultimaAlteracao
+            FROM KS0003.KS00017
+            WHERE GUIDENTIDADE=@guidentidade AND ULTIMAALTERACAO > CONVERT(DATETIME,@desde)
+            ORDER BY ULTIMAALTERACAO DESC
+          `);
+        delta.vendaItens = r.recordset;
+      }
+
+      if (entidades.includes("vendaPagamentos")) {
+        const r = await pool.request()
+          .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+          .input("desde", sql.NVarChar(30), lastPull)
+          .query(`
+            SELECT TOP 1000
+              CAST(GUIDPAGAMENTO AS NVARCHAR(36)) AS guidPagamento,
+              CAST(GUIDVENDA AS NVARCHAR(36)) AS guidVenda,
+              CAST(GUIDFORMAPAGAMENTO AS NVARCHAR(36)) AS guidFormaPagamento,
+              FORMAPAGAMENTO AS formaPagamento, CODIGOSEFAZ AS codigoSefaz,
+              VALOR AS valor, PARCELAS AS parcelas, NSU AS nsu,
+              AUTORIZACAO AS autorizacao, BANDEIRA AS bandeira,
+              FORMAT(ULTIMAALTERACAO,'yyyy-MM-ddTHH:mm:ss') AS ultimaAlteracao
+            FROM KS0003.KS00018
+            WHERE GUIDENTIDADE=@guidentidade AND ULTIMAALTERACAO > CONVERT(DATETIME,@desde)
+            ORDER BY ULTIMAALTERACAO DESC
+          `);
+        delta.vendaPagamentos = r.recordset;
+      }
+
+      if (entidades.includes("notaFiscalEventos")) {
+        const r = await pool.request()
+          .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+          .input("desde", sql.NVarChar(30), lastPull)
+          .query(`
+            SELECT TOP 500
+              CAST(GUIDEVENTO AS NVARCHAR(36)) AS guidEvento,
+              CAST(GUIDVENDA AS NVARCHAR(36)) AS guidVenda,
+              TIPOEVENTO AS tipoEvento, SEQUENCIA AS sequencia, PROTOCOLO AS protocolo,
+              JUSTIFICATIVA AS justificativa, XML AS xml, STATUS AS status,
+              MENSAGEMSEFAZ AS mensagemSefaz,
+              FORMAT(DATAEVENTO,'yyyy-MM-ddTHH:mm:ss') AS dataEvento,
+              FORMAT(ULTIMAALTERACAO,'yyyy-MM-ddTHH:mm:ss') AS ultimaAlteracao
+            FROM KS0003.KS00020
+            WHERE GUIDENTIDADE=@guidentidade AND ULTIMAALTERACAO > CONVERT(DATETIME,@desde)
+            ORDER BY ULTIMAALTERACAO DESC
+          `);
+        delta.notaFiscalEventos = r.recordset;
+      }
+
+      if (entidades.includes("fechamentosCaixa")) {
+        const r = await pool.request()
+          .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+          .input("desde", sql.NVarChar(30), lastPull)
+          .query(`
+            SELECT TOP 500
+              CAST(GUIDFECHAMENTO AS NVARCHAR(36)) AS guidFechamento,
+              DISPOSITIVO AS dispositivo, OPERADOR AS operador,
+              FORMAT(DATAABERTURA,'yyyy-MM-ddTHH:mm:ss') AS dataAbertura,
+              FORMAT(DATAFECHAMENTO,'yyyy-MM-ddTHH:mm:ss') AS dataFechamento,
+              STATUS AS status, VALORABERTURA AS valorAbertura, TOTALVENDAS AS totalVendas,
+              TOTALSUPRIMENTO AS totalSuprimento, TOTALSANGRIA AS totalSangria,
+              TOTALINFORMADO AS totalInformado, TOTALDIFERENCA AS totalDiferenca,
+              OBSERVACAO AS observacao,
+              FORMAT(ULTIMAALTERACAO,'yyyy-MM-ddTHH:mm:ss') AS ultimaAlteracao
+            FROM KS0003.KS00021
+            WHERE GUIDENTIDADE=@guidentidade AND ULTIMAALTERACAO > CONVERT(DATETIME,@desde)
+            ORDER BY ULTIMAALTERACAO DESC
+          `);
+        delta.fechamentosCaixa = r.recordset;
+      }
+
+      if (entidades.includes("fechamentosCaixaControle")) {
+        const r = await pool.request()
+          .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
+          .input("desde", sql.NVarChar(30), lastPull)
+          .query(`
+            SELECT TOP 1000
+              CAST(GUIDCONTROLE AS NVARCHAR(36)) AS guidControle,
+              CAST(GUIDFECHAMENTO AS NVARCHAR(36)) AS guidFechamento,
+              CAST(GUIDFORMAPAGAMENTO AS NVARCHAR(36)) AS guidFormaPagamento,
+              FORMAPAGAMENTO AS formaPagamento, CODIGOSEFAZ AS codigoSefaz,
+              VALORSISTEMA AS valorSistema, VALORINFORMADO AS valorInformado,
+              DIFERENCA AS diferenca, QUANTIDADE AS quantidade, OBSERVACAO AS observacao,
+              FORMAT(ULTIMAALTERACAO,'yyyy-MM-ddTHH:mm:ss') AS ultimaAlteracao
+            FROM KS0003.KS00022
+            WHERE GUIDENTIDADE=@guidentidade AND ULTIMAALTERACAO > CONVERT(DATETIME,@desde)
+            ORDER BY ULTIMAALTERACAO DESC
+          `);
+        delta.fechamentosCaixaControle = r.recordset;
+      }
+
       if (entidades.includes("planoContas")) {
         const r = await pool.request()
           .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
@@ -506,7 +1689,11 @@ export const syncDelphiRouter = router({
           .input("guidentidade", sql.UniqueIdentifier, empresa.guidEntidade)
           .query(`
             SELECT CAST(GUIDPAGAMENTO AS NVARCHAR(36)) AS guidPagamento, PAGAMENTO, CODIGOSEFAZ,
-              INTEGRATEF, SITUACAO
+              INTEGRATEF, SITUACAO,
+              CAST(GUIDCONTA AS NVARCHAR(36)) AS guidConta,
+              CAST(GUIDNATUREZA AS NVARCHAR(36)) AS guidNatureza,
+              CAST(GUIDCENTRO AS NVARCHAR(36)) AS guidCentro,
+              CAST(GUIDCONTABANCARIA AS NVARCHAR(36)) AS guidContaBancaria
             FROM KS0003.KS00006 WHERE GUIDENTIDADE=@guidentidade ORDER BY CODIGOSEFAZ
           `);
         delta.formasPagamento = r.recordset;

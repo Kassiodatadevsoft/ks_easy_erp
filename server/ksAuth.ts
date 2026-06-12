@@ -60,6 +60,13 @@ export async function authenticateKsUser(
     USUARIO: { type: sql.VarChar(15),  value: usuario },
   });
 
+
+
+  console.log("[LOGIN] Usuario:", usuario);
+  console.log("[LOGIN] Senha digitada:", senha);
+  console.log("[LOGIN] Registros encontrados:", rows.length);
+  console.log("[LOGIN] Primeiro registro:", rows[0]);
+  
   if (!rows || rows.length === 0) return null;
   return rows[0];
 }
@@ -73,3 +80,4 @@ export async function updateLastAccess(guidPessoa: string): Promise<void> {
     { GUID: { type: sql.UniqueIdentifier, value: guidPessoa } }
   );
 }
+

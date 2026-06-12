@@ -2,11 +2,14 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure } from "../_core/trpc";
 import { getSqlPool, sql } from "../sqlserver";
+import { COOKIE_NAME } from "@shared/const";
 import { verifyKsSession } from "./ksAuthRouter";
 
 async function getKsSession(req: { headers: { cookie?: string } }) {
   const cookies = req.headers.cookie ?? "";
-  const match = cookies.match(/ks_session=([^;]+)/);
+  const match = cookies.match(
+  new RegExp(`${COOKIE_NAME}=([^;]+)`)
+);
   const session = await verifyKsSession(match?.[1]);
   if (!session) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
   return session;
@@ -100,9 +103,9 @@ export const lancamentosCaixaRouter = router({
       tipo:         z.enum(["E", "S"]),
       valor:        z.number().positive(),
       descricao:    z.string().min(1).max(200),
-      guidConta:    z.string().uuid().optional().nullable(),
-      guidNatureza: z.string().uuid().optional().nullable(),
-      guidCentro:   z.string().uuid().optional().nullable(),
+      guidConta:    z.string().uuid("Conta/caixa obrigatoria"),
+      guidNatureza: z.string().uuid("Natureza de caixa obrigatoria"),
+      guidCentro:   z.string().uuid("Centro de custo obrigatorio"),
       numerodoc:    z.string().max(30).optional().nullable(),
       observacao:   z.string().max(500).optional().nullable(),
     }))
@@ -110,6 +113,27 @@ export const lancamentosCaixaRouter = router({
       const session = await getKsSession(ctx.req);
       const pool = await getSqlPool();
       const guid = crypto.randomUUID();
+      const tipoNatureza = input.tipo === "E" ? "R" : "D";
+
+      const natR = await pool.request()
+        .input("guidnatureza", sql.UniqueIdentifier, input.guidNatureza)
+        .input("tipo",         sql.Char(1),          tipoNatureza)
+        .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
+        .query(`
+          SELECT GUIDCONTA
+          FROM KS0003.KS00003
+          WHERE GUIDNATUREZA=@guidnatureza
+            AND GUIDENTIDADE=@guidentidade
+            AND SITUACAO='A'
+            AND TIPO=@tipo
+        `);
+      const natureza = natR.recordset[0] as { GUIDCONTA: string | null } | undefined;
+      if (!natureza) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Natureza de caixa incompativel com o tipo do lancamento." });
+      }
+      if (!natureza.GUIDCONTA) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "A natureza de caixa precisa estar vinculada a uma conta do plano de contas." });
+      }
 
       await pool.request()
         .input("guid",         sql.UniqueIdentifier, guid)
@@ -117,9 +141,9 @@ export const lancamentosCaixaRouter = router({
         .input("tipo",         sql.Char(1),          input.tipo)
         .input("valor",        sql.Decimal(15,2),    input.valor)
         .input("descricao",    sql.NVarChar(200),    input.descricao.toUpperCase())
-        .input("guidconta",    sql.UniqueIdentifier, input.guidConta ?? null)
-        .input("guidnatureza", sql.UniqueIdentifier, input.guidNatureza ?? null)
-        .input("guidcentro",   sql.UniqueIdentifier, input.guidCentro ?? null)
+        .input("guidconta",    sql.UniqueIdentifier, input.guidConta)
+        .input("guidnatureza", sql.UniqueIdentifier, input.guidNatureza)
+        .input("guidcentro",   sql.UniqueIdentifier, input.guidCentro)
         .input("numerodoc",    sql.NVarChar(30),     input.numerodoc ?? null)
         .input("observacao",   sql.NVarChar(500),    input.observacao ?? null)
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)

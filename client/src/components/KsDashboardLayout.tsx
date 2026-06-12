@@ -17,6 +17,7 @@ import {
   Building2,
   ChevronRight,
   CreditCard,
+  MonitorCog,
   FileText,
   LayoutDashboard,
   LogOut,
@@ -41,15 +42,44 @@ import {
   BarChart2,
   LayoutGrid,
   ArrowUpDown,
+  HandCoins,
+  BadgeCheck,
+  FileSearch,
+  FileUp,
+  ShieldCheck,
+  MessageCircle,
+  ClipboardCheck,
+  ClipboardList,
+  KeyRound,
 } from "lucide-react";
-import { useState } from "react";
+import type { LucideIcon } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 
-const LOGO_URL = "/manus-storage/datadev-logo-clean_3b290173.png";
+const LOGO_URL = "/logo.png";
+const LICENCAS_ADMIN_CNPJ = "50303631000158";
 
-// ─── Definição do menu ────────────────────────────────────────────────────────
-const MENU_GROUPS = [
+type MenuItem = {
+  icon: LucideIcon;
+  label: string;
+  path: string;
+};
+
+type MenuSection = {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  items: MenuItem[];
+};
+
+type MenuGroup = {
+  label: string;
+  items?: MenuItem[];
+  sections?: MenuSection[];
+};
+
+const MENU_GROUPS: MenuGroup[] = [
   {
     label: "Principal",
     items: [
@@ -58,53 +88,121 @@ const MENU_GROUPS = [
   },
   {
     label: "Cadastros",
-    items: [
-      { icon: Users,     label: "Entidades",       path: "/cadastros/entidades" },
-      { icon: Users,     label: "Clientes",        path: "/cadastros/clientes" },
-      { icon: Building2, label: "Fornecedores",     path: "/cadastros/fornecedores" },
-      { icon: Users,     label: "Funcionários",     path: "/cadastros/funcionarios" },
-      { icon: Truck,     label: "Transportadoras",  path: "/cadastros/transportadoras" },
-      { icon: Building2, label: "Empresas",         path: "/cadastros/empresas" },
-      { icon: Briefcase, label: "Cargos",            path: "/cadastros/cargos" },
+    sections: [
+      {
+        id: "cadastros-pessoas",
+        label: "Pessoas e parceiros",
+        icon: Users,
+        items: [
+          { icon: Users, label: "Entidades", path: "/cadastros/entidades" },
+          { icon: Users, label: "Clientes", path: "/cadastros/clientes" },
+          { icon: Building2, label: "Fornecedores", path: "/cadastros/fornecedores" },
+          { icon: Users, label: "Funcionários", path: "/cadastros/funcionarios" },
+          { icon: Truck, label: "Transportadoras", path: "/cadastros/transportadoras" },
+        ],
+      },
+      {
+        id: "cadastros-empresa",
+        label: "Empresa e equipe",
+        icon: Briefcase,
+        items: [
+          { icon: Building2, label: "Empresas", path: "/cadastros/empresas" },
+          { icon: Briefcase, label: "Cargos", path: "/cadastros/cargos" },
+        ],
+      },
     ],
   },
   {
     label: "Comercial",
     items: [
       { icon: BarChart2,    label: "Dashboard",  path: "/vendas/dashboard" },
-      { icon: ShoppingCart, label: "Vendas",     path: "/vendas" },
+      { icon: MonitorCog, label: "PDV / Operacao", path: "/vendas" },
       { icon: FileText,     label: "Pedidos",    path: "/pedidos" },
     ],
   },
   {
     label: "Financeiro",
-    items: [
-      { icon: BookOpen,     label: "Plano de Contas",   path: "/financeiro/plano-contas" },
-      { icon: Target,       label: "Centro de Custo",   path: "/financeiro/centro-custo" },
-      { icon: Tag,          label: "Natureza de Caixa", path: "/financeiro/natureza-caixa" },
-      { icon: TrendingDown, label: "Contas a Pagar",    path: "/financeiro/pagar" },
-      { icon: TrendingUp,   label: "Contas a Receber",  path: "/financeiro/receber" },
-      { icon: Activity,     label: "Fluxo de Caixa",    path: "/financeiro/fluxo-caixa" },
-      { icon: CreditCard,   label: "Formas de Pagamento", path: "/financeiro/formas-pagamento" },
-      { icon: Landmark,     label: "Contas Bancárias",    path: "/financeiro/contas-bancarias" },
-      { icon: ArrowRightLeft, label: "Transferências",      path: "/financeiro/transferencias" },
-      { icon: Wallet,       label: "Lançamentos de Caixa", path: "/financeiro/lancamentos-caixa" },
-      { icon: Scale,        label: "Balanço Patrimonial",  path: "/financeiro/balanco-patrimonial" },
+    sections: [
+      {
+        id: "financeiro-cadastros",
+        label: "Cadastros financeiros",
+        icon: BookOpen,
+        items: [
+          { icon: BookOpen, label: "Plano de Contas", path: "/financeiro/plano-contas" },
+          { icon: Target, label: "Centro de Custo", path: "/financeiro/centro-custo" },
+          { icon: Tag, label: "Natureza de Caixa", path: "/financeiro/natureza-caixa" },
+          { icon: CreditCard, label: "Formas de Pagamento", path: "/financeiro/formas-pagamento" },
+          { icon: Landmark, label: "Contas Bancárias", path: "/financeiro/contas-bancarias" },
+        ],
+      },
+      {
+        id: "financeiro-operacao",
+        label: "Contas e caixa",
+        icon: Wallet,
+        items: [
+          { icon: TrendingDown, label: "Contas a Pagar", path: "/financeiro/pagar" },
+          { icon: TrendingUp, label: "Contas a Receber", path: "/financeiro/receber" },
+          { icon: Wallet, label: "Controle de Caixas", path: "/financeiro/controle-caixas" },
+          { icon: Wallet, label: "Lançamentos de Caixa", path: "/financeiro/lancamentos-caixa" },
+          { icon: ArrowRightLeft, label: "Transferências", path: "/financeiro/transferencias" },
+          { icon: Activity, label: "Fluxo de Caixa", path: "/financeiro/fluxo-caixa" },
+        ],
+      },
+      {
+        id: "financeiro-conciliacao",
+        label: "Conciliação e importação",
+        icon: BadgeCheck,
+        items: [
+          { icon: BadgeCheck, label: "Conciliação Cartões/PIX", path: "/financeiro/conciliacao-cartoes-pix" },
+          { icon: FileSearch, label: "Conciliação Bancária", path: "/financeiro/conciliacao-bancaria" },
+          { icon: FileUp, label: "Importar Extrato OFX", path: "/financeiro/importar-ofx" },
+          { icon: FileUp, label: "Importar CNAB", path: "/financeiro/importar-cnab" },
+        ],
+      },
+      {
+        id: "financeiro-controle",
+        label: "Controle e cobrança",
+        icon: ShieldCheck,
+        items: [
+          { icon: ShieldCheck, label: "Auditoria Financeira", path: "/financeiro/auditoria-financeira" },
+          { icon: MessageCircle, label: "Cobrança Automática", path: "/financeiro/cobranca-automatica" },
+          { icon: ClipboardCheck, label: "Aprovação de Pagamentos", path: "/financeiro/aprovacao-pagamentos" },
+        ],
+      },
+      {
+        id: "financeiro-relatorios",
+        label: "Relatórios e folha",
+        icon: Scale,
+        items: [
+          { icon: Scale, label: "Balanço Patrimonial", path: "/financeiro/balanco-patrimonial" },
+          { icon: HandCoins, label: "Funcionários e Pagamentos", path: "/financeiro/funcionarios-pagamentos" },
+        ],
+      },
     ],
   },
   {
-    label: "Estoque / Cardápio",
-    items: [
-      { icon: Tag,     label: "Categorias", path: "/estoque/categorias" },
-      { icon: Package, label: "Produtos",   path: "/estoque/produtos" },
-    ],
-  },
-  {
-    label: "Estoque ERP",
-    items: [
-      { icon: LayoutGrid,  label: "Dashboard",       path: "/estoque/dashboard" },
-      { icon: Package,     label: "Produtos ERP",    path: "/estoque/produtos-erp" },
-      { icon: ArrowUpDown, label: "Movimentações",    path: "/estoque/movimentacoes" },
+    label: "Estoque",
+    sections: [
+      {
+        id: "estoque-cardapio",
+        label: "Cardápio",
+        icon: ShoppingBag,
+        items: [
+          { icon: Tag, label: "Categorias", path: "/estoque/categorias" },
+          { icon: Package, label: "Produtos", path: "/estoque/produtos" },
+        ],
+      },
+      {
+        id: "estoque-operacao",
+        label: "Operação ERP",
+        icon: LayoutGrid,
+        items: [
+          { icon: LayoutGrid, label: "Dashboard", path: "/estoque/dashboard" },
+          { icon: Package, label: "Produtos ERP", path: "/estoque/produtos-erp" },
+          { icon: ArrowUpDown, label: "Movimentações", path: "/estoque/movimentacoes" },
+          { icon: ClipboardList, label: "Sugestão de Compra", path: "/estoque/sugestao-compra" },
+        ],
+      },
     ],
   },
   {
@@ -116,10 +214,47 @@ const MENU_GROUPS = [
   {
     label: "Sistema",
     items: [
+      { icon: KeyRound, label: "Gerenciador de Licenças", path: "/licencas" },
       { icon: Settings, label: "Configurações", path: "/configuracoes" },
     ],
   },
 ];
+
+function normalizeCnpj(value: string | null | undefined) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+function canViewLicencas(user: { entDocumento?: string | null } | null | undefined) {
+  return normalizeCnpj(user?.entDocumento) === LICENCAS_ADMIN_CNPJ;
+}
+
+function getVisibleMenuGroups(user: { entDocumento?: string | null } | null | undefined) {
+  const showLicencas = canViewLicencas(user);
+  return MENU_GROUPS.map((group) => ({
+    ...group,
+    items: group.items?.filter((item) => item.path !== "/licencas" || showLicencas),
+    sections: group.sections?.map((section) => ({
+      ...section,
+      items: section.items.filter((item) => item.path !== "/licencas" || showLicencas),
+    })).filter((section) => section.items.length > 0),
+  })).filter((group) => (group.items?.length ?? 0) > 0 || (group.sections?.length ?? 0) > 0);
+}
+
+function getGroupItems(group: MenuGroup) {
+  return group.sections?.flatMap((section) => section.items) ?? group.items ?? [];
+}
+
+function getAllMenuItems(groups = MENU_GROUPS) {
+  return groups.flatMap(getGroupItems);
+}
+
+function getActiveSectionIds(path: string, groups = MENU_GROUPS) {
+  return groups.flatMap((group) =>
+    group.sections
+      ?.filter((section) => section.items.some((item) => item.path === path))
+      .map((section) => section.id) ?? [],
+  );
+}
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function KsDashboardLayout({
@@ -143,9 +278,24 @@ export default function KsDashboardLayout({
 function KsLayoutInner({ children }: { children: React.ReactNode }) {
   const { user, nomeEmpresa, logout } = useKsAuth();
   const [location, setLocation] = useLocation();
+  const menuGroups = useMemo(() => getVisibleMenuGroups(user), [user?.entDocumento]);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const isMobile = useIsMobile();
+  const [openSections, setOpenSections] = useState<Set<string>>(
+    () => new Set(getActiveSectionIds(location, menuGroups)),
+  );
+
+  useEffect(() => {
+    const activeSectionIds = getActiveSectionIds(location, menuGroups);
+    if (!activeSectionIds.length) return;
+
+    setOpenSections((current) => {
+      const next = new Set(current);
+      activeSectionIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }, [location, menuGroups]);
 
   const initials = (user?.nome ?? "U")
     .split(" ")
@@ -155,13 +305,99 @@ function KsLayoutInner({ children }: { children: React.ReactNode }) {
     .toUpperCase();
 
   const activeLabel =
-    MENU_GROUPS.flatMap((g) => g.items).find((i) => i.path === location)?.label ??
+    getAllMenuItems(menuGroups).find((i) => i.path === location)?.label ??
     "Dashboard";
 
   const sidebarWidth = collapsed ? 64 : 240;
 
   // ─── Sidebar compartilhada ────────────────────────────────────────────────
   function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+    const showText = !collapsed || isMobile;
+
+    function toggleSection(sectionId: string) {
+      setOpenSections((current) => {
+        const next = new Set(current);
+        if (next.has(sectionId)) {
+          next.delete(sectionId);
+        } else {
+          next.add(sectionId);
+        }
+        return next;
+      });
+    }
+
+    function renderMenuItem(item: MenuItem, nested = false) {
+      const isActive = location === item.path;
+
+      return (
+        <button
+          key={item.path}
+          onClick={() => {
+            setLocation(item.path);
+            onNavigate?.();
+          }}
+          title={!showText ? item.label : undefined}
+          className={`
+            w-full flex items-center gap-3 rounded-lg h-9 text-sm font-medium
+            transition-all duration-150 group relative
+            ${showText ? (nested ? "px-3 pl-8" : "px-3") : "justify-center px-0"}
+            ${
+              isActive
+                ? "bg-blue-600 text-white shadow-md shadow-blue-900/40"
+                : "text-white/60 hover:text-white hover:bg-white/8"
+            }
+          `}
+        >
+          <item.icon
+            className={`w-4 h-4 shrink-0 transition-colors ${
+              isActive ? "text-white" : "text-white/50 group-hover:text-white/80"
+            }`}
+          />
+          {showText && <span className="flex-1 text-left truncate">{item.label}</span>}
+        </button>
+      );
+    }
+
+    function renderSection(section: MenuSection) {
+      const isOpen = openSections.has(section.id);
+      const hasActiveItem = section.items.some((item) => item.path === location);
+
+      if (!showText) {
+        return section.items.map((item) => renderMenuItem(item));
+      }
+
+      return (
+        <div key={section.id} className="space-y-0.5">
+          <button
+            type="button"
+            onClick={() => toggleSection(section.id)}
+            className={`
+              w-full flex items-center gap-2 rounded-lg px-3 h-9 text-xs font-semibold
+              transition-all duration-150
+              ${
+                hasActiveItem
+                  ? "text-white bg-white/10"
+                  : "text-white/50 hover:text-white hover:bg-white/8"
+              }
+            `}
+          >
+            <section.icon className="w-4 h-4 shrink-0" />
+            <span className="flex-1 text-left truncate">{section.label}</span>
+            <ChevronRight
+              className={`w-3.5 h-3.5 shrink-0 transition-transform ${
+                isOpen ? "rotate-90" : ""
+              }`}
+            />
+          </button>
+          {isOpen && (
+            <div className="space-y-0.5">
+              {section.items.map((item) => renderMenuItem(item, true))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div className="flex flex-col h-full">
         {/* Logo */}
@@ -196,54 +432,24 @@ function KsLayoutInner({ children }: { children: React.ReactNode }) {
 
         {/* Menu */}
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-          {MENU_GROUPS.map((group, gi) => (
+          {menuGroups.map((group, gi) => (
             <div key={group.label}>
-              {gi > 0 && (!collapsed || isMobile) && (
+              {gi > 0 && showText && (
                 <div className="px-3 pt-4 pb-1">
                   <span className="text-[10px] font-semibold uppercase tracking-widest text-white/30">
                     {group.label}
                   </span>
                 </div>
               )}
-              {gi > 0 && (collapsed && !isMobile) && (
+              {gi > 0 && !showText && (
                 <div className="my-2 mx-2">
                   <Separator className="bg-white/10" />
                 </div>
               )}
-              {group.items.map((item) => {
-                const isActive = location === item.path;
-                return (
-                  <button
-                    key={item.path}
-                    onClick={() => {
-                      setLocation(item.path);
-                      onNavigate?.();
-                    }}
-                    title={collapsed && !isMobile ? item.label : undefined}
-                    className={`
-                      w-full flex items-center gap-3 rounded-lg px-3 h-9 text-sm font-medium
-                      transition-all duration-150 group relative
-                      ${collapsed && !isMobile ? "justify-center px-0" : ""}
-                      ${
-                        isActive
-                          ? "bg-blue-600 text-white shadow-md shadow-blue-900/40"
-                          : "text-white/60 hover:text-white hover:bg-white/8"
-                      }
-                    `}
-                  >
-                    <item.icon
-                      className={`w-4 h-4 shrink-0 transition-colors ${
-                        isActive ? "text-white" : "text-white/50 group-hover:text-white/80"
-                      }`}
-                    />
-                    {(!collapsed || isMobile) && (
-                      <>
-                        <span className="flex-1 text-left truncate">{item.label}</span>
-                      </>
-                    )}
-                  </button>
-                );
-              })}
+              <div className="space-y-0.5">
+                {group.items?.map((item) => renderMenuItem(item))}
+                {group.sections?.map((section) => renderSection(section))}
+              </div>
             </div>
           ))}
         </nav>

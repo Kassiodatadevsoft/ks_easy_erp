@@ -23,6 +23,15 @@ interface ProdutoFormProps {
 
 // Tamanhos dinâmicos — agora gerenciados como array de objetos
 interface TamanhoItem { nome: string; preco: number; qtd: number; }
+interface FaixaPrecoItem {
+  id?: number;
+  unidade: string;
+  fatorConversao: string;
+  quantidadeMinima: string;
+  descricaoPreco: string;
+  precoVenda: string;
+  ativo: boolean;
+}
 
 // ─── Tabelas fiscais ──────────────────────────────────────────────────────────
 const ORIGEM_OPCOES = [
@@ -82,6 +91,9 @@ const CFOP_OPCOES = [
 ];
 
 const UNIDADES = ["UN", "KG", "G", "L", "ML", "M", "M2", "M3", "CX", "PC", "PAR", "DZ", "CT", "SC", "FD", "PT"];
+const DESCRICOES_PRECO_FAIXA = ["VAREJO", "ATACADO"] as const;
+const IMEI_SITUACOES = ["DISPONIVEL", "RESERVADO", "VENDIDO", "MANUTENCAO", "BLOQUEADO", "DEVOLVIDO"] as const;
+const IMEI_ESTADOS = ["NOVO", "SEMINOVO", "USADO", "VITRINE", "RECONDICIONADO"] as const;
 
 
 
@@ -91,6 +103,7 @@ interface FormData {
   modoPreco: "simples" | "tamanhos";
   precoVenda: string; precocusto: string;
   tamanhos: TamanhoItem[];
+  faixasPreco: FaixaPrecoItem[];
   // Formação de preço
   aliqIcmsForm: string; percReducaoForm: string; percFreteForm: string; percJurosForm: string;
   codBarras: string;
@@ -118,12 +131,43 @@ interface FormData {
   imageUrl: string; erpCode: string;
 }
 
+interface ImeiFormData {
+  guidImei: string;
+  imei1: string;
+  imei2: string;
+  numeroSerie: string;
+  cor: string;
+  capacidade: string;
+  estado: typeof IMEI_ESTADOS[number];
+  situacao: typeof IMEI_SITUACOES[number];
+  dataEntrada: string;
+  custo: string;
+  precoVenda: string;
+  observacao: string;
+}
+
+type ProdutoImei = {
+  GUIDIMEI: string;
+  IMEI1: string | null;
+  IMEI2: string | null;
+  NUMEROSERIE: string | null;
+  COR: string | null;
+  CAPACIDADE: string | null;
+  ESTADO: string | null;
+  SITUACAO: string | null;
+  DATAENTRADA: string | Date | null;
+  CUSTO: number | null;
+  PRECOVENDA: number | null;
+  OBSERVACAO: string | null;
+};
+
 const FORM_INICIAL: FormData = {
   produto: "", referencia: "", descricao: "", guidCategoria: "",
   ordemExibicao: 0, situacao: "A", destaque: false, delivery: true,
   modoPreco: "tamanhos",
   precoVenda: "", precocusto: "",
   tamanhos: [],
+  faixasPreco: [],
   aliqIcmsForm: "0", percReducaoForm: "0", percFreteForm: "0", percJurosForm: "0",
   codBarras: "",
   codBarraCaixa: "",
@@ -142,6 +186,29 @@ const FORM_INICIAL: FormData = {
   estoque: "0", estoqueMinimo: "0",
   imageUrl: "", erpCode: "",
 };
+
+function criarImeiForm(): ImeiFormData {
+  return {
+    guidImei: crypto.randomUUID(),
+    imei1: "",
+    imei2: "",
+    numeroSerie: "",
+    cor: "",
+    capacidade: "",
+    estado: "NOVO",
+    situacao: "DISPONIVEL",
+    dataEntrada: new Date().toISOString().slice(0, 10),
+    custo: "",
+    precoVenda: "",
+    observacao: "",
+  };
+}
+
+function formatDateInput(value: string | Date | null | undefined) {
+  if (!value) return "";
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
+}
 
 function InfoTip({ text }: { text: string }) {
   return (
@@ -162,6 +229,10 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
   const [salvando, setSalvando] = useState(false);
   const [erros, setErros] = useState<Partial<Record<string, string>>>({});
   const [abaAtiva, setAbaAtiva] = useState("dados");
+  const [buscaImei, setBuscaImei] = useState("");
+  const [situacaoImei, setSituacaoImei] = useState<"TODOS" | typeof IMEI_SITUACOES[number]>("TODOS");
+  const [imeiForm, setImeiForm] = useState<ImeiFormData>(() => criarImeiForm());
+  const [salvandoImei, setSalvandoImei] = useState(false);
 
   const { data: categorias } = trpc.categorias.listarTodas.useQuery();
   const { data: regime } = trpc.produtos.regimeEmpresa.useQuery();
@@ -217,6 +288,19 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         } catch { /* usar padrão */ }
       }
       const d = produtoData as Record<string, unknown>;
+      const faixasPreco = Array.isArray(d.faixasPreco)
+        ? (d.faixasPreco as Record<string, unknown>[]).map(faixa => ({
+            id: Number(faixa.ID),
+            unidade: String(faixa.UNIDADE ?? "UN"),
+            fatorConversao: String(faixa.FATORCONVERSAO ?? "1"),
+            quantidadeMinima: String(faixa.QUANTIDADEMINIMA ?? "1"),
+            descricaoPreco: DESCRICOES_PRECO_FAIXA.includes(String(faixa.DESCRICAOPRECO ?? "").toUpperCase() as typeof DESCRICOES_PRECO_FAIXA[number])
+              ? String(faixa.DESCRICAOPRECO).toUpperCase()
+              : "VAREJO",
+            precoVenda: String(faixa.PRECOVENDA ?? ""),
+            ativo: Boolean(faixa.ATIVO),
+          }))
+        : [];
       setForm({
         produto: String(d.PRODUTO ?? ""),
         referencia: String(d.REFERENCIA ?? ""),
@@ -230,6 +314,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         precoVenda: d.PRECOVENDA ? String(d.PRECOVENDA) : "",
         precocusto: d.PRECOCUSTO ? String(d.PRECOCUSTO) : "",
         tamanhos,
+        faixasPreco,
         aliqIcmsForm: d.ALIQICMSFORM !== undefined ? String(d.ALIQICMSFORM) : "0",
         percReducaoForm: d.PERCREDUCAOFORM !== undefined ? String(d.PERCREDUCAOFORM) : "0",
         percFreteForm: d.PERCFRETEFORM !== undefined ? String(d.PERCFRETEFORM) : "0",
@@ -280,10 +365,23 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
   const utils = trpc.useUtils();
   const criarMutation = trpc.produtos.criar.useMutation();
   const atualizarMutation = trpc.produtos.atualizar.useMutation();
+  const salvarImeiMutation = trpc.produtos.salvarImei.useMutation();
+  const excluirImeiMutation = trpc.produtos.excluirImei.useMutation();
+  const { data: imeisData, refetch: refetchImeis } = trpc.produtos.listarImeis.useQuery(
+    {
+      guidProduto: guidProduto!,
+      busca: buscaImei || undefined,
+      situacao: situacaoImei,
+    },
+    { enabled: isEdicao && open && Boolean(guidProduto) }
+  );
 
   function setField<K extends keyof FormData>(key: K, value: FormData[K]) {
     setForm(prev => ({ ...prev, [key]: value }));
     if (erros[key]) setErros(prev => ({ ...prev, [key]: undefined }));
+  }
+  function setImeiField<K extends keyof ImeiFormData>(key: K, value: ImeiFormData[K]) {
+    setImeiForm(prev => ({ ...prev, [key]: value }));
   }
   function setTexto(key: keyof FormData, value: string) {
     setField(key, value.toUpperCase() as FormData[typeof key]);
@@ -292,6 +390,29 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
   const removeTamanho = useCallback((i: number) => setForm(f => ({ ...f, tamanhos: f.tamanhos.filter((_, idx) => idx !== i) })), []);
   const updateTamanho = useCallback((i: number, field: keyof TamanhoItem, v: string | number) =>
     setForm(f => { const t = [...f.tamanhos]; t[i] = { ...t[i], [field]: field === "nome" ? String(v).toUpperCase() : Number(v) }; return { ...f, tamanhos: t }; }), []);
+  const addFaixaPreco = useCallback(() => setForm(f => ({
+    ...f,
+    faixasPreco: [...f.faixasPreco, {
+      unidade: f.unidade || "UN",
+      fatorConversao: f.unidade === "CX" ? (f.qtdCaixa || "1") : "1",
+      quantidadeMinima: "1",
+      descricaoPreco: "VAREJO",
+      precoVenda: f.precoVenda || "",
+      ativo: true,
+    }],
+  })), []);
+  const removeFaixaPreco = useCallback((i: number) => setForm(f => ({ ...f, faixasPreco: f.faixasPreco.filter((_, idx) => idx !== i) })), []);
+  const updateFaixaPreco = useCallback((i: number, field: keyof FaixaPrecoItem, value: string | boolean) =>
+    setForm(f => {
+      const faixas = [...f.faixasPreco];
+      faixas[i] = {
+        ...faixas[i],
+        [field]: typeof value === "string" && (field === "unidade" || field === "descricaoPreco")
+          ? value.toUpperCase()
+          : value,
+      };
+      return { ...f, faixasPreco: faixas };
+    }), []);
 
   function buildPrecosPayload() {
     if (form.modoPreco === "simples") {
@@ -301,6 +422,80 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
     // Novo formato: array de { nome, preco, qtd }
     const tamanhoKeys = form.tamanhos.map(t => t.nome);
     return { precos: JSON.stringify(form.tamanhos), tamanhosDisp: JSON.stringify(tamanhoKeys) };
+  }
+
+  function novoImei() {
+    setImeiForm(criarImeiForm());
+  }
+
+  function editarImei(row: ProdutoImei) {
+    setImeiForm({
+      guidImei: row.GUIDIMEI,
+      imei1: row.IMEI1 ?? "",
+      imei2: row.IMEI2 ?? "",
+      numeroSerie: row.NUMEROSERIE ?? "",
+      cor: row.COR ?? "",
+      capacidade: row.CAPACIDADE ?? "",
+      estado: (IMEI_ESTADOS.includes(row.ESTADO as typeof IMEI_ESTADOS[number]) ? row.ESTADO : "NOVO") as typeof IMEI_ESTADOS[number],
+      situacao: (IMEI_SITUACOES.includes(row.SITUACAO as typeof IMEI_SITUACOES[number]) ? row.SITUACAO : "DISPONIVEL") as typeof IMEI_SITUACOES[number],
+      dataEntrada: formatDateInput(row.DATAENTRADA),
+      custo: row.CUSTO != null ? String(row.CUSTO) : "",
+      precoVenda: row.PRECOVENDA != null ? String(row.PRECOVENDA) : "",
+      observacao: row.OBSERVACAO ?? "",
+    });
+  }
+
+  async function salvarImei() {
+    if (!guidProduto) {
+      toast.error("Salve o produto antes de cadastrar IMEI.");
+      return;
+    }
+    if (!imeiForm.guidImei) {
+      toast.error("GUIDIMEI obrigatorio.");
+      return;
+    }
+    if (!imeiForm.imei1.trim() && !imeiForm.imei2.trim() && !imeiForm.numeroSerie.trim()) {
+      toast.error("Informe IMEI 1, IMEI 2 ou numero de serie.");
+      return;
+    }
+
+    setSalvandoImei(true);
+    try {
+      await salvarImeiMutation.mutateAsync({
+        guidImei: imeiForm.guidImei,
+        guidProduto,
+        imei1: imeiForm.imei1.trim() || undefined,
+        imei2: imeiForm.imei2.trim() || undefined,
+        numeroSerie: imeiForm.numeroSerie.trim() || undefined,
+        cor: imeiForm.cor.trim() || undefined,
+        capacidade: imeiForm.capacidade.trim() || undefined,
+        estado: imeiForm.estado,
+        situacao: imeiForm.situacao,
+        dataEntrada: imeiForm.dataEntrada || undefined,
+        custo: parseFloat(imeiForm.custo || "0"),
+        precoVenda: parseFloat(imeiForm.precoVenda || "0"),
+        observacao: imeiForm.observacao.trim() || undefined,
+      });
+      toast.success("IMEI salvo com sucesso!");
+      novoImei();
+      await refetchImeis();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao salvar IMEI");
+    } finally {
+      setSalvandoImei(false);
+    }
+  }
+
+  async function excluirImei(guidImei: string) {
+    if (!confirm("Excluir este IMEI do produto?")) return;
+    try {
+      await excluirImeiMutation.mutateAsync({ guidImei });
+      toast.success("IMEI excluido com sucesso!");
+      if (imeiForm.guidImei === guidImei) novoImei();
+      await refetchImeis();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao excluir IMEI");
+    }
   }
   function calcTotalFormacao(): number {
     const custo = parseFloat(form.precocusto || "0");
@@ -321,6 +516,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
 
   function validar(): boolean {
     const novosErros: Record<string, string> = {};
+    const ncmLimpo = form.ncm.replace(/\D/g, "");
     if (!form.produto.trim()) novosErros.produto = "Nome do produto é obrigatório";
     if (validacaoNome && !validacaoNome.disponivel) novosErros.produto = "Já existe um produto com este nome";
     if (!form.ncm.trim()) novosErros.ncm = "NCM é obrigatório";
@@ -328,11 +524,26 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
     if ((regime?.isSimples || !regime) && !form.csosn.trim()) novosErros.csosn = "CSOSN é obrigatório para Simples Nacional";
     if (regime?.isNormal && !form.cst.trim()) novosErros.cst = "CST é obrigatório para Regime Normal";
     if (form.modoPreco === "tamanhos" && form.tamanhos.some(t => !t.nome.trim())) novosErros.tamanhos = "Todos os tamanhos precisam ter um nome";
+    if (ncmLimpo && ncmLimpo.length !== 8) novosErros.ncm = "NCM deve ter exatamente 8 dÃ­gitos";
+    const chavesFaixas = new Set<string>();
+    for (const faixa of form.faixasPreco) {
+      const unidade = faixa.unidade.trim().toUpperCase();
+      const fator = parseFloat(faixa.fatorConversao || "0");
+      const qtdMinima = parseFloat(faixa.quantidadeMinima || "0");
+      const precoVenda = parseFloat(faixa.precoVenda || "0");
+      if (!unidade) novosErros.faixasPreco = "Informe a unidade em todas as faixas";
+      if (fator <= 0) novosErros.faixasPreco = "Fator de conversao deve ser maior que zero";
+      if (qtdMinima <= 0) novosErros.faixasPreco = "Quantidade minima deve ser maior que zero";
+      if (precoVenda <= 0) novosErros.faixasPreco = "Preco de venda da faixa deve ser maior que zero";
+      const chave = `${unidade}|${qtdMinima}`;
+      if (chavesFaixas.has(chave)) novosErros.faixasPreco = "Nao pode repetir unidade e quantidade minima";
+      chavesFaixas.add(chave);
+    }
     setErros(novosErros);
     const fiscalErros = ["ncm", "cfop", "csosn", "cst"];
     if (fiscalErros.some(k => novosErros[k])) setAbaAtiva("fiscal");
     else if (novosErros.produto) setAbaAtiva("dados");
-    else if (novosErros.tamanhos) setAbaAtiva("precos");
+    else if (novosErros.tamanhos || novosErros.faixasPreco) setAbaAtiva("precos");
     return Object.keys(novosErros).length === 0;
   }
 
@@ -352,6 +563,15 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         preco: parseFloat(form.precocusto || "0"),
         precoVenda: parseFloat(form.precoVenda || "0"),
         precocusto: parseFloat(form.precocusto || "0"),
+        faixasPreco: form.faixasPreco.map(faixa => ({
+          id: faixa.id,
+          unidade: faixa.unidade.trim().toUpperCase(),
+          fatorConversao: parseFloat(faixa.fatorConversao || "0"),
+          quantidadeMinima: parseFloat(faixa.quantidadeMinima || "0"),
+          descricaoPreco: faixa.descricaoPreco.trim() || undefined,
+          precoVenda: parseFloat(faixa.precoVenda || "0"),
+          ativo: faixa.ativo,
+        })),
         imageUrl: form.imageUrl || undefined,
         erpCode: form.erpCode || undefined,
         destaque: form.destaque,
@@ -366,7 +586,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         percReducaoForm: parseFloat(form.percReducaoForm || "0"),
         percFreteForm: parseFloat(form.percFreteForm || "0"),
         percJurosForm: parseFloat(form.percJurosForm || "0"),
-        ncm: form.ncm || undefined,
+        ncm: form.ncm.replace(/\D/g, "") || undefined,
         cest: form.cest || undefined,
         cfop: form.cfop || undefined,
         unidade: form.unidade || "UN",
@@ -428,7 +648,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       {/* Modal largo com altura controlada */}
-      <DialogContent className="w-[96vw] max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0">
+      <DialogContent className="w-screen max-w-none h-[100dvh] max-h-[100dvh] sm:w-[94vw] sm:max-w-[94vw] sm:h-auto sm:max-h-[90vh] lg:w-[88vw] lg:max-w-[88vw] xl:w-[86vw] xl:max-w-[86vw] 2xl:w-[84vw] 2xl:max-w-[84vw] flex flex-col p-0 gap-0">
         {/* Cabeçalho fixo */}
         <DialogHeader className="px-5 pt-5 pb-3 shrink-0 border-b">
           <DialogTitle className="flex items-center gap-2 text-base">
@@ -440,7 +660,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         <Tabs value={abaAtiva} onValueChange={setAbaAtiva} className="flex-1 flex flex-col overflow-hidden">
           {/* Abas com scroll horizontal em telas pequenas */}
           <div className="shrink-0 border-b overflow-x-auto">
-            <TabsList className="w-full rounded-none h-10 bg-transparent border-0 flex min-w-max">
+            <TabsList className="w-full rounded-none h-10 bg-transparent border-0 flex min-w-max lg:min-w-0">
               <TabsTrigger value="dados" className="relative flex-1 min-w-[90px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">
                 Dados Gerais
                 {erros.produto && <span className="absolute -top-0.5 right-1 w-3.5 h-3.5 bg-destructive text-white text-[9px] rounded-full flex items-center justify-center">!</span>}
@@ -448,6 +668,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
               <TabsTrigger value="precos" className="flex-1 min-w-[70px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">Preços</TabsTrigger>
               <TabsTrigger value="fiscal" className="flex-1 min-w-[60px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">Fiscal</TabsTrigger>
               <TabsTrigger value="estoque" className="flex-1 min-w-[70px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">Estoque</TabsTrigger>
+              <TabsTrigger value="imei" className="flex-1 min-w-[100px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">Celular / IMEI</TabsTrigger>
               <TabsTrigger value="delivery" className="flex-1 min-w-[90px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">Delivery / ERP</TabsTrigger>
             </TabsList>
           </div>
@@ -456,9 +677,9 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
           <div className="flex-1 overflow-y-auto">
 
             {/* ── ABA DADOS GERAIS ─────────────────────────────────────────── */}
-            <TabsContent value="dados" className="space-y-4 p-4 mt-0">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="sm:col-span-2 space-y-1">
+            <TabsContent value="dados" className="space-y-4 p-4 lg:p-5 mt-0">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="xl:col-span-2 space-y-1">
                   <Label>Referência</Label>
                   <Input value={form.referencia} onChange={e => setTexto("referencia", e.target.value)} placeholder="REF-001" maxLength={50} />
                 </div>
@@ -499,8 +720,8 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 <p className="text-xs text-muted-foreground">EAN-8, EAN-13 ou GTIN-14. Usado no PDV e na NF-e para venda da <strong>unidade</strong>.</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-3 rounded-md border bg-muted/20">
-                <div className="sm:col-span-2 space-y-1">
+              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-4 p-3 rounded-md border bg-muted/20">
+                <div className="md:col-span-2 xl:col-span-3 space-y-1">
                   <Label htmlFor="codBarraCaixa" className="flex items-center gap-1">
                     <Barcode className="h-4 w-4" /> Cód. de Barras da Caixa / Embalagem
                   </Label>
@@ -555,7 +776,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 </Select>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div className="space-y-1">
                   <Label htmlFor="ordemExibicao">Ordem de Exibição</Label>
                   <Input id="ordemExibicao" type="number" min={0} max={9999} value={form.ordemExibicao} onChange={e => setField("ordemExibicao", parseInt(e.target.value) || 0)} />
@@ -572,7 +793,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
                 <div className="flex items-center gap-3 p-3 rounded-md border">
                   <Switch id="destaque" checked={form.destaque} onCheckedChange={v => setField("destaque", v)} />
                   <div>
@@ -591,7 +812,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
 
               <Separator />
               <p className="text-sm font-semibold text-muted-foreground">Configurações do PDV</p>
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
                 <div className="flex items-center gap-3 p-3 rounded-md border">
                   <Switch id="balanca" checked={form.balanca} onCheckedChange={v => setField("balanca", v)} />
                   <div>
@@ -617,7 +838,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
             </TabsContent>
 
             {/* ── ABA PREÇOS ───────────────────────────────────────────────── */}
-            <TabsContent value="precos" className="space-y-4 p-4 mt-0">
+            <TabsContent value="precos" className="space-y-4 p-4 lg:p-5 mt-0">
               <div className="space-y-2">
                 <Label>Modo de Preço</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -633,7 +854,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
 
               {form.modoPreco === "simples" ? (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                     <div className="space-y-1">
                       <Label htmlFor="precocusto">Preço de Custo (R$)</Label>
                       <Input id="precocusto" type="number" min={0} step={0.01} value={form.precocusto} onChange={e => setField("precocusto", e.target.value)} placeholder="0,00" />
@@ -646,7 +867,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                   {/* Formação de preço */}
                   <div className="rounded-md border bg-muted/30 p-4 space-y-3">
                     <p className="text-sm font-semibold">Formação de Preço (sobre o Custo)</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                       {([
                         { k: "aliqIcmsForm" as const, l: "ICMS (%)" },
                         { k: "percReducaoForm" as const, l: "Redução (%)" },
@@ -742,11 +963,81 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 </div>
               )}
 
+              <Separator />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">Precos por faixa de quantidade</p>
+                    <p className="text-xs text-muted-foreground">O PDV aplica automaticamente a maior quantidade minima compativel com a venda.</p>
+                  </div>
+                  <Button type="button" size="sm" variant="outline" onClick={addFaixaPreco} className="gap-1 h-8 text-xs shrink-0">
+                    <Plus className="h-3 w-3" /> Adicionar
+                  </Button>
+                </div>
+                {erros.faixasPreco && <p className="text-xs text-destructive">{erros.faixasPreco}</p>}
+                {form.faixasPreco.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                    Sem faixas cadastradas. O sistema continua usando o preco de venda padrao do produto.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {form.faixasPreco.map((faixa, i) => (
+                      <div key={faixa.id ?? i} className="space-y-3 rounded-md bg-muted/30 p-3">
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[120px_1fr_1fr_40px] xl:items-end">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Unidade</Label>
+                            <Select value={faixa.unidade || "UN"} onValueChange={v => updateFaixaPreco(i, "unidade", v)}>
+                              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                              <SelectContent>{UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Fator conversao</Label>
+                            <Input type="number" min={0.0001} step={0.0001} className="h-8" value={faixa.fatorConversao} onChange={e => updateFaixaPreco(i, "fatorConversao", e.target.value)} />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Qtd minima</Label>
+                            <Input type="number" min={0.0001} step={0.0001} className="h-8" value={faixa.quantidadeMinima} onChange={e => updateFaixaPreco(i, "quantidadeMinima", e.target.value)} />
+                          </div>
+                          <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => removeFaixaPreco(i)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_120px] xl:items-end">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Descricao</Label>
+                            <Select value={faixa.descricaoPreco || "VAREJO"} onValueChange={v => updateFaixaPreco(i, "descricaoPreco", v)}>
+                              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {DESCRICOES_PRECO_FAIXA.map(descricao => (
+                                  <SelectItem key={descricao} value={descricao}>{descricao}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Preco venda</Label>
+                            <Input type="number" min={0.01} step={0.01} className="h-8" value={faixa.precoVenda} onChange={e => updateFaixaPreco(i, "precoVenda", e.target.value)} />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Ativo</Label>
+                            <div className="flex h-8 items-center gap-2 rounded-md border bg-background px-3">
+                              <Switch checked={faixa.ativo} onCheckedChange={v => updateFaixaPreco(i, "ativo", v)} />
+                              <span className="text-xs">{faixa.ativo ? "Sim" : "Nao"}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* ── Promoção ── */}
               <Separator />
               <div className="space-y-3">
                 <p className="text-sm font-semibold">Promoção</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                   <div className="space-y-1">
                     <Label htmlFor="percDesconto">% Desconto <InfoTip text="Percentual de desconto sobre o preço de venda. Ex: 10 = 10% de desconto." /></Label>
                     <Input id="percDesconto" type="number" min={0} max={100} step={0.01} value={form.percDesconto} onChange={e => setField("percDesconto", e.target.value)} placeholder="0,00" />
@@ -756,7 +1047,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                     <Input id="precoPromo" type="number" min={0} step={0.01} value={form.precoPromo} onChange={e => setField("precoPromo", e.target.value)} placeholder="0,00" />
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                   <div className="space-y-1">
                     <Label htmlFor="dtInicioPromo">Data Inicial da Promoção</Label>
                     <Input id="dtInicioPromo" type="date" value={form.dtInicioPromo} onChange={e => setField("dtInicioPromo", e.target.value)} />
@@ -773,7 +1064,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
             </TabsContent>
 
             {/* ── ABA FISCAL ───────────────────────────────────────────────── */}
-            <TabsContent value="fiscal" className="space-y-4 p-4 mt-0">
+            <TabsContent value="fiscal" className="space-y-4 p-4 lg:p-5 mt-0">
 
               {/* Banner de regime */}
               {regime && (
@@ -810,7 +1101,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
               </div>
 
               {/* NCM e CEST */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div className="space-y-1">
                   <Label htmlFor="ncm">NCM <span className="text-destructive">*</span> <InfoTip text="Nomenclatura Comum do Mercosul — 8 dígitos. Obrigatório na NF-e." /></Label>
                   <Input id="ncm" value={form.ncm} onChange={e => setField("ncm", e.target.value.replace(/\D/g, "").slice(0, 8))} placeholder="00000000" maxLength={8} className={erros.ncm ? "border-destructive" : ""} />
@@ -823,11 +1114,11 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
               </div>
 
               {/* CFOP, Unidade e Fracionado */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-1">
+              <div className="space-y-4">
+              <div className="space-y-1 min-w-0">
                 <Label className="flex items-center gap-1">CFOP <span className="text-destructive">*</span> <InfoTip text="Código Fiscal de Operações e Prestações — define a natureza da operação." /></Label>
                 <Select value={form.cfop || "NENHUM"} onValueChange={v => setField("cfop", v === "NENHUM" ? "" : v)}>
-                  <SelectTrigger className={erros.cfop ? "border-destructive" : ""}><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectTrigger className={`w-full min-w-0 ${erros.cfop ? "border-destructive" : ""}`}><SelectValue placeholder="Selecione..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="NENHUM">Não definido</SelectItem>
                     {CFOP_OPCOES.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -835,23 +1126,25 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 </Select>
                 {erros.cfop && <p className="text-xs text-destructive">{erros.cfop}</p>}
               </div>
-              <div className="space-y-1">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[150px_260px]">
+              <div className="space-y-1 min-w-0">
                 <Label>Unidade Fiscal <InfoTip text="Unidade de medida usada na NF-e (UN, KG, L, CX, etc.)" /></Label>
                 <Select value={form.unidade} onValueChange={v => setField("unidade", v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 min-w-0">
                 <Label className="flex items-center gap-1">
                   Fracionado <InfoTip text="Produto vendido em frações (ex: kg, litro, metro). Permite quantidades decimais no PDV e na NF-e." />
                 </Label>
-                <div className="flex items-center gap-3 h-10 px-3 rounded-md border">
+                <div className="flex h-10 items-center gap-3 rounded-md border px-3">
                   <Switch id="fracionado" checked={form.fracionado} onCheckedChange={v => setField("fracionado", v)} />
                   <span className="text-sm">{form.fracionado ? "Sim — fracionado" : "Não — inteiro"}</span>
                 </div>
+              </div>
               </div>
               </div>
 
@@ -889,7 +1182,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
               )}
 
               {!regime?.isMEI && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                   <div className="space-y-1">
                     <Label htmlFor="aliqIcms">ICMS (%)</Label>
                     <Input id="aliqIcms" type="number" min={0} max={100} step={0.01} value={form.aliqIcms} onChange={e => setField("aliqIcms", e.target.value)} placeholder="0.00" />
@@ -927,7 +1220,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 </Select>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="aliqIbs">IBS (%) <InfoTip text="Imposto sobre Bens e Serviços — substitui ICMS e ISS. Referência: ~26,5%." /></Label>
                   <Input id="aliqIbs" type="number" min={0} max={100} step={0.0001} value={form.aliqIbs} onChange={e => setField("aliqIbs", e.target.value)} placeholder="0.0000" />
@@ -943,7 +1236,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
               </div>
 
               {form.regimeTrib === 2 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                   <div className="space-y-1">
                     <Label htmlFor="percReducao">Redução da Base (%) <InfoTip text="Percentual de redução da base de cálculo do IBS/CBS." /></Label>
                     <Input id="percReducao" type="number" min={0} max={100} step={0.01} value={form.percReducao} onChange={e => setField("percReducao", e.target.value)} placeholder="50.00" />
@@ -962,7 +1255,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
             </TabsContent>
 
             {/* ── ABA ESTOQUE ──────────────────────────────────────────────── */}
-            <TabsContent value="estoque" className="space-y-4 p-4 mt-0">
+            <TabsContent value="estoque" className="space-y-4 p-4 lg:p-5 mt-0">
               <div className="p-3 rounded-md bg-muted/50 border text-sm">
                 <p className="font-medium">Controle de Estoque</p>
                 <p className="text-muted-foreground text-xs mt-1">
@@ -970,7 +1263,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                 <div className="space-y-1">
                   <Label htmlFor="estoque">Estoque Atual</Label>
                   <Input id="estoque" type="number" min={0} step={0.001} value={form.estoque} onChange={e => setField("estoque", e.target.value)} placeholder="0" />
@@ -983,6 +1276,30 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
                 </div>
               </div>
 
+              <div className="rounded-md border p-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <Label htmlFor="fracionado-estoque" className="flex items-center gap-1">
+                      Produto fracionado
+                      <InfoTip text="Ative para produtos vendidos em fracoes, como kg, litro, metro ou quantidade decimal. No PDV, a quantidade podera ter casas decimais." />
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Permite venda com quantidade decimal no PDV.
+                    </p>
+                  </div>
+                  <div className="flex h-10 items-center gap-3 rounded-md bg-muted/50 px-3">
+                    <Switch
+                      id="fracionado-estoque"
+                      checked={form.fracionado}
+                      onCheckedChange={v => setField("fracionado", v)}
+                    />
+                    <span className="text-sm font-medium">
+                      {form.fracionado ? "Sim" : "Nao"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               {parseFloat(form.estoque || "0") < parseFloat(form.estoqueMinimo || "0") && parseFloat(form.estoqueMinimo || "0") > 0 && (
                 <div className="p-3 rounded-md bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-400">
                   ⚠️ Estoque atual abaixo do mínimo — produto precisa de reposição.
@@ -991,7 +1308,197 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
             </TabsContent>
 
             {/* ── ABA DELIVERY / ERP ───────────────────────────────────────── */}
-            <TabsContent value="delivery" className="space-y-4 p-4 mt-0">
+            <TabsContent value="imei" className="space-y-4 p-4 lg:p-5 mt-0">
+              {!isEdicao || !guidProduto ? (
+                <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
+                  Salve o produto primeiro para gerar/preservar o GUIDPRODUTO. Depois disso, os IMEIs poderao ser vinculados a este produto sem criar produtos duplicados.
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_220px_180px]">
+                    <div className="rounded-md border bg-muted/30 p-3">
+                      <p className="text-sm font-semibold">Controle de IMEI por GUIDPRODUTO</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Cada aparelho fisico recebe um GUIDIMEI proprio e fica vinculado ao produto atual por GUIDPRODUTO.
+                      </p>
+                    </div>
+                    <div className="rounded-md border p-3">
+                      <p className="text-xs uppercase text-muted-foreground">IMEIs disponiveis</p>
+                      <p className="text-2xl font-bold text-emerald-600">{imeisData?.disponiveis ?? 0}</p>
+                    </div>
+                    <div className="rounded-md border p-3">
+                      <p className="text-xs uppercase text-muted-foreground">Total vinculado</p>
+                      <p className="text-2xl font-bold">{imeisData?.total ?? 0}</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border p-3 space-y-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold">Cadastrar / editar IMEI</p>
+                        <p className="text-xs text-muted-foreground">Use IMEI 1, IMEI 2 ou numero de serie para identificar a unidade fisica.</p>
+                      </div>
+                      <Button type="button" variant="outline" size="sm" onClick={novoImei}>
+                        Novo IMEI
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="space-y-1">
+                        <Label>GUIDIMEI</Label>
+                        <Input value={imeiForm.guidImei} readOnly className="font-mono text-xs" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>IMEI 1</Label>
+                        <Input value={imeiForm.imei1} onChange={e => setImeiField("imei1", e.target.value.replace(/\D/g, "").slice(0, 20))} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>IMEI 2</Label>
+                        <Input value={imeiForm.imei2} onChange={e => setImeiField("imei2", e.target.value.replace(/\D/g, "").slice(0, 20))} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Numero de serie</Label>
+                        <Input value={imeiForm.numeroSerie} onChange={e => setImeiField("numeroSerie", e.target.value.toUpperCase().slice(0, 50))} />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="space-y-1">
+                        <Label>Cor</Label>
+                        <Input value={imeiForm.cor} onChange={e => setImeiField("cor", e.target.value.toUpperCase().slice(0, 50))} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Capacidade / GB</Label>
+                        <Input value={imeiForm.capacidade} onChange={e => setImeiField("capacidade", e.target.value.toUpperCase().slice(0, 20))} placeholder="EX: 128GB" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Estado</Label>
+                        <Select value={imeiForm.estado} onValueChange={v => setImeiField("estado", v as ImeiFormData["estado"])}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {IMEI_ESTADOS.map(estado => <SelectItem key={estado} value={estado}>{estado}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Situacao</Label>
+                        <Select value={imeiForm.situacao} onValueChange={v => setImeiField("situacao", v as ImeiFormData["situacao"])}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {IMEI_SITUACOES.map(situacao => <SelectItem key={situacao} value={situacao}>{situacao}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="space-y-1">
+                        <Label>Data de entrada</Label>
+                        <Input type="date" value={imeiForm.dataEntrada} onChange={e => setImeiField("dataEntrada", e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Custo individual</Label>
+                        <Input type="number" min={0} step={0.01} value={imeiForm.custo} onChange={e => setImeiField("custo", e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Preco de venda individual</Label>
+                        <Input type="number" min={0} step={0.01} value={imeiForm.precoVenda} onChange={e => setImeiField("precoVenda", e.target.value)} />
+                      </div>
+                      <div className="space-y-1 md:col-span-2 xl:col-span-1">
+                        <Label>Observacao</Label>
+                        <Input value={imeiForm.observacao} onChange={e => setImeiField("observacao", e.target.value)} />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <Button type="button" onClick={salvarImei} disabled={salvandoImei}>
+                        {salvandoImei ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Salvar IMEI
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_220px]">
+                      <div className="space-y-1">
+                        <Label>Pesquisar IMEI</Label>
+                        <Input value={buscaImei} onChange={e => setBuscaImei(e.target.value)} placeholder="IMEI, serie, cor ou capacidade" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Filtrar situacao</Label>
+                        <Select value={situacaoImei} onValueChange={v => setSituacaoImei(v as typeof situacaoImei)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="TODOS">TODOS</SelectItem>
+                            {IMEI_SITUACOES.map(situacao => <SelectItem key={situacao} value={situacao}>{situacao}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-md border">
+                      <table className="w-full min-w-[1100px] text-sm">
+                        <thead className="bg-muted/50">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-medium">IMEI 1</th>
+                            <th className="px-3 py-2 text-left font-medium">IMEI 2</th>
+                            <th className="px-3 py-2 text-left font-medium">Serie</th>
+                            <th className="px-3 py-2 text-left font-medium">Cor</th>
+                            <th className="px-3 py-2 text-left font-medium">Capacidade</th>
+                            <th className="px-3 py-2 text-left font-medium">Estado</th>
+                            <th className="px-3 py-2 text-left font-medium">Situacao</th>
+                            <th className="px-3 py-2 text-left font-medium">Entrada</th>
+                            <th className="px-3 py-2 text-right font-medium">Custo</th>
+                            <th className="px-3 py-2 text-right font-medium">Venda</th>
+                            <th className="px-3 py-2 text-left font-medium">Observacao</th>
+                            <th className="px-3 py-2 text-right font-medium">Acoes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(imeisData?.registros ?? []).length === 0 ? (
+                            <tr>
+                              <td colSpan={12} className="px-3 py-8 text-center text-muted-foreground">
+                                Nenhum IMEI vinculado a este produto.
+                              </td>
+                            </tr>
+                          ) : (
+                            (imeisData?.registros ?? []).map((row: ProdutoImei) => (
+                              <tr key={row.GUIDIMEI} className="border-t">
+                                <td className="px-3 py-2 font-mono text-xs">{row.IMEI1 || "-"}</td>
+                                <td className="px-3 py-2 font-mono text-xs">{row.IMEI2 || "-"}</td>
+                                <td className="px-3 py-2 font-mono text-xs">{row.NUMEROSERIE || "-"}</td>
+                                <td className="px-3 py-2">{row.COR || "-"}</td>
+                                <td className="px-3 py-2">{row.CAPACIDADE || "-"}</td>
+                                <td className="px-3 py-2">{row.ESTADO || "-"}</td>
+                                <td className="px-3 py-2">
+                                  <Badge variant={row.SITUACAO === "DISPONIVEL" ? "default" : "outline"}>{row.SITUACAO || "-"}</Badge>
+                                </td>
+                                <td className="px-3 py-2">{formatDateInput(row.DATAENTRADA) || "-"}</td>
+                                <td className="px-3 py-2 text-right">R$ {Number(row.CUSTO ?? 0).toFixed(2)}</td>
+                                <td className="px-3 py-2 text-right">R$ {Number(row.PRECOVENDA ?? 0).toFixed(2)}</td>
+                                <td className="px-3 py-2 max-w-[220px] truncate">{row.OBSERVACAO || "-"}</td>
+                                <td className="px-3 py-2">
+                                  <div className="flex justify-end gap-1">
+                                    <Button type="button" size="sm" variant="outline" onClick={() => editarImei(row)}>
+                                      Editar
+                                    </Button>
+                                    <Button type="button" size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => excluirImei(row.GUIDIMEI)}>
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </TabsContent>
+
+            <TabsContent value="delivery" className="space-y-4 p-4 lg:p-5 mt-0">
               <div className="space-y-1">
                 <Label htmlFor="erpCode">Código ERP</Label>
                 <Input id="erpCode" value={form.erpCode} onChange={e => setTexto("erpCode", e.target.value)} placeholder="EX: PROD-001" maxLength={100} />

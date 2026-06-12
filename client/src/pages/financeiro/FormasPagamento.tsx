@@ -16,6 +16,10 @@ interface FormData {
   pagamento: string;
   descricao: string;
   codigoSefaz: string;
+  guidConta: string;
+  guidNatureza: string;
+  guidCentro: string;
+  guidContaBancaria: string;
   integraTef: boolean;
   codigoTef: string;
   bandeiraTef: string;
@@ -27,6 +31,10 @@ const FORM_INICIAL: FormData = {
   pagamento: "",
   descricao: "",
   codigoSefaz: "",
+  guidConta: "",
+  guidNatureza: "",
+  guidCentro: "",
+  guidContaBancaria: "",
   integraTef: false,
   codigoTef: "",
   bandeiraTef: "",
@@ -44,6 +52,10 @@ export default function FormasPagamento() {
   const utils = trpc.useUtils();
   const { data: sefazCodigos } = trpc.formasPagamento.codigosSefaz.useQuery();
   const { data: formas = [], isLoading } = trpc.formasPagamento.listar.useQuery({ busca: busca || undefined, situacao: situacaoFiltro !== "todos" ? situacaoFiltro : undefined });
+  const { data: contas = [] } = trpc.planoContas.listarTodas.useQuery();
+  const { data: naturezas = [] } = trpc.naturezaCaixa.listarTodas.useQuery({ tipo: "R" });
+  const { data: centros = [] } = trpc.centroCusto.listarTodos.useQuery();
+  const { data: contasBancarias = [] } = trpc.contasBancarias.listarTodas.useQuery();
 
   const criar = trpc.formasPagamento.criar.useMutation({
     onSuccess: () => { utils.formasPagamento.listar.invalidate(); toast.success("Forma de pagamento criada!"); fecharModal(); },
@@ -64,6 +76,10 @@ export default function FormasPagamento() {
       pagamento: String(fp.PAGAMENTO ?? ""),
       descricao: String(fp.DESCRICAO ?? ""),
       codigoSefaz: String(fp.CODIGOSEFAZ ?? ""),
+      guidConta: String(fp.guidConta ?? ""),
+      guidNatureza: String(fp.guidNatureza ?? ""),
+      guidCentro: String(fp.guidCentro ?? ""),
+      guidContaBancaria: String(fp.guidContaBancaria ?? ""),
       integraTef: fp.INTEGRATEF === true || fp.INTEGRATEF === 1,
       codigoTef: String(fp.CODIGOTEF ?? ""),
       bandeiraTef: String(fp.BANDEIRATEF ?? ""),
@@ -77,10 +93,19 @@ export default function FormasPagamento() {
 
   function handleSalvar() {
     if (!form.pagamento.trim()) { toast.error("Nome da forma de pagamento é obrigatório"); return; }
+    if (!form.codigoSefaz) { toast.error("Selecione o código fiscal SEFAZ"); return; }
+    if (!form.guidConta) { toast.error("Vincule o plano de contas da forma de pagamento"); return; }
+    if (!form.guidNatureza) { toast.error("Vincule a natureza de caixa da forma de pagamento"); return; }
+    if (!form.guidCentro) { toast.error("Vincule o centro de custo da forma de pagamento"); return; }
+    if (!form.guidContaBancaria) { toast.error("Selecione a conta bancária/caixa da forma de pagamento"); return; }
     const payload = {
       pagamento: form.pagamento,
       descricao: form.descricao || null,
-      codigoSefaz: form.codigoSefaz || null,
+      codigoSefaz: form.codigoSefaz,
+      guidConta: form.guidConta,
+      guidNatureza: form.guidNatureza,
+      guidCentro: form.guidCentro,
+      guidContaBancaria: form.guidContaBancaria,
       integraTef: form.integraTef,
       codigoTef: form.codigoTef || null,
       bandeiraTef: form.bandeiraTef || null,
@@ -132,6 +157,7 @@ export default function FormasPagamento() {
             <TableRow>
               <TableHead>Nome</TableHead>
               <TableHead>Código SEFAZ</TableHead>
+              <TableHead>Vínculo financeiro</TableHead>
               <TableHead className="text-center">TEF</TableHead>
               <TableHead className="text-center">Troco</TableHead>
               <TableHead>Situação</TableHead>
@@ -140,10 +166,10 @@ export default function FormasPagamento() {
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
             )}
             {!isLoading && formas.length === 0 && (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma forma de pagamento cadastrada</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhuma forma de pagamento cadastrada</TableCell></TableRow>
             )}
             {(formas as Record<string, unknown>[]).map((fp) => (
               <TableRow key={String(fp.guidPagamento)}>
@@ -159,6 +185,14 @@ export default function FormasPagamento() {
                       </Tooltip>
                     </TooltipProvider>
                   ) : <span className="text-muted-foreground text-xs">—</span>}
+                </TableCell>
+                <TableCell>
+                  <div className="max-w-64 space-y-0.5 text-xs text-muted-foreground">
+                    <p className="truncate">Conta: {String(fp.nomeConta ?? "—")}</p>
+                    <p className="truncate">Natureza: {String(fp.nomeNatureza ?? "—")}</p>
+                    <p className="truncate">Centro: {String(fp.nomeCentro ?? "—")}</p>
+                    <p className="truncate">Banco/Caixa: {String(fp.nomeContaBancaria ?? "—")}</p>
+                  </div>
                 </TableCell>
                 <TableCell className="text-center">
                   {fp.INTEGRATEF ? (
@@ -216,13 +250,12 @@ export default function FormasPagamento() {
 
             {/* Código SEFAZ */}
             <div>
-              <Label>Código Fiscal SEFAZ (NF-e)</Label>
+              <Label>Código Fiscal SEFAZ (NF-e) <span className="text-destructive">*</span></Label>
               <Select value={form.codigoSefaz} onValueChange={v => setForm(f => ({ ...f, codigoSefaz: v === "__none__" ? "" : v }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o código fiscal..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">— Não informado —</SelectItem>
                   {sefazCodigos?.map(c => (
                     <SelectItem key={c.codigo} value={c.codigo}>
                       <span className="font-mono mr-2">{c.codigo}</span> {c.descricao}
@@ -231,6 +264,61 @@ export default function FormasPagamento() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground mt-1">Código utilizado na NF-e/NFC-e conforme tabela SEFAZ</p>
+            </div>
+
+            <div className="rounded-lg border p-4 space-y-3">
+              <div>
+                <Label className="text-sm font-medium">Vínculo financeiro obrigatório</Label>
+                <p className="text-xs text-muted-foreground">Usado para gerar o crédito financeiro das vendas recebidas.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
+                  <Label>Plano de Contas <span className="text-destructive">*</span></Label>
+                  <Select value={form.guidConta || "none"} onValueChange={v => setForm(f => ({ ...f, guidConta: v === "none" ? "" : v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione a conta de crédito" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Selecione</SelectItem>
+                      {(contas as Array<{guidConta:string;CODCONTA:string;CONTA:string;TIPO:string}>)
+                        .filter(c => c.TIPO === "R")
+                        .map(c => <SelectItem key={c.guidConta} value={c.guidConta}>{c.CODCONTA} - {c.CONTA}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="sm:col-span-2">
+                  <Label>Conta Bancária / Caixa <span className="text-destructive">*</span></Label>
+                  <Select value={form.guidContaBancaria || "none"} onValueChange={v => setForm(f => ({ ...f, guidContaBancaria: v === "none" ? "" : v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione onde movimentar o valor" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Selecione</SelectItem>
+                      {(contasBancarias as Array<{guidConta:string;CONTA:string;SALDOATUAL:number}>)
+                        .map(c => <SelectItem key={c.guidConta} value={c.guidConta}>{c.CONTA}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">Usada para movimentar o caixa/banco na venda e também para boleto.</p>
+                </div>
+                <div>
+                  <Label>Natureza de Caixa <span className="text-destructive">*</span></Label>
+                  <Select value={form.guidNatureza || "none"} onValueChange={v => setForm(f => ({ ...f, guidNatureza: v === "none" ? "" : v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Selecione</SelectItem>
+                      {(naturezas as Array<{guidNatureza:string;NATUREZA:string}>)
+                        .map(n => <SelectItem key={n.guidNatureza} value={n.guidNatureza}>{n.NATUREZA}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Centro de Custo <span className="text-destructive">*</span></Label>
+                  <Select value={form.guidCentro || "none"} onValueChange={v => setForm(f => ({ ...f, guidCentro: v === "none" ? "" : v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Selecione</SelectItem>
+                      {(centros as Array<{guidCentro:string;CENTRO:string}>)
+                        .map(c => <SelectItem key={c.guidCentro} value={c.guidCentro}>{c.CENTRO}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
 
             {/* TEF */}

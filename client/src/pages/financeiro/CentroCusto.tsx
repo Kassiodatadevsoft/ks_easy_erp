@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Search, Edit2, Trash2, Target, Sparkles } from "lucide-react";
+import { Plus, Search, Edit2, XCircle, Target, Sparkles } from "lucide-react";
 
 type Centro = {
   CODCENTRO: string; CENTRO: string; DESCRICAO: string | null;
@@ -30,7 +30,7 @@ export default function CentroCusto() {
   const { data: centros = [], isLoading } = trpc.centroCusto.listar.useQuery({ situacao: "A" });
   const criar = trpc.centroCusto.criar.useMutation({ onSuccess: () => { utils.centroCusto.listar.invalidate(); toast.success("Centro criado!"); fecharModal(); } });
   const atualizar = trpc.centroCusto.atualizar.useMutation({ onSuccess: () => { utils.centroCusto.listar.invalidate(); toast.success("Centro atualizado!"); fecharModal(); } });
-  const excluir = trpc.centroCusto.excluir.useMutation({ onSuccess: () => { utils.centroCusto.listar.invalidate(); toast.success("Centro inativado!"); } });
+  const cancelar = trpc.centroCusto.cancelar.useMutation({ onSuccess: () => { utils.centroCusto.listar.invalidate(); toast.success("Centro cancelado. O histórico foi preservado."); } });
   const seedStatus = trpc.seed.status.useQuery();
   const popularCC = trpc.seed.popularCentroCusto.useMutation({
     onSuccess: (r) => { utils.centroCusto.listar.invalidate(); seedStatus.refetch(); toast.success(`${r.inseridos} centros padrão inseridos!`); },
@@ -114,7 +114,7 @@ export default function CentroCusto() {
                 <td className="px-4 py-3">
                   <div className="flex gap-1 justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => abrirEditar(c)}><Edit2 className="h-3.5 w-3.5" /></Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400 hover:text-red-300" onClick={() => excluir.mutate({ guidCentro: c.guidCentro })}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    <Button size="icon" variant="ghost" title="Cancelar centro" className="h-7 w-7 text-orange-400 hover:text-orange-300" onClick={() => cancelar.mutate({ guidCentro: c.guidCentro })}><XCircle className="h-3.5 w-3.5" /></Button>
                   </div>
                 </td>
               </tr>

@@ -16,9 +16,9 @@ import {
 } from "lucide-react";
 
 // Logo original com fundo branco (fica perfeito sobre fundo branco)
-const LOGO_FULL_URL = "/manus-storage/datadev-logo-full_f2fd46f8.png";
+const LOGO_FULL_URL = "/logo-full.png";
 // Robô original com transparência
-const ROBOT_URL     = "/manus-storage/datadev-robot-clean_7bc0c87c.png";
+const ROBOT_URL = "/robot.png";
 
 const loginSchema = z.object({
   usuario: z.string().min(1, "Informe o usuário"),
@@ -90,7 +90,7 @@ export default function Login() {
               </h1>
               <p className="text-slate-500 text-sm mt-3 max-w-xs mx-auto leading-relaxed">
                 Controle financeiro, vendas, cadastros e emissão fiscal
-                integrados ao seu sistema legado Delphi.
+                em uma plataforma simples, segura e integrada.
               </p>
             </div>
           </div>

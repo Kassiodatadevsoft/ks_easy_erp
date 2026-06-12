@@ -11,6 +11,7 @@ import { fornecedoresRouter } from "./routers/fornecedoresRouter";
 import { empresasRouter } from "./routers/empresasRouter";
 import { cargosRouter } from "./routers/cargosRouter";
 import { funcionariosRouter } from "./routers/funcionariosRouter";
+import { funcionariosPagamentosRouter } from "./routers/funcionariosPagamentosRouter";
 import { transportadorasRouter } from "./routers/transportadorasRouter";
 import { categoriasRouter } from "./routers/categoriasRouter";
 import { produtosRouter } from "./routers/produtosRouter";
@@ -26,11 +27,18 @@ import { contasBancariasRouter } from "./routers/contasBancariasRouter";
 import { transferenciasRouter } from "./routers/transferenciasRouter";
 import { lancamentosCaixaRouter } from "./routers/lancamentosCaixaRouter";
 import { balancoPatrimonialRouter } from "./routers/balancoPatrimonialRouter";
+import { conciliacaoRouter } from "./routers/conciliacaoRouter";
+import { conciliacaoFinanceiraRouter } from "./routers/conciliacaoFinanceiraRouter";
+import { cobrancaAprovacaoRouter } from "./routers/cobrancaAprovacaoRouter";
+import { sugestaoCompraRouter } from "./routers/sugestaoCompraRouter";
 import { seedRouter } from "./routers/seedRouter";
 import { vendasDashboardRouter } from "./routers/vendasDashboardRouter";
 import { categoriasEstoqueRouter } from "./routers/categoriasEstoqueRouter";
 import { produtosErpRouter } from "./routers/produtosErpRouter";
 import { movimentacoesEstoqueRouter } from "./routers/movimentacoesEstoqueRouter";
+import { licencasRouter } from "./routers/licencasRouter";
+import { caixaMovimentoRouter } from "./routers/caixaMovimentoRouter";
+import { vendasOperacaoRouter } from "./routers/vendasOperacaoRouter";
 
 export const appRouter = router({
   system: systemRouter,
@@ -65,6 +73,7 @@ export const appRouter = router({
 
   // Módulo de Funcionários
   funcionarios: funcionariosRouter,
+  funcionariosPagamentos: funcionariosPagamentosRouter,
 
   // Módulo de Transportadoras
   transportadoras: transportadorasRouter,
@@ -90,14 +99,21 @@ export const appRouter = router({
   transferencias: transferenciasRouter,
   lancamentosCaixa: lancamentosCaixaRouter,
   balancoPatrimonial: balancoPatrimonialRouter,
+  conciliacao: conciliacaoRouter,
+  conciliacaoFinanceira: conciliacaoFinanceiraRouter,
+  cobrancaAprovacao: cobrancaAprovacaoRouter,
+  sugestaoCompra: sugestaoCompraRouter,
 
   // Módulo de Estoque ERP
   categoriasEstoque: categoriasEstoqueRouter,
   produtosErp: produtosErpRouter,
   movimentacoesEstoque: movimentacoesEstoqueRouter,
+  licencas: licencasRouter,
+  caixaMovimento: caixaMovimentoRouter,
 
   // Dashboard de Vendas
   vendasDashboard: vendasDashboardRouter,
+  vendasOperacao: vendasOperacaoRouter,
 
   // Seed de dados padrão
   seed: seedRouter,

@@ -92,7 +92,7 @@ export default function MovimentacoesEstoque() {
     dtInicio: dtInicio || undefined,
     dtFim: dtFim || undefined,
   });
-  const { data: produtos } = trpc.produtosErp.buscar.useQuery(
+  const { data: produtos } = trpc.produtos.buscar.useQuery(
     { q: buscaProduto },
     { enabled: buscaProduto.length >= 2 }
   );
@@ -101,7 +101,8 @@ export default function MovimentacoesEstoque() {
     onSuccess: () => {
       utils.movimentacoesEstoque.listar.invalidate();
       utils.movimentacoesEstoque.totais.invalidate();
-      utils.produtosErp.resumoEstoque.invalidate();
+      utils.produtos.resumoEstoque.invalidate();
+      utils.produtos.listar.invalidate();
       setOpen(false);
       toast.success("Movimentação registrada!");
     },
@@ -111,7 +112,8 @@ export default function MovimentacoesEstoque() {
     onSuccess: () => {
       utils.movimentacoesEstoque.listar.invalidate();
       utils.movimentacoesEstoque.totais.invalidate();
-      utils.produtosErp.resumoEstoque.invalidate();
+      utils.produtos.resumoEstoque.invalidate();
+      utils.produtos.listar.invalidate();
       toast.success("Movimentação excluída e estoque revertido!");
     },
     onError: (e) => toast.error(e.message),

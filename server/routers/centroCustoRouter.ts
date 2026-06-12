@@ -1,11 +1,14 @@
 import { z } from "zod";
 import { router, publicProcedure } from "../_core/trpc";
 import { getSqlPool, sql } from "../sqlserver";
+import { COOKIE_NAME } from "@shared/const";
 import { verifyKsSession } from "./ksAuthRouter";
 
 async function getKsSession(req: { headers: { cookie?: string } }) {
   const cookies = req.headers.cookie ?? "";
-  const match = cookies.match(/ks_session=([^;]+)/);
+  const match = cookies.match(
+  new RegExp(`${COOKIE_NAME}=([^;]+)`)
+);
   return await verifyKsSession(match?.[1]);
 }
 
@@ -17,6 +20,20 @@ const centroBase = z.object({
   guidCentroPai: z.string().uuid().optional().nullable(),
   orcamento:     z.number().min(0).default(0),
   situacao:      z.enum(["A", "I"]).default("A"),
+});
+
+const cancelarCentroProcedure = publicProcedure.input(z.object({ guidCentro: z.string().uuid() })).mutation(async ({ input, ctx }) => {
+  const session = await getKsSession(ctx.req);
+  if (!session) throw new Error("Não autenticado");
+  const pool = await getSqlPool();
+  await pool.request()
+    .input("guidcentro",   sql.UniqueIdentifier, input.guidCentro)
+    .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
+    .query(`
+      UPDATE KS0003.KS00002 SET SITUACAO='I', ULTIMAALTERACAO=GETDATE()
+      WHERE GUIDCENTRO=@guidcentro AND GUIDENTIDADE=@guidentidade
+    `);
+  return { success: true, action: "cancelado" as const };
 });
 
 export const centroCustoRouter = router({
@@ -109,19 +126,8 @@ export const centroCustoRouter = router({
     return { success: true };
   }),
 
-  excluir: publicProcedure.input(z.object({ guidCentro: z.string().uuid() })).mutation(async ({ input, ctx }) => {
-    const session = await getKsSession(ctx.req);
-    if (!session) throw new Error("Não autenticado");
-    const pool = await getSqlPool();
-    await pool.request()
-      .input("guidcentro",   sql.UniqueIdentifier, input.guidCentro)
-      .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-      .query(`
-        UPDATE KS0003.KS00002 SET SITUACAO='I', ULTIMAALTERACAO=GETDATE()
-        WHERE GUIDCENTRO=@guidcentro AND GUIDENTIDADE=@guidentidade
-      `);
-    return { success: true };
-  }),
+  cancelar: cancelarCentroProcedure,
+  excluir: cancelarCentroProcedure,
 
   resumoOrcamento: publicProcedure
     .input(z.object({ dtInicio: z.string(), dtFim: z.string() }))

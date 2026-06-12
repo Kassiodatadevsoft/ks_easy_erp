@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Search, ChevronRight, ChevronDown, Edit2, Trash2, BookOpen, Sparkles } from "lucide-react";
+import { Plus, Search, ChevronRight, ChevronDown, Edit2, XCircle, BookOpen, Sparkles } from "lucide-react";
 
 type Conta = {
   CODCONTA: string;
@@ -43,9 +43,9 @@ const FORM_INICIAL = {
   situacao: "A" as "A" | "I",
 };
 
-function ContaNode({ conta, todasContas, nivel, busca, onEdit, onDelete }: {
+function ContaNode({ conta, todasContas, nivel, busca, onEdit, onCancel }: {
   conta: Conta; todasContas: Conta[]; nivel: number; busca: string;
-  onEdit: (c: Conta) => void; onDelete: (c: Conta) => void;
+  onEdit: (c: Conta) => void; onCancel: (c: Conta) => void;
 }) {
   const [aberto, setAberto] = useState(nivel < 2);
   const guidC = conta.GUIDCONTA ?? conta.guidConta;
@@ -68,11 +68,11 @@ function ContaNode({ conta, todasContas, nivel, busca, onEdit, onDelete }: {
         {conta.SITUACAO === "I" && <Badge variant="outline" className="text-xs text-muted-foreground">Inativa</Badge>}
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onEdit(conta)}><Edit2 className="h-3.5 w-3.5" /></Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400 hover:text-red-300" onClick={() => onDelete(conta)}><Trash2 className="h-3.5 w-3.5" /></Button>
+          <Button size="icon" variant="ghost" title="Cancelar conta" className="h-7 w-7 text-orange-400 hover:text-orange-300" onClick={() => onCancel(conta)}><XCircle className="h-3.5 w-3.5" /></Button>
         </div>
       </div>
       {aberto && filhos.map(f => (
-        <ContaNode key={f.GUIDCONTA ?? f.guidConta} conta={f} todasContas={todasContas} nivel={nivel + 1} busca={busca} onEdit={onEdit} onDelete={onDelete} />
+        <ContaNode key={f.GUIDCONTA ?? f.guidConta} conta={f} todasContas={todasContas} nivel={nivel + 1} busca={busca} onEdit={onEdit} onCancel={onCancel} />
       ))}
     </div>
   );
@@ -99,8 +99,8 @@ export default function PlanoContas() {
     onSuccess: () => { utils.planoContas.listar.invalidate(); toast.success("Conta atualizada!"); fecharModal(); },
     onError: (e) => toast.error(e.message),
   });
-  const excluir = trpc.planoContas.excluir.useMutation({
-    onSuccess: () => { utils.planoContas.listar.invalidate(); toast.success("Conta inativada!"); },
+  const cancelar = trpc.planoContas.cancelar.useMutation({
+    onSuccess: () => { utils.planoContas.listar.invalidate(); toast.success("Conta cancelada. O histórico foi preservado."); },
     onError: (e) => toast.error(e.message),
   });
   const seedStatus = trpc.seed.status.useQuery();
@@ -138,6 +138,10 @@ export default function PlanoContas() {
     } else {
       criar.mutate(form);
     }
+  }
+
+  function cancelarConta(c: Conta) {
+    cancelar.mutate({ guidConta: c.GUIDCONTA ?? c.guidConta });
   }
 
   const contasSinteticas = (contas as Conta[]);
@@ -204,7 +208,7 @@ export default function PlanoContas() {
                 nivel={1}
                 busca={busca}
                 onEdit={abrirEditar}
-                onDelete={(ct) => excluir.mutate({ guidConta: ct.GUIDCONTA ?? ct.guidConta })}
+                onCancel={cancelarConta}
               />
             ))}
           </div>

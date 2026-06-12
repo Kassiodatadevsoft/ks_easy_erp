@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Plus, Search, Edit2, Trash2, CheckCircle, XCircle, TrendingDown, AlertTriangle, Clock } from "lucide-react";
+import { Plus, Search, Edit2, CheckCircle, XCircle, TrendingDown, AlertTriangle, Clock } from "lucide-react";
 
 type Lanc = {
   guidLancamento: string;
@@ -29,8 +29,10 @@ type Lanc = {
   STATUS: string;
   nomePagamento: string | null;
   OBSERVACAO: string | null;
+  MOTIVOCANCELAMENTO: string | null;
   guidNatureza: string | null;
   guidCentro: string | null;
+  guidConta: string | null;
 };
 
 type Fornecedor = { guidPessoa: string; nome: string; documento: string };
@@ -69,9 +71,11 @@ export default function ContasPagar() {
   const [pagina, setPagina] = useState(1);
   const [modalAberto, setModalAberto] = useState(false);
   const [modalBaixa, setModalBaixa] = useState<Lanc | null>(null);
+  const [modalCancelamento, setModalCancelamento] = useState<Lanc | null>(null);
   const [editando, setEditando] = useState<Lanc | null>(null);
   const [form, setForm] = useState(FORM_INICIAL);
   const [baixa, setBaixa] = useState(BAIXA_INICIAL);
+  const [motivoCancelamento, setMotivoCancelamento] = useState("");
   const [buscaCredor, setBuscaCredor] = useState("");
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const utils = trpc.useUtils();
@@ -81,6 +85,7 @@ export default function ContasPagar() {
   const { data: naturezas = [] } = trpc.naturezaCaixa.listarTodas.useQuery({ tipo: "D" });
   const { data: centros = [] } = trpc.centroCusto.listarTodos.useQuery();
   const { data: contas = [] } = trpc.planoContas.listarTodas.useQuery();
+  const { data: contasBancarias = [] } = trpc.contasBancarias.listarTodas.useQuery();
   const { data: fornecedoresSugestoes = [] } = trpc.contasPagar.buscarFornecedores.useQuery(
     { busca: buscaCredor },
     { enabled: buscaCredor.length >= 2 }
@@ -88,9 +93,8 @@ export default function ContasPagar() {
 
   const criar = trpc.contasPagar.criar.useMutation({ onSuccess: () => { utils.contasPagar.listar.invalidate(); toast.success("Lançamento criado!"); fecharModal(); } });
   const atualizar = trpc.contasPagar.atualizar.useMutation({ onSuccess: () => { utils.contasPagar.listar.invalidate(); toast.success("Lançamento atualizado!"); fecharModal(); } });
-  const baixarMut = trpc.contasPagar.baixar.useMutation({ onSuccess: (r) => { utils.contasPagar.listar.invalidate(); toast.success(`Baixa registrada! Status: ${r.status}`); setModalBaixa(null); setBaixa(BAIXA_INICIAL); } });
-  const cancelar = trpc.contasPagar.cancelar.useMutation({ onSuccess: () => { utils.contasPagar.listar.invalidate(); toast.success("Lançamento cancelado!"); } });
-  const excluir = trpc.contasPagar.excluir.useMutation({ onSuccess: () => { utils.contasPagar.listar.invalidate(); toast.success("Lançamento excluído!"); } });
+  const baixarMut = trpc.contasPagar.baixar.useMutation({ onSuccess: (r) => { utils.contasPagar.listar.invalidate(); utils.contasBancarias.listarTodas.invalidate(); toast.success(`Baixa registrada! Status: ${r.status}`); setModalBaixa(null); setBaixa(BAIXA_INICIAL); } });
+  const cancelar = trpc.contasPagar.cancelar.useMutation({ onSuccess: () => { utils.contasPagar.listar.invalidate(); toast.success("Lancamento cancelado!"); setModalCancelamento(null); setMotivoCancelamento(""); } });
 
   const itens: Lanc[] = (data as { items?: Lanc[] } | undefined)?.items ?? [];
   const total = (data as { total?: number } | undefined)?.total ?? 0;
@@ -102,7 +106,7 @@ export default function ContasPagar() {
   function abrirEditar(l: Lanc) {
     setEditando(l);
     setBuscaCredor(l.NOMECREDOR ?? "");
-    setForm({ ...FORM_INICIAL, descricao: l.DESCRICAO, guidCredor: l.guidCredor ?? "", nomeCredor: l.NOMECREDOR ?? "", valor: Number(l.VALOR), dtLancamento: l.dtLancamento?.slice(0,10) ?? hoje(), dtVencimento: l.dtVencimento?.slice(0,10) ?? hoje(), guidNatureza: l.guidNatureza ?? "", guidCentro: l.guidCentro ?? "", numerodoc: l.NUMERODOC ?? "", parcela: l.PARCELA, totalParcelas: l.TOTALPARCELAS, observacao: l.OBSERVACAO ?? "" });
+    setForm({ ...FORM_INICIAL, descricao: l.DESCRICAO, guidCredor: l.guidCredor ?? "", nomeCredor: l.NOMECREDOR ?? "", valor: Number(l.VALOR), dtLancamento: l.dtLancamento?.slice(0,10) ?? hoje(), dtVencimento: l.dtVencimento?.slice(0,10) ?? hoje(), guidNatureza: l.guidNatureza ?? "", guidCentro: l.guidCentro ?? "", guidConta: l.guidConta ?? "", numerodoc: l.NUMERODOC ?? "", parcela: l.PARCELA, totalParcelas: l.TOTALPARCELAS, observacao: l.OBSERVACAO ?? "" });
     setModalAberto(true);
   }
   function fecharModal() { setModalAberto(false); setEditando(null); setForm(FORM_INICIAL); setBuscaCredor(""); setMostrarSugestoes(false); }
@@ -112,7 +116,10 @@ export default function ContasPagar() {
     if (!form.guidCredor) { toast.error("Selecione um fornecedor cadastrado como Credor"); return; }
     if (!form.valor || form.valor <= 0) { toast.error("Informe o valor"); return; }
     if (!form.dtVencimento) { toast.error("Informe o vencimento"); return; }
-    const payload = { ...form, guidCredor: form.guidCredor || undefined, guidNatureza: form.guidNatureza || undefined, guidCentro: form.guidCentro || undefined, guidConta: form.guidConta || undefined };
+    if (!form.guidNatureza) { toast.error("Selecione a natureza de caixa"); return; }
+    if (!form.guidCentro) { toast.error("Selecione o centro de custo"); return; }
+    if (!form.guidConta) { toast.error("Selecione a conta do plano de contas"); return; }
+    const payload = { ...form, numeroDoc: form.numerodoc || undefined, guidCredor: form.guidCredor || undefined, guidNatureza: form.guidNatureza, guidCentro: form.guidCentro, guidConta: form.guidConta };
     if (editando) atualizar.mutate({ ...payload, guidLancamento: editando.guidLancamento });
     else criar.mutate(payload);
   }
@@ -120,7 +127,17 @@ export default function ContasPagar() {
   function registrarBaixa() {
     if (!modalBaixa) return;
     if (!baixa.valorPago || baixa.valorPago <= 0) { toast.error("Informe o valor pago"); return; }
+    if (!baixa.contaBancaria) { toast.error("Selecione a conta/caixa do pagamento"); return; }
     baixarMut.mutate({ guidLancamento: modalBaixa.guidLancamento, ...baixa });
+  }
+
+  function confirmarCancelamento() {
+    if (!modalCancelamento) return;
+    if (!motivoCancelamento.trim()) { toast.error("Informe o motivo do cancelamento"); return; }
+    cancelar.mutate({
+      guidLancamento: modalCancelamento.guidLancamento,
+      motivo: motivoCancelamento.trim(),
+    });
   }
 
   const totalPaginas = Math.ceil(total / 50);
@@ -231,10 +248,7 @@ export default function ContasPagar() {
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => abrirEditar(l)}><Edit2 className="h-3.5 w-3.5" /></Button>
                       )}
                       {l.STATUS === "ABERTO" && (
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-orange-400 hover:text-orange-300" title="Cancelar" onClick={() => cancelar.mutate({ guidLancamento: l.guidLancamento })}><XCircle className="h-3.5 w-3.5" /></Button>
-                      )}
-                      {(l.STATUS === "ABERTO" || l.STATUS === "CANCELADO") && (
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400 hover:text-red-300" onClick={() => excluir.mutate({ guidLancamento: l.guidLancamento })}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-orange-400 hover:text-orange-300" title="Cancelar" onClick={() => { setModalCancelamento(l); setMotivoCancelamento(""); }}><XCircle className="h-3.5 w-3.5" /></Button>
                       )}
                     </div>
                   </td>
@@ -330,24 +344,42 @@ export default function ContasPagar() {
                 <Input type="date" value={form.dtVencimento} onChange={e => setForm(f => ({ ...f, dtVencimento: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>Natureza de Caixa</Label>
+                <Label>Natureza de Caixa *</Label>
 <Select value={form.guidNatureza || "none"} onValueChange={v => setForm(f => ({ ...f, guidNatureza: v === "none" ? "" : v }))}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Nenhuma</SelectItem>
+                    <SelectItem value="none">Selecione uma natureza</SelectItem>
                     {(naturezas as Array<{guidNatureza:string;NATUREZA:string}>).map(n => <SelectItem key={n.guidNatureza} value={n.guidNatureza}>{n.NATUREZA}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Centro de Custo</Label>
+                <Label>Centro de Custo *</Label>
 <Select value={form.guidCentro || "none"} onValueChange={v => setForm(f => ({ ...f, guidCentro: v === "none" ? "" : v }))}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
+                    <SelectItem value="none">Selecione um centro</SelectItem>
                     {(centros as Array<{guidCentro:string;CENTRO:string}>).map(c => <SelectItem key={c.guidCentro} value={c.guidCentro}>{c.CENTRO}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="sm:col-span-2 space-y-1.5">
+                <Label>Conta da Despesa (Debito) *</Label>
+                <Select value={form.guidConta || "none"} onValueChange={v => setForm(f => ({ ...f, guidConta: v === "none" ? "" : v }))}>
+                  <SelectTrigger><SelectValue placeholder="Selecione a conta de despesa" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Selecione uma conta de despesa</SelectItem>
+                    {(contas as Array<{guidConta:string;CODCONTA:string;CONTA:string;TIPO:string}>).filter(c => c.TIPO === "D").map(c => (
+                      <SelectItem key={c.guidConta} value={c.guidConta}>
+                        {c.CODCONTA} - {c.CONTA}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="sm:col-span-2 rounded-lg border border-blue-500/20 bg-blue-500/10 p-3 text-sm">
+                <p className="font-medium text-blue-300">Regra contabil automatica</p>
+                <p className="mt-1 text-muted-foreground">Ao lancar: Debito na conta de despesa escolhida e Credito automatico em Contas a Pagar.</p>
               </div>
               {!editando && (
                 <>
@@ -428,8 +460,19 @@ export default function ContasPagar() {
                   </Select>
                 </div>
                 <div className="col-span-2 space-y-1.5">
-                  <Label>Conta Bancária</Label>
-                  <Input placeholder="Ex: Bradesco CC 1234-5" value={baixa.contaBancaria} onChange={e => setBaixa(b => ({ ...b, contaBancaria: e.target.value }))} />
+                  <Label>Conta/Caixa do Pagamento *</Label>
+                  <Select value={baixa.contaBancaria || "none"} onValueChange={v => setBaixa(b => ({ ...b, contaBancaria: v === "none" ? "" : v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione de onde saiu o pagamento" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Selecione uma conta/caixa</SelectItem>
+                      {(contasBancarias as Array<{guidConta:string;CONTA:string;SALDOATUAL:number}>).map(c => (
+                        <SelectItem key={c.guidConta} value={c.guidConta}>
+                          {c.CONTA} - saldo {fmt(Number(c.SALDOATUAL) || 0)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Na baixa: Debito automatico em Contas a Pagar e Credito nesta conta/caixa.</p>
                 </div>
                 <div className="col-span-2 space-y-1.5">
                   <Label>Observação</Label>
@@ -441,6 +484,38 @@ export default function ContasPagar() {
           <DialogFooter>
             <Button variant="outline" onClick={() => { setModalBaixa(null); setBaixa(BAIXA_INICIAL); }}>Cancelar</Button>
             <Button onClick={registrarBaixa} disabled={baixarMut.isPending} className="gap-2"><CheckCircle className="h-4 w-4" /> Confirmar Pagamento</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Cancelamento */}
+      <Dialog open={!!modalCancelamento} onOpenChange={v => { if (!v) { setModalCancelamento(null); setMotivoCancelamento(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Cancelar lancamento</DialogTitle></DialogHeader>
+          {modalCancelamento && (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-white/5 p-3 text-sm">
+                <p className="font-medium">{modalCancelamento.DESCRICAO}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Valor: {fmt(modalCancelamento.VALOR)} | Vencimento: {fmtDate(modalCancelamento.dtVencimento)}</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Motivo do cancelamento *</Label>
+                <Textarea
+                  rows={4}
+                  value={motivoCancelamento}
+                  onChange={e => setMotivoCancelamento(e.target.value)}
+                  placeholder="Ex: lancamento duplicado, boleto substituido, fornecedor incorreto..."
+                  maxLength={500}
+                />
+                <p className="text-xs text-muted-foreground">{motivoCancelamento.length}/500 caracteres</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setModalCancelamento(null); setMotivoCancelamento(""); }}>Voltar</Button>
+            <Button onClick={confirmarCancelamento} disabled={cancelar.isPending} variant="destructive">
+              Confirmar cancelamento
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

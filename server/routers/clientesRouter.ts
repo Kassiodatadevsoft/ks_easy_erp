@@ -3,21 +3,30 @@ import { TRPCError } from "@trpc/server";
 import { publicProcedure, router } from "../_core/trpc";
 import { querySql, sql } from "../sqlserver";
 import { verifyKsSession } from "./ksAuthRouter";
+import { COOKIE_NAME } from "@shared/const";
 
 // Helper para extrair sessão KS do cookie
 async function getKsSession(req: { headers: { cookie?: string } }) {
   const cookies = req.headers.cookie ?? "";
-  const match = cookies.match(/ks_session=([^;]+)/);
+
+  const match = cookies.match(
+    new RegExp(`${COOKIE_NAME}=([^;]+)`)
+  );
+
   const token = match?.[1];
   const session = await verifyKsSession(token);
+
   if (!session) {
-    throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida. Faça login novamente." });
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Sessão inválida. Faça login novamente.",
+    });
   }
+
   return session;
 }
 
 export const clientesRouter = router({
-
   /**
    * Listar clientes da empresa logada com filtros e paginação
    */
@@ -229,6 +238,7 @@ export const clientesRouter = router({
         { GUIDENTIDADE: { type: sql.UniqueIdentifier, value: session.guidEntidade } }
       );
       const novoCodigo = maxCod[0]?.maxCod ?? 1;
+      const guidPessoa = crypto.randomUUID();
 
       await querySql(
         `INSERT INTO KS0002.KS00001 (
@@ -248,7 +258,7 @@ export const clientesRouter = router({
           CODLOCALIDADE, PRECIFICACAO, ATUALIZARPRECOS,
           ALIQUOTA, CREDITOCSOSN, JUROMENSAL, MARGEMPADRAO, CODCARGO
         ) VALUES (
-          @CODIGO, NEWID(), @GUIDENTIDADE,
+          @CODIGO, @GUIDPESSOA, @GUIDENTIDADE,
           @NOME, @FANTASIA, @DOCUMENTO, @CODTIPODOCUMENTO,
           @TELEFONE, @CELULAR, @WHATSAPP, @EMAIL,
           @IE, @INDIEDEST, @DATANASCIMENTO,
@@ -266,6 +276,7 @@ export const clientesRouter = router({
         )`,
         {
           CODIGO: { type: sql.Int, value: novoCodigo },
+          GUIDPESSOA: { type: sql.UniqueIdentifier, value: guidPessoa },
           GUIDENTIDADE: { type: sql.UniqueIdentifier, value: session.guidEntidade },
           NOME: { type: sql.VarChar(100), value: input.nome },
           FANTASIA: { type: sql.VarChar(60), value: input.fantasia ?? null },
@@ -295,7 +306,7 @@ export const clientesRouter = router({
         }
       );
 
-      return { success: true, codigo: novoCodigo };
+      return { success: true, codigo: novoCodigo, guidPessoa };
     }),
 
   /**

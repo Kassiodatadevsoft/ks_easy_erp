@@ -20,8 +20,8 @@ function fmtQtd(v: number) {
 
 export default function EstoqueDashboard() {
   const [, navigate] = useLocation();
-  const { data: resumo, isLoading: loadResumo } = trpc.produtosErp.resumoEstoque.useQuery();
-  const { data: criticos, isLoading: loadCriticos } = trpc.produtosErp.produtosCriticos.useQuery();
+  const { data: resumo, isLoading: loadResumo } = trpc.produtos.resumoEstoque.useQuery();
+  const { data: criticos, isLoading: loadCriticos } = trpc.produtos.produtosCriticos.useQuery();
 
   // Últimos 6 meses de movimentações (entradas vs saídas)
   const hoje = new Date();
@@ -55,7 +55,7 @@ export default function EstoqueDashboard() {
       icon: Package,
       color: "text-blue-500",
       bg: "bg-blue-50 dark:bg-blue-950",
-      action: () => navigate("/estoque/produtos-erp"),
+      action: () => navigate("/estoque/produtos"),
     },
     {
       title: "Valor em Estoque",
@@ -63,7 +63,7 @@ export default function EstoqueDashboard() {
       icon: DollarSign,
       color: "text-emerald-500",
       bg: "bg-emerald-50 dark:bg-emerald-950",
-      action: () => navigate("/estoque/produtos-erp"),
+      action: () => navigate("/estoque/produtos"),
     },
     {
       title: "Abaixo do Mínimo",
@@ -71,7 +71,7 @@ export default function EstoqueDashboard() {
       icon: AlertTriangle,
       color: "text-amber-500",
       bg: "bg-amber-50 dark:bg-amber-950",
-      action: () => navigate("/estoque/produtos-erp"),
+      action: () => navigate("/estoque/produtos"),
     },
     {
       title: "Sem Estoque",
@@ -79,7 +79,7 @@ export default function EstoqueDashboard() {
       icon: TrendingDown,
       color: "text-red-500",
       bg: "bg-red-50 dark:bg-red-950",
-      action: () => navigate("/estoque/produtos-erp"),
+      action: () => navigate("/estoque/produtos"),
     },
   ];
 
@@ -95,7 +95,7 @@ export default function EstoqueDashboard() {
             <ArrowUpCircle className="h-4 w-4 mr-2" />
             Movimentações
           </Button>
-          <Button size="sm" onClick={() => navigate("/estoque/produtos-erp")}>
+          <Button size="sm" onClick={() => navigate("/estoque/produtos")}>
             <Package className="h-4 w-4 mr-2" />
             Produtos
           </Button>
@@ -196,7 +196,7 @@ export default function EstoqueDashboard() {
               </div>
             )}
             <div className="p-3 border-t">
-              <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => navigate("/estoque/produtos-erp")}>
+              <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => navigate("/estoque/produtos")}>
                 <Settings2 className="h-3 w-3 mr-1" /> Ver todos os produtos
               </Button>
             </div>

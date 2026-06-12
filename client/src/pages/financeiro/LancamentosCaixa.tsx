@@ -15,6 +15,8 @@ const hoje = () => new Date().toISOString().slice(0, 10);
 const primeiroDiaMes = () => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10); };
 
 const EMPTY = { dtLancamento: hoje(), tipo: "E" as "E"|"S", valor: "", descricao: "", guidConta: "", guidNatureza: "", guidCentro: "", numerodoc: "", observacao: "" };
+type NaturezaOpcao = { guidNatureza: string; NATUREZA?: string; natureza?: string; TIPO?: string; guidConta?: string | null };
+type CentroOpcao = { guidCentro: string; CENTRO?: string; centro?: string };
 
 export default function LancamentosCaixa() {
   const utils = trpc.useUtils();
@@ -48,14 +50,21 @@ export default function LancamentosCaixa() {
 
   const totalPaginas = Math.ceil((data?.total ?? 0) / POR_PAGINA);
   const saldo = (data?.totalEntradas ?? 0) - (data?.totalSaidas ?? 0);
+  const tipoNatureza = form.tipo === "E" ? "R" : "D";
+  const naturezasFiltradas = (naturezas as NaturezaOpcao[]).filter(n => (n.TIPO ?? tipoNatureza) === tipoNatureza);
+  const naturezaSelecionada = naturezasFiltradas.find(n => n.guidNatureza === form.guidNatureza);
 
   function salvar() {
     if (!form.descricao.trim()) { toast.error("Informe a descrição."); return; }
     const valor = parseFloat(form.valor);
     if (!valor || valor <= 0) { toast.error("Informe um valor válido."); return; }
+    if (!form.guidConta) { toast.error("Selecione a conta/caixa."); return; }
+    if (!form.guidNatureza) { toast.error("Selecione a natureza de caixa."); return; }
+    if (!form.guidCentro) { toast.error("Selecione o centro de custo."); return; }
+    if (!naturezaSelecionada?.guidConta) { toast.error("A natureza precisa estar vinculada ao plano de contas."); return; }
     criar.mutate({
       dtLancamento: form.dtLancamento, tipo: form.tipo, valor, descricao: form.descricao,
-      guidConta: form.guidConta || null, guidNatureza: form.guidNatureza || null, guidCentro: form.guidCentro || null,
+      guidConta: form.guidConta, guidNatureza: form.guidNatureza, guidCentro: form.guidCentro,
       numerodoc: form.numerodoc || null, observacao: form.observacao || null,
     });
   }
@@ -185,7 +194,7 @@ export default function LancamentosCaixa() {
             </div>
             <div className="space-y-1">
               <Label>Tipo *</Label>
-              <Select value={form.tipo} onValueChange={v => setForm(f => ({ ...f, tipo: v as "E"|"S" }))}>
+              <Select value={form.tipo} onValueChange={v => setForm(f => ({ ...f, tipo: v as "E"|"S", guidNatureza: "" }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="E">Entrada</SelectItem>
@@ -206,34 +215,38 @@ export default function LancamentosCaixa() {
               <Input value={form.numerodoc} onChange={e => setForm(f => ({ ...f, numerodoc: e.target.value }))} placeholder="NF, recibo..." />
             </div>
             <div className="col-span-2 space-y-1">
-              <Label>Conta Bancária</Label>
+              <Label>Conta/Caixa *</Label>
               <Select value={form.guidConta} onValueChange={v => setForm(f => ({ ...f, guidConta: v === "__none__" ? "" : v }))}>
-                <SelectTrigger><SelectValue placeholder="Selecione a conta (opcional)" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecione a conta/caixa" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">— Sem conta —</SelectItem>
                   {contas.map(c => <SelectItem key={c.guidConta} value={c.guidConta}>{c.CONTA}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Natureza</Label>
+              <Label>Natureza de Caixa *</Label>
               <Select value={form.guidNatureza} onValueChange={v => setForm(f => ({ ...f, guidNatureza: v === "__none__" ? "" : v }))}>
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">— Nenhuma —</SelectItem>
-                  {(naturezas as Array<{ guidNatureza: string; natureza: string }>).map(n => <SelectItem key={n.guidNatureza} value={n.guidNatureza}>{n.natureza}</SelectItem>)}
+                  {naturezasFiltradas.map(n => <SelectItem key={n.guidNatureza} value={n.guidNatureza}>{n.NATUREZA ?? n.natureza}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {form.guidNatureza && !naturezaSelecionada?.guidConta && (
+                <p className="text-xs text-destructive">Vincule esta natureza a uma conta do plano de contas.</p>
+              )}
             </div>
             <div className="space-y-1">
-              <Label>Centro de Custo</Label>
+              <Label>Centro de Custo *</Label>
               <Select value={form.guidCentro} onValueChange={v => setForm(f => ({ ...f, guidCentro: v === "__none__" ? "" : v }))}>
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">— Nenhum —</SelectItem>
-                  {(centros as Array<{ guidCentro: string; centro: string }>).map(c => <SelectItem key={c.guidCentro} value={c.guidCentro}>{c.centro}</SelectItem>)}
+                  {(centros as CentroOpcao[]).map(c => <SelectItem key={c.guidCentro} value={c.guidCentro}>{c.CENTRO ?? c.centro}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="col-span-2 rounded-lg border border-blue-500/20 bg-blue-500/10 p-3 text-sm">
+              <p className="font-medium text-blue-300">Regra contabil automatica</p>
+              <p className="mt-1 text-muted-foreground">A conta/caixa movimenta o saldo financeiro; a natureza define a conta do plano de contas para os relatórios contábeis.</p>
             </div>
             <div className="col-span-2 space-y-1">
               <Label>Observação</Label>

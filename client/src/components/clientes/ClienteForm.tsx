@@ -18,7 +18,7 @@ import { Loader2, X, Search, UserCheck, AlertCircle } from "lucide-react";
 
 interface Props {
   guidPessoa: string | null;
-  onClose: (salvo?: boolean) => void;
+  onClose: (salvo?: boolean, guidPessoa?: string) => void;
 }
 
 interface FormData {
@@ -334,11 +334,12 @@ export default function ClienteForm({ guidPessoa, onClose }: Props) {
       if (isEdicao) {
         await atualizarMutation.mutateAsync({ guidPessoa: guidPessoa!, ...payload });
         toast.success("Alterado com sucesso.");
+        onClose(true, guidPessoa!);
       } else {
-        await criarMutation.mutateAsync(payload);
+        const result = await criarMutation.mutateAsync(payload);
         toast.success("Cadastrado com sucesso.");
+        onClose(true, result.guidPessoa);
       }
-      onClose(true);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Erro ao salvar cliente";
       // Verificar se é erro de documento duplicado

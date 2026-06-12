@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Pencil, Landmark, Wallet, PiggyBank, CircleDollarSign, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Landmark, Wallet, PiggyBank, CircleDollarSign, RefreshCw, ReceiptText } from "lucide-react";
 
 const TIPO_LABEL: Record<string, string> = { C: "Corrente", P: "Poupança", X: "Caixa", O: "Outro" };
 const TIPO_ICON: Record<string, React.ReactNode> = {
@@ -19,8 +19,40 @@ const TIPO_ICON: Record<string, React.ReactNode> = {
   O: <CircleDollarSign className="w-5 h-5" />,
 };
 
-type FormState = { conta: string; banco: string; agencia: string; numeroConta: string; tipoConta: "C"|"P"|"X"|"O"; saldoInicial: number; situacao: "A"|"I" };
-const EMPTY: FormState = { conta: "", banco: "", agencia: "", numeroConta: "", tipoConta: "C", saldoInicial: 0, situacao: "A" };
+type BoletoBanco = "ITAU" | "CORA";
+type BoletoAmbiente = "HOMOLOGACAO" | "PRODUCAO";
+type BoletoConfigForm = {
+  ativo: boolean;
+  banco: BoletoBanco | "";
+  ambiente: BoletoAmbiente;
+  clientId: string;
+  clientSecret: string;
+  apiUrl: string;
+  tokenUrl: string;
+  emitirPath: string;
+  consultarPath: string;
+  cancelarPath: string;
+  carteira: string;
+  convenio: string;
+  secretConfigurado: boolean;
+};
+type FormState = { conta: string; banco: string; agencia: string; numeroConta: string; tipoConta: "C"|"P"|"X"|"O"; saldoInicial: number; situacao: "A"|"I"; boleto: BoletoConfigForm };
+const EMPTY_BOLETO: BoletoConfigForm = {
+  ativo: false,
+  banco: "",
+  ambiente: "HOMOLOGACAO",
+  clientId: "",
+  clientSecret: "",
+  apiUrl: "",
+  tokenUrl: "",
+  emitirPath: "",
+  consultarPath: "",
+  cancelarPath: "",
+  carteira: "",
+  convenio: "",
+  secretConfigurado: false,
+};
+const EMPTY: FormState = { conta: "", banco: "", agencia: "", numeroConta: "", tipoConta: "C", saldoInicial: 0, situacao: "A", boleto: { ...EMPTY_BOLETO } };
 
 export default function ContasBancarias() {
   const utils = trpc.useUtils();
@@ -42,18 +74,60 @@ export default function ContasBancarias() {
   const [editGuid, setEditGuid] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>({ ...EMPTY });
 
-  function abrirNovo() { setEditGuid(null); setForm({ ...EMPTY }); setModal(true); }
+  function abrirNovo() { setEditGuid(null); setForm({ ...EMPTY, boleto: { ...EMPTY_BOLETO } }); setModal(true); }
   function abrirEditar(c: typeof contas[0]) {
     setEditGuid(c.guidConta);
-    setForm({ conta: c.CONTA, banco: c.BANCO ?? "", agencia: c.AGENCIA ?? "", numeroConta: c.NUMEROCONTA ?? "", tipoConta: (c.TIPOCONTA as "C"|"P"|"X"|"O") ?? "C", saldoInicial: Number(c.SALDOINICIAL), situacao: (c.SITUACAO as "A"|"I") ?? "A" });
+    setForm({
+      conta: c.CONTA,
+      banco: c.BANCO ?? "",
+      agencia: c.AGENCIA ?? "",
+      numeroConta: c.NUMEROCONTA ?? "",
+      tipoConta: (c.TIPOCONTA as "C"|"P"|"X"|"O") ?? "C",
+      saldoInicial: Number(c.SALDOINICIAL),
+      situacao: (c.SITUACAO as "A"|"I") ?? "A",
+      boleto: {
+        ativo: Boolean(c.BOLETOATIVO),
+        banco: (c.BOLETOBANCO as BoletoBanco | null) ?? "",
+        ambiente: (c.BOLETOAMBIENTE as BoletoAmbiente | null) ?? "HOMOLOGACAO",
+        clientId: c.BOLETOCLIENTID ?? "",
+        clientSecret: "",
+        apiUrl: c.BOLETOAPIURL ?? "",
+        tokenUrl: c.BOLETOTOKENURL ?? "",
+        emitirPath: c.BOLETOEMITIRPATH ?? "",
+        consultarPath: c.BOLETOCONSULTARPATH ?? "",
+        cancelarPath: c.BOLETOCANCELARPATH ?? "",
+        carteira: c.BOLETOCARTEIRA ?? "",
+        convenio: c.BOLETOCONVENIO ?? "",
+        secretConfigurado: Boolean(c.BOLETOCLIENTSECRETCONFIGURADO),
+      },
+    });
     setModal(true);
+  }
+  function boletoPayload() {
+    return {
+      ativo: form.boleto.ativo,
+      banco: form.boleto.banco || null,
+      ambiente: form.boleto.ambiente,
+      clientId: form.boleto.clientId || null,
+      clientSecret: form.boleto.clientSecret || null,
+      apiUrl: form.boleto.apiUrl || null,
+      tokenUrl: form.boleto.tokenUrl || null,
+      emitirPath: form.boleto.emitirPath || null,
+      consultarPath: form.boleto.consultarPath || null,
+      cancelarPath: form.boleto.cancelarPath || null,
+      carteira: form.boleto.carteira || null,
+      convenio: form.boleto.convenio || null,
+    };
   }
   function salvar() {
     if (!form.conta.trim()) { toast.error("Informe o nome da conta."); return; }
+    if (form.boleto.ativo && !form.boleto.banco) { toast.error("Selecione o banco da integração de boleto."); return; }
+    if (form.boleto.ativo && !form.boleto.clientId.trim()) { toast.error("Informe o Client ID da integração de boleto."); return; }
+    if (form.boleto.ativo && !form.boleto.clientSecret.trim() && !form.boleto.secretConfigurado) { toast.error("Informe o Client Secret da integração de boleto."); return; }
     if (editGuid) {
-      atualizar.mutate({ guidConta: editGuid, conta: form.conta, banco: form.banco || null, agencia: form.agencia || null, numeroConta: form.numeroConta || null, tipoConta: form.tipoConta, situacao: form.situacao });
+      atualizar.mutate({ guidConta: editGuid, conta: form.conta, banco: form.banco || null, agencia: form.agencia || null, numeroConta: form.numeroConta || null, tipoConta: form.tipoConta, situacao: form.situacao, boleto: boletoPayload() });
     } else {
-      criar.mutate({ conta: form.conta, banco: form.banco || null, agencia: form.agencia || null, numeroConta: form.numeroConta || null, tipoConta: form.tipoConta, saldoInicial: form.saldoInicial, situacao: form.situacao });
+      criar.mutate({ conta: form.conta, banco: form.banco || null, agencia: form.agencia || null, numeroConta: form.numeroConta || null, tipoConta: form.tipoConta, saldoInicial: form.saldoInicial, situacao: form.situacao, boleto: boletoPayload() });
     }
   }
 
@@ -89,6 +163,11 @@ export default function ContasBancarias() {
                 R$ {Number(c.SALDOATUAL).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </p>
               <p className="text-xs text-muted-foreground mt-1">{TIPO_LABEL[c.TIPOCONTA] ?? "Outro"}{c.BANCO ? ` · ${c.BANCO}` : ""}</p>
+              {Boolean(c.BOLETOATIVO) && (
+                <Badge variant="outline" className="mt-2 gap-1 text-xs">
+                  <ReceiptText className="w-3 h-3" /> Boleto {c.BOLETOBANCO}
+                </Badge>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -104,6 +183,7 @@ export default function ContasBancarias() {
                 <TableHead>Tipo</TableHead>
                 <TableHead>Banco / Agência</TableHead>
                 <TableHead>Nº Conta</TableHead>
+                <TableHead>Boleto</TableHead>
                 <TableHead className="text-right">Saldo Inicial</TableHead>
                 <TableHead className="text-right">Saldo Atual</TableHead>
                 <TableHead>Status</TableHead>
@@ -112,10 +192,10 @@ export default function ContasBancarias() {
             </TableHeader>
             <TableBody>
               {isLoading && (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               )}
               {!isLoading && contas.length === 0 && (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma conta cadastrada.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhuma conta cadastrada.</TableCell></TableRow>
               )}
               {contas.map(c => (
                 <TableRow key={c.guidConta}>
@@ -123,6 +203,15 @@ export default function ContasBancarias() {
                   <TableCell>{TIPO_LABEL[c.TIPOCONTA] ?? c.TIPOCONTA}</TableCell>
                   <TableCell className="text-muted-foreground">{[c.BANCO, c.AGENCIA].filter(Boolean).join(" / ") || "—"}</TableCell>
                   <TableCell className="text-muted-foreground">{c.NUMEROCONTA || "—"}</TableCell>
+                  <TableCell>
+                    {Boolean(c.BOLETOATIVO) ? (
+                      <Badge variant="outline" className="gap-1 text-xs">
+                        <ReceiptText className="w-3 h-3" /> {c.BOLETOBANCO}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">R$ {Number(c.SALDOINICIAL).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
                   <TableCell className={`text-right font-semibold ${Number(c.SALDOATUAL) >= 0 ? "text-green-600" : "text-red-600"}`}>
                     R$ {Number(c.SALDOATUAL).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
@@ -147,7 +236,7 @@ export default function ContasBancarias() {
 
       {/* Modal */}
       <Dialog open={modal} onOpenChange={setModal}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editGuid ? "Editar Conta" : "Nova Conta Bancária"}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
             <div className="col-span-2 space-y-1">
@@ -193,6 +282,85 @@ export default function ContasBancarias() {
                   <SelectItem value="I">Inativa</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="col-span-2 border-t pt-4 mt-2 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label className="flex items-center gap-2">
+                    <ReceiptText className="w-4 h-4" /> Integração de Boletos
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-1">Configure Itaú ou Cora para emissão dentro de Contas a Receber.</p>
+                </div>
+                <Select value={form.boleto.ativo ? "S" : "N"} onValueChange={v => setForm(f => ({ ...f, boleto: { ...f.boleto, ativo: v === "S" } }))}>
+                  <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="S">Ativo</SelectItem>
+                    <SelectItem value="N">Inativo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {form.boleto.ativo && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label>Banco emissor *</Label>
+                    <Select value={form.boleto.banco || "none"} onValueChange={v => setForm(f => ({ ...f, boleto: { ...f.boleto, banco: v === "none" ? "" : v as BoletoBanco } }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Selecione</SelectItem>
+                        <SelectItem value="ITAU">Itaú</SelectItem>
+                        <SelectItem value="CORA">Cora</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Ambiente</Label>
+                    <Select value={form.boleto.ambiente} onValueChange={v => setForm(f => ({ ...f, boleto: { ...f.boleto, ambiente: v as BoletoAmbiente } }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="HOMOLOGACAO">Homologação</SelectItem>
+                        <SelectItem value="PRODUCAO">Produção</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Client ID *</Label>
+                    <Input value={form.boleto.clientId} onChange={e => setForm(f => ({ ...f, boleto: { ...f.boleto, clientId: e.target.value } }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Client Secret {form.boleto.secretConfigurado ? "(já configurado)" : "*"}</Label>
+                    <Input type="password" value={form.boleto.clientSecret} onChange={e => setForm(f => ({ ...f, boleto: { ...f.boleto, clientSecret: e.target.value } }))} placeholder={form.boleto.secretConfigurado ? "Deixe em branco para manter" : ""} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>API URL</Label>
+                    <Input value={form.boleto.apiUrl} onChange={e => setForm(f => ({ ...f, boleto: { ...f.boleto, apiUrl: e.target.value } }))} placeholder="https://api..." />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Token URL</Label>
+                    <Input value={form.boleto.tokenUrl} onChange={e => setForm(f => ({ ...f, boleto: { ...f.boleto, tokenUrl: e.target.value } }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Carteira</Label>
+                    <Input value={form.boleto.carteira} onChange={e => setForm(f => ({ ...f, boleto: { ...f.boleto, carteira: e.target.value } }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Convênio</Label>
+                    <Input value={form.boleto.convenio} onChange={e => setForm(f => ({ ...f, boleto: { ...f.boleto, convenio: e.target.value } }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Path emissão</Label>
+                    <Input value={form.boleto.emitirPath} onChange={e => setForm(f => ({ ...f, boleto: { ...f.boleto, emitirPath: e.target.value } }))} placeholder="/boletos" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Path consulta</Label>
+                    <Input value={form.boleto.consultarPath} onChange={e => setForm(f => ({ ...f, boleto: { ...f.boleto, consultarPath: e.target.value } }))} placeholder="/boletos/{id}" />
+                  </div>
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label>Path cancelamento</Label>
+                    <Input value={form.boleto.cancelarPath} onChange={e => setForm(f => ({ ...f, boleto: { ...f.boleto, cancelarPath: e.target.value } }))} placeholder="/boletos/{id}" />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>

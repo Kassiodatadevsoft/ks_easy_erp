@@ -16,6 +16,7 @@ import Transportadoras from "./pages/Transportadoras";
 import Entidades from "./pages/Entidades";
 import Categorias from "./pages/Categorias";
 import Produtos from "./pages/Produtos";
+import Licencas from "./pages/Licencas";
 import KsDashboardLayout from "./components/KsDashboardLayout";
 import { useKsAuth } from "./hooks/useKsAuth";
 import { useEffect } from "react";
@@ -37,13 +38,23 @@ import FormasPagamento from "./pages/financeiro/FormasPagamento";
 import ContasBancarias from "./pages/financeiro/ContasBancarias";
 import Transferencias from "./pages/financeiro/Transferencias";
 import LancamentosCaixa from "./pages/financeiro/LancamentosCaixa";
+import ControleCaixas from "./pages/financeiro/ControleCaixas";
 import BalancoPatrimonial from "./pages/financeiro/BalancoPatrimonial";
+import FuncionariosPagamentos from "./pages/financeiro/FuncionariosPagamentos";
+import ConciliacaoCartoesPix from "./pages/financeiro/ConciliacaoCartoesPix";
+import ConciliacaoBancaria from "./pages/financeiro/ConciliacaoBancaria";
+import ImportarExtratoOfx from "./pages/financeiro/ImportarExtratoOfx";
+import ImportarCnab from "./pages/financeiro/ImportarCnab";
+import AuditoriaFinanceira from "./pages/financeiro/AuditoriaFinanceira";
+import CobrancaAutomatica from "./pages/financeiro/CobrancaAutomatica";
+import AprovacaoPagamentos from "./pages/financeiro/AprovacaoPagamentos";
 // Vendas
 import DashboardVendas from "./pages/vendas/DashboardVendas";
+import VendasOperacao from "./pages/vendas/VendasOperacao";
 // Estoque ERP
 import EstoqueDashboard from "./pages/estoque/EstoqueDashboard";
-import ProdutosErp from "./pages/estoque/ProdutosErp";
 import MovimentacoesEstoque from "./pages/estoque/MovimentacoesEstoque";
+import SugestaoCompra from "./pages/estoque/SugestaoCompra";
 
 /**
  * Rota protegida: redireciona para /login se não houver sessão KS válida.
@@ -107,7 +118,7 @@ function Router() {
 
       {/* Comercial */}
       <Route path="/vendas">
-        <ProtectedRoute><DashboardVendas /></ProtectedRoute>
+        <ProtectedRoute><VendasOperacao /></ProtectedRoute>
       </Route>
       <Route path="/vendas/dashboard">
         <ProtectedRoute><DashboardVendas /></ProtectedRoute>
@@ -147,8 +158,35 @@ function Router() {
       <Route path="/financeiro/lancamentos-caixa">
         <ProtectedRoute><LancamentosCaixa /></ProtectedRoute>
       </Route>
+      <Route path="/financeiro/controle-caixas">
+        <ProtectedRoute><ControleCaixas /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/conciliacao-cartoes-pix">
+        <ProtectedRoute><ConciliacaoCartoesPix /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/conciliacao-bancaria">
+        <ProtectedRoute><ConciliacaoBancaria /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/importar-ofx">
+        <ProtectedRoute><ImportarExtratoOfx /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/importar-cnab">
+        <ProtectedRoute><ImportarCnab /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/auditoria-financeira">
+        <ProtectedRoute><AuditoriaFinanceira /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/cobranca-automatica">
+        <ProtectedRoute><CobrancaAutomatica /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/aprovacao-pagamentos">
+        <ProtectedRoute><AprovacaoPagamentos /></ProtectedRoute>
+      </Route>
       <Route path="/financeiro/balanco-patrimonial">
         <ProtectedRoute><BalancoPatrimonial /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/funcionarios-pagamentos">
+        <ProtectedRoute><FuncionariosPagamentos /></ProtectedRoute>
       </Route>
 
       {/* Estoque / Cardápio */}
@@ -164,10 +202,13 @@ function Router() {
         <ProtectedRoute><EstoqueDashboard /></ProtectedRoute>
       </Route>
       <Route path="/estoque/produtos-erp">
-        <ProtectedRoute><ProdutosErp /></ProtectedRoute>
+        <ProtectedRoute><Produtos /></ProtectedRoute>
       </Route>
       <Route path="/estoque/movimentacoes">
         <ProtectedRoute><MovimentacoesEstoque /></ProtectedRoute>
+      </Route>
+      <Route path="/estoque/sugestao-compra">
+        <ProtectedRoute><SugestaoCompra /></ProtectedRoute>
       </Route>
 
       {/* Delivery — admin */}
@@ -181,6 +222,9 @@ function Router() {
       <Route path="/pedido/:token" component={PedidoTracking} />
 
       {/* Configurações */}
+      <Route path="/licencas">
+        <ProtectedRoute><Licencas /></ProtectedRoute>
+      </Route>
       <Route path="/configuracoes">
         <ProtectedRoute><ComingSoon title="Configurações do Sistema" /></ProtectedRoute>
       </Route>

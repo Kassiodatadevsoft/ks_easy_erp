@@ -3,10 +3,13 @@ import { TRPCError } from "@trpc/server";
 import { publicProcedure, router } from "../_core/trpc";
 import { querySql, sql } from "../sqlserver";
 import { verifyKsSession } from "./ksAuthRouter";
+import { COOKIE_NAME } from "@shared/const";
 
 async function getKsSession(req: { headers: { cookie?: string } }) {
   const cookies = req.headers.cookie ?? "";
-  const match = cookies.match(/ks_session=([^;]+)/);
+  const match = cookies.match(
+  new RegExp(`${COOKIE_NAME}=([^;]+)`)
+);
   const token = match?.[1];
   const session = await verifyKsSession(token);
   if (!session) {
@@ -16,6 +19,59 @@ async function getKsSession(req: { headers: { cookie?: string } }) {
 }
 
 export const funcionariosRouter = router({
+  listarVendedoresAtivos: publicProcedure
+    .query(async ({ ctx }) => {
+      const session = await getKsSession(ctx.req);
+      const vendedores = await querySql<{
+        GUIDVENDEDOR: string;
+        CODVENDEDOR: number | null;
+        NOME: string;
+        USUARIO: string | null;
+        SITUACAO: string;
+      }>(
+        `SELECT
+           CAST(c.GUIDPESSOA AS NVARCHAR(36)) AS GUIDVENDEDOR,
+           ISNULL(NULLIF(c.CODVENDEDOR, 0), c.CODIGO) AS CODVENDEDOR,
+           c.NOME,
+           c.USUARIO,
+           c.SITUACAO
+         FROM KS0002.KS00001 c
+         WHERE c.GUIDENTIDADE = @GUIDENTIDADE
+           AND c.CADUSUARIO = 1
+           AND c.SITUACAO = 'A'
+         ORDER BY c.NOME`,
+        { GUIDENTIDADE: { type: sql.UniqueIdentifier, value: session.guidEntidade } }
+      );
+
+      const vendedorLogado = await querySql<{
+        GUIDVENDEDOR: string;
+        CODVENDEDOR: number | null;
+        NOME: string;
+        USUARIO: string | null;
+        SITUACAO: string;
+      }>(
+        `SELECT TOP 1
+           CAST(c.GUIDPESSOA AS NVARCHAR(36)) AS GUIDVENDEDOR,
+           ISNULL(NULLIF(c.CODVENDEDOR, 0), c.CODIGO) AS CODVENDEDOR,
+           c.NOME,
+           c.USUARIO,
+           c.SITUACAO
+         FROM KS0002.KS00001 c
+         WHERE c.GUIDENTIDADE = @GUIDENTIDADE
+           AND c.GUIDPESSOA = @GUIDPESSOA
+           AND c.CADUSUARIO = 1`,
+        {
+          GUIDENTIDADE: { type: sql.UniqueIdentifier, value: session.guidEntidade },
+          GUIDPESSOA: { type: sql.UniqueIdentifier, value: session.guidPessoa },
+        }
+      );
+
+      return {
+        vendedores,
+        vendedorLogado: vendedorLogado[0] ?? null,
+      };
+    }),
+
   /**
    * Listar funcionários da empresa logada (CADUSUARIO = 1)
    */

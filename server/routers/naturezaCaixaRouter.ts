@@ -1,11 +1,14 @@
 import { z } from "zod";
 import { router, publicProcedure } from "../_core/trpc";
 import { getSqlPool, sql } from "../sqlserver";
+import { COOKIE_NAME } from "@shared/const";
 import { verifyKsSession } from "./ksAuthRouter";
 
 async function getKsSession(req: { headers: { cookie?: string } }) {
   const cookies = req.headers.cookie ?? "";
-  const match = cookies.match(/ks_session=([^;]+)/);
+  const match = cookies.match(
+  new RegExp(`${COOKIE_NAME}=([^;]+)`)
+);
   return await verifyKsSession(match?.[1]);
 }
 
@@ -13,8 +16,22 @@ const naturezaBase = z.object({
   natureza:  z.string().min(1).max(100),
   descricao: z.string().max(255).optional().nullable(),
   tipo:      z.enum(["R", "D"]),
-  guidConta: z.string().uuid().optional().nullable(),
+  guidConta: z.string().uuid("Conta do plano de contas obrigatória"),
   situacao:  z.enum(["A", "I"]).default("A"),
+});
+
+const cancelarNaturezaProcedure = publicProcedure.input(z.object({ guidNatureza: z.string().uuid() })).mutation(async ({ input, ctx }) => {
+  const session = await getKsSession(ctx.req);
+  if (!session) throw new Error("Não autenticado");
+  const pool = await getSqlPool();
+  await pool.request()
+    .input("guidnatureza", sql.UniqueIdentifier, input.guidNatureza)
+    .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
+    .query(`
+      UPDATE KS0003.KS00003 SET SITUACAO='I', ULTIMAALTERACAO=GETDATE()
+      WHERE GUIDNATUREZA=@guidnatureza AND GUIDENTIDADE=@guidentidade
+    `);
+  return { success: true, action: "cancelado" as const };
 });
 
 export const naturezaCaixaRouter = router({
@@ -56,7 +73,11 @@ export const naturezaCaixaRouter = router({
       const r = await pool.request()
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
         .query(`
-          SELECT CAST(GUIDNATUREZA AS NVARCHAR(36)) AS guidNatureza, NATUREZA, TIPO
+          SELECT
+            CAST(GUIDNATUREZA AS NVARCHAR(36)) AS guidNatureza,
+            NATUREZA,
+            TIPO,
+            CAST(GUIDCONTA AS NVARCHAR(36)) AS guidConta
           FROM KS0003.KS00003
           WHERE ${where}
           ORDER BY TIPO, NATUREZA
@@ -107,17 +128,6 @@ export const naturezaCaixaRouter = router({
     return { success: true };
   }),
 
-  excluir: publicProcedure.input(z.object({ guidNatureza: z.string().uuid() })).mutation(async ({ input, ctx }) => {
-    const session = await getKsSession(ctx.req);
-    if (!session) throw new Error("Não autenticado");
-    const pool = await getSqlPool();
-    await pool.request()
-      .input("guidnatureza", sql.UniqueIdentifier, input.guidNatureza)
-      .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-      .query(`
-        UPDATE KS0003.KS00003 SET SITUACAO='I', ULTIMAALTERACAO=GETDATE()
-        WHERE GUIDNATUREZA=@guidnatureza AND GUIDENTIDADE=@guidentidade
-      `);
-    return { success: true };
-  }),
+  cancelar: cancelarNaturezaProcedure,
+  excluir: cancelarNaturezaProcedure,
 });

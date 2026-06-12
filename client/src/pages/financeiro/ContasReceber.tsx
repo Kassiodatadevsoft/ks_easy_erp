@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Plus, Search, Edit2, Trash2, CheckCircle, XCircle, TrendingUp, AlertTriangle, Clock } from "lucide-react";
+import { Plus, Search, Edit2, CheckCircle, XCircle, TrendingUp, AlertTriangle, MoreHorizontal, ReceiptText, RefreshCw, Download, Copy, Ban } from "lucide-react";
 
 type Lanc = {
   guidLancamento: string;
@@ -31,6 +32,14 @@ type Lanc = {
   OBSERVACAO: string | null;
   guidNatureza: string | null;
   guidCentro: string | null;
+  guidConta: string | null;
+  MOTIVOCANCELAMENTO: string | null;
+  boletoStatus: string | null;
+  boletoBanco: "ITAU" | "CORA" | null;
+  guidBoleto: string | null;
+  boletoLinhaDigitavel: string | null;
+  boletoUrlPdf: string | null;
+  boletoMensagemErro: string | null;
 };
 
 type Cliente = { guidPessoa: string; nome: string; documento: string };
@@ -48,10 +57,20 @@ const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
   CANCELADO: { label: "Cancelado", cls: "text-muted-foreground" },
 };
 
+const BOLETO_STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
+  NAO_EMITIDO: { label: "Não emitido", cls: "text-muted-foreground border-white/20" },
+  PENDENTE: { label: "Pendente", cls: "text-yellow-400 border-yellow-500/30" },
+  REGISTRADO: { label: "Registrado", cls: "text-blue-400 border-blue-500/30" },
+  PAGO: { label: "Pago", cls: "text-emerald-400 border-emerald-500/30" },
+  CANCELADO: { label: "Cancelado", cls: "text-muted-foreground border-white/20" },
+  VENCIDO: { label: "Vencido", cls: "text-red-400 border-red-500/30" },
+  ERRO: { label: "Erro", cls: "text-red-400 border-red-500/30" },
+};
+
 const FORM_INICIAL = {
   descricao: "", guidDevedor: "" as string, nomeDevedor: "",
   valor: 0, dtLancamento: hoje(), dtVencimento: hoje(),
-  guidNatureza: "" as string, guidCentro: "" as string,
+  guidNatureza: "" as string, guidCentro: "" as string, guidConta: "" as string,
   numerodoc: "", parcela: 1, totalParcelas: 1, observacao: "",
   gerarParcelas: false, intervaloDias: 30,
 };
@@ -69,17 +88,23 @@ export default function ContasReceber() {
   const [pagina, setPagina] = useState(1);
   const [modalAberto, setModalAberto] = useState(false);
   const [modalBaixa, setModalBaixa] = useState<Lanc | null>(null);
+  const [modalCancelamento, setModalCancelamento] = useState<Lanc | null>(null);
   const [editando, setEditando] = useState<Lanc | null>(null);
   const [form, setForm] = useState(FORM_INICIAL);
   const [baixa, setBaixa] = useState(BAIXA_INICIAL);
+  const [motivoCancelamento, setMotivoCancelamento] = useState("");
   const [buscaDevedor, setBuscaDevedor] = useState("");
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
+  const [modalEmitirBoleto, setModalEmitirBoleto] = useState<Lanc | null>(null);
+  const [bancoBoleto, setBancoBoleto] = useState<"ITAU" | "CORA">("ITAU");
   const utils = trpc.useUtils();
 
   const { data, isLoading } = trpc.contasReceber.listar.useQuery({ status: filtroStatus !== "todos" ? filtroStatus : undefined, dtInicio, dtFim, busca: busca || undefined, page: pagina, pageSize: 50 });
   const { data: totaisData } = trpc.contasReceber.totais.useQuery({ dtInicio, dtFim });
   const { data: naturezas = [] } = trpc.naturezaCaixa.listarTodas.useQuery({ tipo: "R" });
   const { data: centros = [] } = trpc.centroCusto.listarTodos.useQuery();
+  const { data: contas = [] } = trpc.planoContas.listarTodas.useQuery();
+  const { data: contasBancarias = [] } = trpc.contasBancarias.listarTodas.useQuery();
   const { data: clientesSugestoes = [] } = trpc.contasReceber.buscarClientes.useQuery(
     { busca: buscaDevedor },
     { enabled: buscaDevedor.length >= 2 }
@@ -87,9 +112,30 @@ export default function ContasReceber() {
 
   const criar = trpc.contasReceber.criar.useMutation({ onSuccess: () => { utils.contasReceber.listar.invalidate(); toast.success("Lançamento criado!"); fecharModal(); } });
   const atualizar = trpc.contasReceber.atualizar.useMutation({ onSuccess: () => { utils.contasReceber.listar.invalidate(); toast.success("Lançamento atualizado!"); fecharModal(); } });
-  const baixarMut = trpc.contasReceber.baixar.useMutation({ onSuccess: (r) => { utils.contasReceber.listar.invalidate(); toast.success(`Recebimento registrado! Status: ${r.status}`); setModalBaixa(null); setBaixa(BAIXA_INICIAL); } });
-  const cancelar = trpc.contasReceber.cancelar.useMutation({ onSuccess: () => { utils.contasReceber.listar.invalidate(); toast.success("Lançamento cancelado!"); } });
-  const excluir = trpc.contasReceber.excluir.useMutation({ onSuccess: () => { utils.contasReceber.listar.invalidate(); toast.success("Lançamento excluído!"); } });
+  const baixarMut = trpc.contasReceber.baixar.useMutation({ onSuccess: (r) => { utils.contasReceber.listar.invalidate(); utils.contasBancarias.listarTodas.invalidate(); toast.success(`Recebimento registrado! Status: ${r.status}`); setModalBaixa(null); setBaixa(BAIXA_INICIAL); } });
+  const cancelar = trpc.contasReceber.cancelar.useMutation({ onSuccess: () => { utils.contasReceber.listar.invalidate(); toast.success("Lançamento cancelado!"); setModalCancelamento(null); setMotivoCancelamento(""); } });
+  const emitirBoleto = trpc.contasReceber.emitirBoleto.useMutation({
+    onSuccess: () => {
+      utils.contasReceber.listar.invalidate();
+      toast.success("Boleto emitido/registrado para consulta.");
+      setModalEmitirBoleto(null);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const consultarBoleto = trpc.contasReceber.consultarBoleto.useMutation({
+    onSuccess: () => {
+      utils.contasReceber.listar.invalidate();
+      toast.success("Status do boleto atualizado.");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const cancelarBoleto = trpc.contasReceber.cancelarBoleto.useMutation({
+    onSuccess: () => {
+      utils.contasReceber.listar.invalidate();
+      toast.success("Boleto cancelado.");
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   const itens: Lanc[] = (data as { items?: Lanc[] } | undefined)?.items ?? [];
   const total = (data as { total?: number } | undefined)?.total ?? 0;
@@ -101,7 +147,7 @@ export default function ContasReceber() {
   function abrirEditar(l: Lanc) {
     setEditando(l);
     setBuscaDevedor(l.NOMEDEVEDOR ?? "");
-    setForm({ ...FORM_INICIAL, descricao: l.DESCRICAO, guidDevedor: l.guidDevedor ?? "", nomeDevedor: l.NOMEDEVEDOR ?? "", valor: Number(l.VALOR), dtLancamento: l.dtLancamento?.slice(0,10) ?? hoje(), dtVencimento: l.dtVencimento?.slice(0,10) ?? hoje(), guidNatureza: l.guidNatureza ?? "", guidCentro: l.guidCentro ?? "", numerodoc: l.NUMERODOC ?? "", parcela: l.PARCELA, totalParcelas: l.TOTALPARCELAS, observacao: l.OBSERVACAO ?? "" });
+    setForm({ ...FORM_INICIAL, descricao: l.DESCRICAO, guidDevedor: l.guidDevedor ?? "", nomeDevedor: l.NOMEDEVEDOR ?? "", valor: Number(l.VALOR), dtLancamento: l.dtLancamento?.slice(0,10) ?? hoje(), dtVencimento: l.dtVencimento?.slice(0,10) ?? hoje(), guidNatureza: l.guidNatureza ?? "", guidCentro: l.guidCentro ?? "", guidConta: l.guidConta ?? "", numerodoc: l.NUMERODOC ?? "", parcela: l.PARCELA, totalParcelas: l.TOTALPARCELAS, observacao: l.OBSERVACAO ?? "" });
     setModalAberto(true);
   }
   function fecharModal() { setModalAberto(false); setEditando(null); setForm(FORM_INICIAL); setBuscaDevedor(""); setMostrarSugestoes(false); }
@@ -111,7 +157,10 @@ export default function ContasReceber() {
     if (!form.guidDevedor) { toast.error("Selecione um cliente cadastrado como Devedor"); return; }
     if (!form.valor || form.valor <= 0) { toast.error("Informe o valor"); return; }
     if (!form.dtVencimento) { toast.error("Informe o vencimento"); return; }
-    const payload = { ...form, guidDevedor: form.guidDevedor || undefined, guidNatureza: form.guidNatureza || undefined, guidCentro: form.guidCentro || undefined };
+    if (!form.guidNatureza) { toast.error("Selecione a natureza de caixa"); return; }
+    if (!form.guidCentro) { toast.error("Selecione o centro de custo"); return; }
+    if (!form.guidConta) { toast.error("Selecione a conta da receita"); return; }
+    const payload = { ...form, numeroDoc: form.numerodoc || undefined, guidDevedor: form.guidDevedor || undefined, guidNatureza: form.guidNatureza, guidCentro: form.guidCentro, guidConta: form.guidConta };
     if (editando) atualizar.mutate({ ...payload, guidLancamento: editando.guidLancamento });
     else criar.mutate(payload);
   }
@@ -119,7 +168,43 @@ export default function ContasReceber() {
   function registrarBaixa() {
     if (!modalBaixa) return;
     if (!baixa.valorRecebido || baixa.valorRecebido <= 0) { toast.error("Informe o valor recebido"); return; }
+    if (!baixa.contaBancaria) { toast.error("Selecione a conta/caixa do recebimento"); return; }
     baixarMut.mutate({ guidLancamento: modalBaixa.guidLancamento, ...baixa });
+  }
+
+  function confirmarCancelamento() {
+    if (!modalCancelamento) return;
+    if (!motivoCancelamento.trim() || motivoCancelamento.trim().length < 3) {
+      toast.error("Informe o motivo do cancelamento");
+      return;
+    }
+    cancelar.mutate({ guidLancamento: modalCancelamento.guidLancamento, motivo: motivoCancelamento.trim() });
+  }
+
+  function boletoStatus(l: Lanc) {
+    return l.boletoStatus ?? "NAO_EMITIDO";
+  }
+
+  function abrirEmissaoBoleto(l: Lanc) {
+    setModalEmitirBoleto(l);
+    setBancoBoleto(l.boletoBanco ?? "ITAU");
+  }
+
+  async function copiarLinhaDigitavel(l: Lanc) {
+    if (!l.boletoLinhaDigitavel) {
+      toast.error("Linha digitável ainda não disponível.");
+      return;
+    }
+    await navigator.clipboard.writeText(l.boletoLinhaDigitavel);
+    toast.success("Linha digitável copiada.");
+  }
+
+  function baixarPdf(l: Lanc) {
+    if (!l.boletoUrlPdf) {
+      toast.error("PDF do boleto ainda não disponível.");
+      return;
+    }
+    window.open(l.boletoUrlPdf, "_blank", "noopener,noreferrer");
   }
 
   const totalPaginas = Math.ceil(total / 50);
@@ -185,14 +270,15 @@ export default function ContasReceber() {
                 <th className="px-4 py-3 text-center">Vencimento</th>
                 <th className="px-4 py-3 text-center">Parcela</th>
                 <th className="px-4 py-3 text-center">Status</th>
+                <th className="px-4 py-3 text-center">Boleto</th>
                 <th className="px-4 py-3 text-center">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {isLoading ? (
-                <tr><td colSpan={9} className="p-8 text-center text-muted-foreground">Carregando...</td></tr>
+                <tr><td colSpan={10} className="p-8 text-center text-muted-foreground">Carregando...</td></tr>
               ) : itens.length === 0 ? (
-                <tr><td colSpan={9} className="p-12 text-center">
+                <tr><td colSpan={10} className="p-12 text-center">
                   <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
                   <p className="text-muted-foreground">Nenhum lançamento encontrado</p>
                   <Button variant="outline" className="mt-4" onClick={abrirNova}><Plus className="h-4 w-4 mr-2" /> Novo Lançamento</Button>
@@ -215,20 +301,55 @@ export default function ContasReceber() {
                   <td className="px-4 py-3 text-center">
                     <Badge variant="outline" className={`text-xs ${STATUS_CONFIG[l.STATUS]?.cls ?? ""}`}>{STATUS_CONFIG[l.STATUS]?.label ?? l.STATUS}</Badge>
                   </td>
+                  <td className="px-4 py-3 text-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <Badge variant="outline" className={`text-xs whitespace-nowrap ${BOLETO_STATUS_CONFIG[boletoStatus(l)]?.cls ?? ""}`}>
+                        {BOLETO_STATUS_CONFIG[boletoStatus(l)]?.label ?? boletoStatus(l)}
+                      </Badge>
+                      {l.boletoBanco && <span className="text-[10px] text-muted-foreground">{l.boletoBanco}</span>}
+                      {l.boletoMensagemErro && <span className="text-[10px] text-red-400 max-w-28 truncate" title={l.boletoMensagemErro}>{l.boletoMensagemErro}</span>}
+                    </div>
+                  </td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-1 justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-1 justify-center">
                       {(l.STATUS === "ABERTO" || l.STATUS === "PARCIAL") && (
                         <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-400 hover:text-emerald-300" title="Registrar Recebimento" onClick={() => { setModalBaixa(l); setBaixa({ ...BAIXA_INICIAL, valorRecebido: Number(l.VALOR) - Number(l.VALORRECEBIDO ?? 0) }); }}><CheckCircle className="h-3.5 w-3.5" /></Button>
                       )}
-                      {l.STATUS === "ABERTO" && (
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => abrirEditar(l)}><Edit2 className="h-3.5 w-3.5" /></Button>
-                      )}
-                      {l.STATUS === "ABERTO" && (
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-orange-400 hover:text-orange-300" onClick={() => cancelar.mutate({ guidLancamento: l.guidLancamento })}><XCircle className="h-3.5 w-3.5" /></Button>
-                      )}
-                      {(l.STATUS === "ABERTO" || l.STATUS === "CANCELADO") && (
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400 hover:text-red-300" onClick={() => excluir.mutate({ guidLancamento: l.guidLancamento })}><Trash2 className="h-3.5 w-3.5" /></Button>
-                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" title="Ações">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                          {l.STATUS === "ABERTO" && (
+                            <DropdownMenuItem onClick={() => abrirEditar(l)}>
+                              <Edit2 className="h-4 w-4" /> Editar título
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem disabled={!["ABERTO", "PARCIAL"].includes(l.STATUS) || !!l.guidBoleto} onClick={() => abrirEmissaoBoleto(l)}>
+                            <ReceiptText className="h-4 w-4" /> Emitir Boleto
+                          </DropdownMenuItem>
+                          <DropdownMenuItem disabled={!l.guidBoleto || consultarBoleto.isPending} onClick={() => consultarBoleto.mutate({ guidLancamento: l.guidLancamento })}>
+                            <RefreshCw className="h-4 w-4" /> Consultar Boleto
+                          </DropdownMenuItem>
+                          <DropdownMenuItem disabled={!l.boletoUrlPdf} onClick={() => baixarPdf(l)}>
+                            <Download className="h-4 w-4" /> Baixar PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuItem disabled={!l.boletoLinhaDigitavel} onClick={() => copiarLinhaDigitavel(l)}>
+                            <Copy className="h-4 w-4" /> Copiar Linha Digitável
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem disabled={!l.guidBoleto || ["PAGO", "CANCELADO"].includes(boletoStatus(l)) || cancelarBoleto.isPending} onClick={() => cancelarBoleto.mutate({ guidLancamento: l.guidLancamento, motivo: "Cancelado pelo usuário" })} className="text-orange-400">
+                            <Ban className="h-4 w-4" /> Cancelar Boleto
+                          </DropdownMenuItem>
+                          {l.STATUS === "ABERTO" && (
+                            <DropdownMenuItem onClick={() => { setModalCancelamento(l); setMotivoCancelamento(""); }} className="text-red-400">
+                              <XCircle className="h-4 w-4" /> Cancelar título
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </td>
                 </tr>
@@ -323,24 +444,40 @@ export default function ContasReceber() {
                 <Input type="date" value={form.dtVencimento} onChange={e => setForm(f => ({ ...f, dtVencimento: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>Natureza de Caixa</Label>
+                <Label>Natureza de Caixa *</Label>
 <Select value={form.guidNatureza || "none"} onValueChange={v => setForm(f => ({ ...f, guidNatureza: v === "none" ? "" : v }))}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Nenhuma</SelectItem>
+                    <SelectItem value="none">Selecione</SelectItem>
                     {(naturezas as Array<{guidNatureza:string;NATUREZA:string}>).map(n => <SelectItem key={n.guidNatureza} value={n.guidNatureza}>{n.NATUREZA}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Centro de Custo</Label>
+                <Label>Centro de Custo *</Label>
 <Select value={form.guidCentro || "none"} onValueChange={v => setForm(f => ({ ...f, guidCentro: v === "none" ? "" : v }))}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
+                    <SelectItem value="none">Selecione</SelectItem>
                     {(centros as Array<{guidCentro:string;CENTRO:string}>).map(c => <SelectItem key={c.guidCentro} value={c.guidCentro}>{c.CENTRO}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="sm:col-span-2 space-y-1.5">
+                <Label>Conta da Receita (Credito) *</Label>
+                <Select value={form.guidConta || "none"} onValueChange={v => setForm(f => ({ ...f, guidConta: v === "none" ? "" : v }))}>
+                  <SelectTrigger><SelectValue placeholder="Selecione a conta de receita" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Selecione</SelectItem>
+                    {(contas as Array<{guidConta:string;CODCONTA:string;CONTA:string;TIPO:string}>)
+                      .filter(c => c.TIPO === "R")
+                      .map(c => <SelectItem key={c.guidConta} value={c.guidConta}>{c.CODCONTA} - {c.CONTA}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="sm:col-span-2 rounded-lg border border-blue-500/20 bg-blue-500/10 p-3 text-sm">
+                <p className="font-medium text-blue-300">Regra contabil automatica</p>
+                <p className="mt-1 text-muted-foreground">Ao lancar: Debito automatico em Contas a Receber e Credito na conta de receita escolhida.</p>
               </div>
               {!editando && (
                 <>
@@ -412,8 +549,20 @@ export default function ContasReceber() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Conta Bancária</Label>
-                  <Input placeholder="Ex: Itaú CC 5678-9" value={baixa.contaBancaria} onChange={e => setBaixa(b => ({ ...b, contaBancaria: e.target.value }))} />
+                  <Label>Conta/Caixa do Recebimento *</Label>
+                  <Select value={baixa.contaBancaria || "none"} onValueChange={v => setBaixa(b => ({ ...b, contaBancaria: v === "none" ? "" : v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Selecione</SelectItem>
+                      {(contasBancarias as Array<{guidConta:string;CONTA:string;SALDOATUAL:number}>).map(c => (
+                        <SelectItem key={c.guidConta} value={c.guidConta}>{c.CONTA} - saldo {fmt(Number(c.SALDOATUAL) || 0)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm">
+                  <p className="font-medium text-emerald-300">Regra contabil da baixa</p>
+                  <p className="mt-1 text-muted-foreground">Na baixa: Debito nesta conta/caixa e Credito automatico em Contas a Receber.</p>
                 </div>
                 <div className="col-span-2 space-y-1.5">
                   <Label>Observação</Label>
@@ -425,6 +574,69 @@ export default function ContasReceber() {
           <DialogFooter>
             <Button variant="outline" onClick={() => { setModalBaixa(null); setBaixa(BAIXA_INICIAL); }}>Cancelar</Button>
             <Button onClick={registrarBaixa} disabled={baixarMut.isPending} className="gap-2 bg-emerald-600 hover:bg-emerald-700"><CheckCircle className="h-4 w-4" /> Confirmar Recebimento</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!modalEmitirBoleto} onOpenChange={v => { if (!v) setModalEmitirBoleto(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Emitir boleto</DialogTitle></DialogHeader>
+          {modalEmitirBoleto && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-white/5 text-sm">
+                <p className="font-medium">{modalEmitirBoleto.DESCRICAO}</p>
+                <p className="text-muted-foreground text-xs mt-1">
+                  Devedor: {modalEmitirBoleto.NOMEDEVEDOR ?? "—"} | Valor em aberto: {fmt(Number(modalEmitirBoleto.VALOR) - Number(modalEmitirBoleto.VALORRECEBIDO ?? 0))}
+                </p>
+                <p className="text-muted-foreground text-xs">Vencimento: {fmtDate(modalEmitirBoleto.dtVencimento)}</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Banco emissor *</Label>
+                <Select value={bancoBoleto} onValueChange={v => setBancoBoleto(v as "ITAU" | "CORA")}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ITAU">Itaú</SelectItem>
+                    <SelectItem value="CORA">Cora</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3 text-sm">
+                <p className="font-medium text-blue-300">Integração bancária</p>
+                <p className="mt-1 text-muted-foreground">O ERP enviará a emissão pelo backend e salvará o status e o histórico do boleto neste título.</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalEmitirBoleto(null)}>Cancelar</Button>
+            <Button
+              onClick={() => modalEmitirBoleto && emitirBoleto.mutate({ guidLancamento: modalEmitirBoleto.guidLancamento, banco: bancoBoleto })}
+              disabled={emitirBoleto.isPending}
+              className="gap-2"
+            >
+              <ReceiptText className="h-4 w-4" /> Emitir Boleto
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!modalCancelamento} onOpenChange={v => { if (!v) { setModalCancelamento(null); setMotivoCancelamento(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Cancelar lançamento</DialogTitle></DialogHeader>
+          {modalCancelamento && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-white/5 text-sm">
+                <p className="font-medium">{modalCancelamento.DESCRICAO}</p>
+                <p className="text-muted-foreground text-xs mt-1">Valor: {fmt(modalCancelamento.VALOR)} | Vencimento: {fmtDate(modalCancelamento.dtVencimento)}</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Motivo do cancelamento *</Label>
+                <Textarea rows={4} value={motivoCancelamento} onChange={e => setMotivoCancelamento(e.target.value)} placeholder="Informe o motivo para auditoria" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setModalCancelamento(null); setMotivoCancelamento(""); }}>Voltar</Button>
+            <Button onClick={confirmarCancelamento} disabled={cancelar.isPending} variant="destructive">Confirmar cancelamento</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

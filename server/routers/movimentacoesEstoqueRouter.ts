@@ -2,10 +2,11 @@ import { z } from "zod";
 import { router, publicProcedure } from "../_core/trpc";
 import { getSqlPool } from "../sqlserver";
 import { verifyKsSession } from "./ksAuthRouter";
+import { COOKIE_NAME } from "@shared/const";
 
 async function getKsSession(req: { headers: { cookie?: string } }) {
   const cookie = req.headers.cookie ?? "";
-  const match = cookie.match(/ks_session=([^;]+)/);
+  const match = cookie.match(new RegExp(`${COOKIE_NAME}=([^;]+)`));
   return await verifyKsSession(match?.[1]);
 }
 import sql from "mssql";
@@ -159,7 +160,7 @@ export const movimentacoesEstoqueRouter = router({
           .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
           .input("delta",        sql.Decimal(15,4),    delta)
           .query(`
-            UPDATE KS0004.KS00001
+            UPDATE KS0000.KS00009
             SET ESTOQUE = ESTOQUE + @delta, ULTIMAALTERACAO = GETDATE()
             WHERE GUIDPRODUTO = @guidproduto AND GUIDENTIDADE = @guidentidade
           `);
@@ -170,7 +171,7 @@ export const movimentacoesEstoqueRouter = router({
           .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
           .input("quantidade",   sql.Decimal(15,4),    input.quantidade)
           .query(`
-            UPDATE KS0004.KS00001
+            UPDATE KS0000.KS00009
             SET ESTOQUE = @quantidade, ULTIMAALTERACAO = GETDATE()
             WHERE GUIDPRODUTO = @guidproduto AND GUIDENTIDADE = @guidentidade
           `);
@@ -206,7 +207,7 @@ export const movimentacoesEstoqueRouter = router({
           .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
           .input("delta",        sql.Decimal(15,4),    delta)
           .query(`
-            UPDATE KS0004.KS00001
+            UPDATE KS0000.KS00009
             SET ESTOQUE = ESTOQUE + @delta, ULTIMAALTERACAO = GETDATE()
             WHERE GUIDPRODUTO = @guidproduto AND GUIDENTIDADE = @guidentidade
           `);

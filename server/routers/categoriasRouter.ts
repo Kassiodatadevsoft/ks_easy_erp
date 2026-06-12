@@ -6,11 +6,14 @@ import { z } from "zod";
 import { router, publicProcedure } from "../_core/trpc";
 import { querySql } from "../sqlserver";
 import { TRPCError } from "@trpc/server";
+import { COOKIE_NAME } from "@shared/const";
 import { verifyKsSession } from "./ksAuthRouter";
 
 async function getKsSession(req: { headers: { cookie?: string } }) {
   const cookies = req.headers.cookie ?? "";
-  const match = cookies.match(/ks_session=([^;]+)/);
+  const match = cookies.match(
+  new RegExp(`${COOKIE_NAME}=([^;]+)`)
+);
   const token = match?.[1];
   const session = await verifyKsSession(token);
   if (!session) {

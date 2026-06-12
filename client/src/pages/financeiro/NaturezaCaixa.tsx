@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Search, Edit2, Trash2, Tag, Sparkles } from "lucide-react";
+import { Plus, Search, Edit2, XCircle, Tag, Sparkles } from "lucide-react";
 
 type Natureza = {
   NATUREZA: string; DESCRICAO: string | null;
@@ -16,7 +16,7 @@ type Natureza = {
   SITUACAO: string; GUIDNATUREZA: string; guidNatureza: string;
 };
 
-const FORM_INICIAL = { natureza: "", descricao: "", tipo: "D" as "R"|"D", guidConta: undefined as string|undefined, situacao: "A" as "A"|"I" };
+const FORM_INICIAL = { natureza: "", descricao: "", tipo: "D" as "R"|"D", guidConta: "" as string, situacao: "A" as "A"|"I" };
 
 export default function NaturezaCaixa() {
   const [busca, setBusca] = useState("");
@@ -35,7 +35,7 @@ export default function NaturezaCaixa() {
 
   const criar = trpc.naturezaCaixa.criar.useMutation({ onSuccess: () => { utils.naturezaCaixa.listar.invalidate(); toast.success("Natureza criada!"); fecharModal(); } });
   const atualizar = trpc.naturezaCaixa.atualizar.useMutation({ onSuccess: () => { utils.naturezaCaixa.listar.invalidate(); toast.success("Natureza atualizada!"); fecharModal(); } });
-  const excluir = trpc.naturezaCaixa.excluir.useMutation({ onSuccess: () => { utils.naturezaCaixa.listar.invalidate(); toast.success("Natureza inativada!"); } });
+  const cancelar = trpc.naturezaCaixa.cancelar.useMutation({ onSuccess: () => { utils.naturezaCaixa.listar.invalidate(); toast.success("Natureza cancelada. O histórico foi preservado."); } });
   const seedStatus = trpc.seed.status.useQuery();
   const popularNat = trpc.seed.popularNaturezaCaixa.useMutation({
     onSuccess: (r) => { utils.naturezaCaixa.listar.invalidate(); seedStatus.refetch(); toast.success(`${r.inseridos} naturezas padrão inseridas!`); },
@@ -45,12 +45,13 @@ export default function NaturezaCaixa() {
   function abrirNova() { setEditando(null); setForm(FORM_INICIAL); setModalAberto(true); }
   function abrirEditar(n: Natureza) {
     setEditando(n);
-    setForm({ natureza: n.NATUREZA, descricao: n.DESCRICAO ?? "", tipo: n.TIPO as "R"|"D", guidConta: n.guidConta ?? undefined, situacao: n.SITUACAO as "A"|"I" });
+    setForm({ natureza: n.NATUREZA, descricao: n.DESCRICAO ?? "", tipo: n.TIPO as "R"|"D", guidConta: n.guidConta ?? "", situacao: n.SITUACAO as "A"|"I" });
     setModalAberto(true);
   }
   function fecharModal() { setModalAberto(false); setEditando(null); setForm(FORM_INICIAL); }
   function salvar() {
     if (!form.natureza.trim()) { toast.error("Informe o nome da natureza"); return; }
+    if (!form.guidConta) { toast.error("Selecione a conta do plano de contas"); return; }
     if (editando) atualizar.mutate({ ...form, guidNatureza: editando.GUIDNATUREZA ?? editando.guidNatureza });
     else criar.mutate(form);
   }
@@ -72,7 +73,7 @@ export default function NaturezaCaixa() {
             <Badge variant="outline" className={`text-xs ${n.TIPO === "R" ? "text-emerald-400 border-emerald-500/30" : "text-red-400 border-red-500/30"}`}>{n.TIPO === "R" ? "Receita" : "Despesa"}</Badge>
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => abrirEditar(n)}><Edit2 className="h-3.5 w-3.5" /></Button>
-              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400 hover:text-red-300" onClick={() => excluir.mutate({ guidNatureza: n.GUIDNATUREZA ?? n.guidNatureza })}><Trash2 className="h-3.5 w-3.5" /></Button>
+              <Button size="icon" variant="ghost" title="Cancelar natureza" className="h-7 w-7 text-orange-400 hover:text-orange-300" onClick={() => cancelar.mutate({ guidNatureza: n.GUIDNATUREZA ?? n.guidNatureza })}><XCircle className="h-3.5 w-3.5" /></Button>
             </div>
           </div>
         ))}
@@ -152,19 +153,21 @@ export default function NaturezaCaixa() {
                 </SelectContent>
               </Select>
             </div>
-            {contas.length > 0 && (
-              <div className="space-y-1.5">
-                <Label>Conta do Plano de Contas</Label>
-                <Select value={form.guidConta ?? "none"} onValueChange={v => setForm(f => ({ ...f, guidConta: v === "none" ? undefined : v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione (opcional)" /></SelectTrigger>
+            <div className="space-y-1.5">
+              <Label>Conta do Plano de Contas *</Label>
+              {contas.length > 0 ? (
+                <Select value={form.guidConta || "none"} onValueChange={v => setForm(f => ({ ...f, guidConta: v === "none" ? "" : v }))}>
+                  <SelectTrigger><SelectValue placeholder="Selecione uma conta" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Nenhuma</SelectItem>
+                    <SelectItem value="none">Selecione uma conta</SelectItem>
                     {(contas as Array<{ guidConta: string; MASCARA?: string | null; CONTA: string; TIPO: string }>)
                       .map(c => <SelectItem key={c.guidConta} value={c.guidConta}>{c.MASCARA ? `${c.MASCARA} — ` : ""}{c.CONTA}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
-            )}
+              ) : (
+                <p className="text-sm text-muted-foreground">Cadastre uma conta no plano de contas antes de salvar a natureza.</p>
+              )}
+            </div>
             <div className="space-y-1.5">
               <Label>Descrição</Label>
               <Textarea placeholder="Descrição da natureza..." value={form.descricao ?? ""} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} rows={2} />

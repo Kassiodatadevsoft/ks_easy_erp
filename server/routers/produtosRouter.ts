@@ -12,11 +12,19 @@ import { z } from "zod";
 import { router, publicProcedure } from "../_core/trpc";
 import { querySql } from "../sqlserver";
 import { TRPCError } from "@trpc/server";
+import { COOKIE_NAME } from "@shared/const";
 import { verifyKsSession } from "./ksAuthRouter";
+import {
+  calcularPrecoFaixa,
+  listarFaixasProduto,
+  salvarFaixasProduto,
+} from "../services/produtoUnidadePreco";
 
 async function getKsSession(req: { headers: { cookie?: string } }) {
   const cookies = req.headers.cookie ?? "";
-  const match = cookies.match(/ks_session=([^;]+)/);
+  const match = cookies.match(
+  new RegExp(`${COOKIE_NAME}=([^;]+)`)
+);
   const token = match?.[1];
   const session = await verifyKsSession(token);
   if (!session) {
@@ -36,6 +44,61 @@ function sqlStr(v: string | null | undefined): string {
 function sqlNum(v: number | null | undefined, def = 0): string {
   const n = typeof v === "number" ? v : def;
   return String(n);
+}
+
+const imeiSituacoes = ["DISPONIVEL", "RESERVADO", "VENDIDO", "MANUTENCAO", "BLOQUEADO", "DEVOLVIDO"] as const;
+const imeiEstados = ["NOVO", "SEMINOVO", "USADO", "VITRINE", "RECONDICIONADO"] as const;
+
+const produtoImeiInput = z.object({
+  guidImei: z.string().uuid(),
+  guidProduto: z.string().uuid(),
+  imei1: z.string().max(20).optional(),
+  imei2: z.string().max(20).optional(),
+  numeroSerie: z.string().max(50).optional(),
+  cor: z.string().max(50).optional(),
+  capacidade: z.string().max(20).optional(),
+  estado: z.enum(imeiEstados).default("NOVO"),
+  situacao: z.enum(imeiSituacoes).default("DISPONIVEL"),
+  dataEntrada: z.string().optional(),
+  custo: z.number().default(0),
+  precoVenda: z.number().default(0),
+  observacao: z.string().optional(),
+});
+
+async function ensureProdutosImeiTable() {
+  await querySql(`
+    IF OBJECT_ID('KS0005.KS_PRODUTOS_IMEI', 'U') IS NULL
+    BEGIN
+      CREATE TABLE KS0005.KS_PRODUTOS_IMEI (
+        GUIDIMEI uniqueidentifier NOT NULL,
+        GUIDPRODUTO uniqueidentifier NOT NULL,
+        GUIDENTIDADE uniqueidentifier NOT NULL,
+        IMEI1 varchar(20) NULL,
+        IMEI2 varchar(20) NULL,
+        NUMEROSERIE varchar(50) NULL,
+        COR varchar(50) NULL,
+        CAPACIDADE varchar(20) NULL,
+        ESTADO varchar(30) NULL,
+        SITUACAO varchar(30) NULL,
+        DATAENTRADA datetime NULL,
+        CUSTO numeric(18,4) NULL,
+        PRECOVENDA numeric(18,4) NULL,
+        OBSERVACAO varchar(max) NULL,
+        ULTIMAALTERACAO datetime NULL,
+        SINCRONIZADO bit NOT NULL CONSTRAINT DF_KS_PRODUTOS_IMEI_SINCRONIZADO DEFAULT 0,
+        CONSTRAINT PK_KS_PRODUTOS_IMEI PRIMARY KEY (GUIDIMEI)
+      );
+      CREATE INDEX IX_KS_PRODUTOS_IMEI_PRODUTO
+        ON KS0005.KS_PRODUTOS_IMEI (GUIDENTIDADE, GUIDPRODUTO, SITUACAO);
+      CREATE INDEX IX_KS_PRODUTOS_IMEI_BUSCA
+        ON KS0005.KS_PRODUTOS_IMEI (GUIDENTIDADE, IMEI1, IMEI2, NUMEROSERIE);
+    END
+  `);
+}
+
+function sqlDate(v: string | null | undefined): string {
+  if (!v) return "NULL";
+  return `'${v.replace(/'/g, "''")}'`;
 }
 
 // ─── Campos base compartilhados ───────────────────────────────────────────────
@@ -103,6 +166,15 @@ const produtoInputBase = {
   percReducaoForm: z.number().min(0).max(100).default(0),
   percFreteForm: z.number().min(0).max(100).default(0),
   percJurosForm: z.number().min(0).max(100).default(0),
+  faixasPreco: z.array(z.object({
+    id: z.number().int().positive().optional(),
+    unidade: z.string().min(1).max(6),
+    fatorConversao: z.number().positive(),
+    quantidadeMinima: z.number().positive(),
+    descricaoPreco: z.string().max(60).optional().nullable(),
+    precoVenda: z.number().positive(),
+    ativo: z.boolean().default(true),
+  })).default([]),
 };
 
 type ProdutoRow = {
@@ -286,11 +358,25 @@ export const produtosRouter = router({
       if (guidCategoria) where += ` AND p.GUIDENTIDADECAT = '${guidCategoria}'`;
       if (busca) {
         const b = busca.replace(/'/g, "''");
-        where += ` AND (p.PRODUTO LIKE '%${b}%' OR p.DESCRICAO LIKE '%${b}%' OR p.ERPCODE LIKE '%${b}%')`;
+        where += ` AND (
+          p.PRODUTO LIKE '%${b}%'
+          OR p.DESCRICAO LIKE '%${b}%'
+          OR p.ERPCODE LIKE '%${b}%'
+          OR CAST(p.CODPRODUTO AS NVARCHAR(20)) LIKE '%${b}%'
+          OR p.CODBARRAS LIKE '%${b}%'
+          OR p.CODBARRACAIXA LIKE '%${b}%'
+          OR p.REFERENCIA LIKE '%${b}%'
+          OR p.TAMANHOSDISP LIKE '%${b}%'
+          OR c.CATEGORIA LIKE '%${b}%'
+        )`;
       }
 
       const countResult = await querySql<{ TOTAL: number }>(
-        `SELECT COUNT(*) AS TOTAL FROM KS0000.KS00009 p ${where}`
+        `SELECT COUNT(*) AS TOTAL
+         FROM KS0000.KS00009 p
+         LEFT JOIN KS0000.KS00008 c
+           ON c.CODCATEGORIA = p.CODCATEGORIA AND c.GUIDENTIDADE = p.GUIDENTIDADE
+         ${where}`
       );
       const total = countResult[0]?.TOTAL ?? 0;
 
@@ -304,7 +390,12 @@ export const produtosRouter = router({
          OFFSET ${offset} ROWS FETCH NEXT ${porPagina} ROWS ONLY`
       );
 
-      return { total, pagina, porPagina, registros: rows };
+      const registros = await Promise.all(rows.map(async (produto) => ({
+        ...produto,
+        faixasPreco: await listarFaixasProduto(session.guidEntidade, String(produto.GUIDPRODUTO)),
+      })));
+
+      return { total, pagina, porPagina, registros };
     }),
 
   // ── Buscar por GUID ──────────────────────────────────────────────────────────
@@ -321,7 +412,9 @@ export const produtosRouter = router({
            AND p.GUIDENTIDADE = '${session.guidEntidade}'`
       );
       if (!rows.length) throw new TRPCError({ code: "NOT_FOUND", message: "Produto não encontrado" });
-      return rows[0];
+      const produto = rows[0];
+      const faixasPreco = await listarFaixasProduto(session.guidEntidade, String(produto.GUIDPRODUTO));
+      return { ...produto, faixasPreco };
     }),
 
   // ── Validar nome ─────────────────────────────────────────────────────────────
@@ -396,6 +489,16 @@ export const produtosRouter = router({
             NEWID(), '${session.guidEntidade}', '${now}', '${now}')`
       );
 
+      const produtoRows = await querySql<{ GUIDPRODUTO: string }>(
+        `SELECT TOP 1 CAST(GUIDPRODUTO AS NVARCHAR(36)) AS GUIDPRODUTO
+         FROM KS0000.KS00009
+         WHERE CODPRODUTO = ${codProduto} AND GUIDENTIDADE = '${session.guidEntidade}'`
+      );
+      const guidProdutoCriado = produtoRows[0]?.GUIDPRODUTO;
+      if (guidProdutoCriado) {
+        await salvarFaixasProduto(session.guidEntidade, guidProdutoCriado, codProduto, input.faixasPreco);
+      }
+
       return { codProduto, mensagem: "Produto criado com sucesso" };
     }),
 
@@ -467,7 +570,40 @@ export const produtosRouter = router({
            AND GUIDENTIDADE = '${session.guidEntidade}'`
       );
 
+      const produtoRows = await querySql<{ CODPRODUTO: number }>(
+        `SELECT TOP 1 CODPRODUTO
+         FROM KS0000.KS00009
+         WHERE GUIDPRODUTO = '${input.guidProduto}' AND GUIDENTIDADE = '${session.guidEntidade}'`
+      );
+      await salvarFaixasProduto(session.guidEntidade, input.guidProduto, produtoRows[0]?.CODPRODUTO ?? null, input.faixasPreco);
+
       return { mensagem: "Produto atualizado com sucesso" };
+    }),
+
+  calcularPrecoVenda: publicProcedure
+    .input(z.object({
+      guidProduto: z.string(),
+      unidade: z.string().min(1).max(6),
+      quantidade: z.number().positive(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const session = await getKsSession(ctx.req);
+      const preco = await calcularPrecoFaixa(
+        session.guidEntidade,
+        input.guidProduto,
+        input.unidade,
+        input.quantidade
+      );
+      if (!preco) throw new TRPCError({ code: "NOT_FOUND", message: "Produto nÃ£o encontrado" });
+      return {
+        id: preco.ID,
+        descricaoPreco: preco.DESCRICAOPRECO,
+        precoVenda: Number(preco.PRECOVENDA),
+        fatorConversao: Number(preco.FATORCONVERSAO),
+        quantidadeMinima: preco.QUANTIDADEMINIMA === null ? null : Number(preco.QUANTIDADEMINIMA),
+        quantidadeEstoque: input.quantidade * Number(preco.FATORCONVERSAO),
+        origem: preco.ORIGEM,
+      };
     }),
 
   // ── Excluir (soft delete) ────────────────────────────────────────────────────
@@ -482,5 +618,318 @@ export const produtosRouter = router({
            AND GUIDENTIDADE = '${session.guidEntidade}'`
       );
       return { mensagem: "Produto inativado com sucesso" };
+    }),
+
+  buscar: publicProcedure
+    .input(z.object({ q: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const session = await getKsSession(ctx.req);
+      const busca = input.q.replace(/'/g, "''");
+      const rows = await querySql<{
+        guidProduto: string;
+        PRODUTO: string;
+        CODBARRAS: string | null;
+        UNIDADE: string | null;
+        ESTOQUE: number;
+        PRECOVENDA: number;
+      }>(
+        `SELECT TOP 20
+           CAST(GUIDPRODUTO AS NVARCHAR(36)) AS guidProduto,
+           PRODUTO,
+           CODBARRAS,
+           ISNULL(UNIDADE, 'UN') AS UNIDADE,
+           ISNULL(ESTOQUE, 0) AS ESTOQUE,
+           ISNULL(PRECOVENDA, 0) AS PRECOVENDA
+         FROM KS0000.KS00009
+         WHERE GUIDENTIDADE = '${session.guidEntidade}'
+           AND SITUACAO = 'A'
+           AND (
+             PRODUTO LIKE '%${busca}%'
+             OR CODBARRAS LIKE '%${busca}%'
+             OR REFERENCIA LIKE '%${busca}%'
+             OR ERPCODE LIKE '%${busca}%'
+           )
+         ORDER BY PRODUTO ASC`
+      );
+      return rows.map(row => ({
+        ...row,
+        UNIDADE: row.UNIDADE ?? "UN",
+        CODBARRAS: row.CODBARRAS ?? "",
+      }));
+    }),
+
+  resumoEstoque: publicProcedure
+    .query(async ({ ctx }) => {
+      const session = await getKsSession(ctx.req);
+      const rows = await querySql<{
+        totalProdutos: number;
+        valorEstoque: number;
+        abaixoMinimo: number;
+        semEstoque: number;
+      }>(
+        `SELECT
+           COUNT(*) AS totalProdutos,
+           ISNULL(SUM(ISNULL(ESTOQUE, 0) * ISNULL(PRECOVENDA, 0)), 0) AS valorEstoque,
+           SUM(CASE WHEN ISNULL(ESTOQUE, 0) < ISNULL(ESTOQUEMINIMO, 0) AND ISNULL(ESTOQUEMINIMO, 0) > 0 THEN 1 ELSE 0 END) AS abaixoMinimo,
+           SUM(CASE WHEN ISNULL(ESTOQUE, 0) <= 0 THEN 1 ELSE 0 END) AS semEstoque
+         FROM KS0000.KS00009
+         WHERE GUIDENTIDADE = '${session.guidEntidade}'
+           AND SITUACAO = 'A'`
+      );
+      return rows[0] ?? { totalProdutos: 0, valorEstoque: 0, abaixoMinimo: 0, semEstoque: 0 };
+    }),
+
+  produtosCriticos: publicProcedure
+    .query(async ({ ctx }) => {
+      const session = await getKsSession(ctx.req);
+      return querySql(
+        `SELECT TOP 20
+           CAST(GUIDPRODUTO AS NVARCHAR(36)) AS guidProduto,
+           PRODUTO,
+           ISNULL(ESTOQUE, 0) AS ESTOQUE,
+           ISNULL(ESTOQUEMINIMO, 0) AS ESTOQUEMINIMO,
+           ISNULL(UNIDADE, 'UN') AS UNIDADE,
+           CASE WHEN ISNULL(ESTOQUE, 0) <= 0 THEN 'SEM_ESTOQUE' ELSE 'ABAIXO_MINIMO' END AS status
+         FROM KS0000.KS00009
+         WHERE GUIDENTIDADE = '${session.guidEntidade}'
+           AND SITUACAO = 'A'
+           AND (
+             ISNULL(ESTOQUE, 0) <= 0
+             OR (ISNULL(ESTOQUEMINIMO, 0) > 0 AND ISNULL(ESTOQUE, 0) < ISNULL(ESTOQUEMINIMO, 0))
+           )
+          ORDER BY ISNULL(ESTOQUE, 0) ASC`
+      );
+    }),
+
+  listarImeis: publicProcedure
+    .input(z.object({
+      guidProduto: z.string().uuid(),
+      busca: z.string().optional(),
+      situacao: z.enum(["TODOS", ...imeiSituacoes]).default("TODOS"),
+    }))
+    .query(async ({ ctx, input }) => {
+      const session = await getKsSession(ctx.req);
+      await ensureProdutosImeiTable();
+
+      let where = `
+        WHERE GUIDENTIDADE = '${session.guidEntidade}'
+          AND GUIDPRODUTO = '${input.guidProduto}'
+      `;
+      if (input.situacao !== "TODOS") where += ` AND SITUACAO = '${input.situacao}'`;
+      if (input.busca?.trim()) {
+        const busca = input.busca.trim().replace(/'/g, "''");
+        where += ` AND (
+          IMEI1 LIKE '%${busca}%'
+          OR IMEI2 LIKE '%${busca}%'
+          OR NUMEROSERIE LIKE '%${busca}%'
+          OR COR LIKE '%${busca}%'
+          OR CAPACIDADE LIKE '%${busca}%'
+        )`;
+      }
+
+      const rows = await querySql<{
+        GUIDIMEI: string;
+        GUIDPRODUTO: string;
+        GUIDENTIDADE: string;
+        IMEI1: string | null;
+        IMEI2: string | null;
+        NUMEROSERIE: string | null;
+        COR: string | null;
+        CAPACIDADE: string | null;
+        ESTADO: string | null;
+        SITUACAO: string | null;
+        DATAENTRADA: Date | null;
+        CUSTO: number | null;
+        PRECOVENDA: number | null;
+        OBSERVACAO: string | null;
+        ULTIMAALTERACAO: Date | null;
+        SINCRONIZADO: boolean;
+      }>(
+        `SELECT
+           CAST(GUIDIMEI AS NVARCHAR(36)) AS GUIDIMEI,
+           CAST(GUIDPRODUTO AS NVARCHAR(36)) AS GUIDPRODUTO,
+           CAST(GUIDENTIDADE AS NVARCHAR(36)) AS GUIDENTIDADE,
+           IMEI1, IMEI2, NUMEROSERIE, COR, CAPACIDADE, ESTADO, SITUACAO,
+           DATAENTRADA, CUSTO, PRECOVENDA, OBSERVACAO, ULTIMAALTERACAO,
+           SINCRONIZADO
+         FROM KS0005.KS_PRODUTOS_IMEI
+         ${where}
+         ORDER BY DATAENTRADA DESC, ULTIMAALTERACAO DESC`
+      );
+
+      const disponiveis = rows.filter((row) => row.SITUACAO === "DISPONIVEL").length;
+      return { registros: rows, disponiveis, total: rows.length };
+    }),
+
+  buscarPorImei: publicProcedure
+    .input(z.object({ q: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const session = await getKsSession(ctx.req);
+      await ensureProdutosImeiTable();
+      const busca = input.q.trim().replace(/'/g, "''");
+      const rows = await querySql<ProdutoRow & {
+        GUIDIMEI: string;
+        IMEI1: string | null;
+        IMEI2: string | null;
+        NUMEROSERIE: string | null;
+        SITUACAOIMEI: string | null;
+        DATAENTRADAIMEI: Date | null;
+        CUSTOIMEI: number | null;
+        PRECOVENDAIMEI: number | null;
+      }>(
+        `SELECT TOP 1
+           ${SELECT_CAMPOS},
+           CAST(i.GUIDIMEI AS NVARCHAR(36)) AS GUIDIMEI,
+           i.IMEI1, i.IMEI2, i.NUMEROSERIE,
+           i.SITUACAO AS SITUACAOIMEI,
+           i.DATAENTRADA AS DATAENTRADAIMEI,
+           i.CUSTO AS CUSTOIMEI,
+           i.PRECOVENDA AS PRECOVENDAIMEI
+         FROM KS0005.KS_PRODUTOS_IMEI i
+         INNER JOIN KS0000.KS00009 p
+           ON p.GUIDPRODUTO = i.GUIDPRODUTO
+          AND p.GUIDENTIDADE = i.GUIDENTIDADE
+         LEFT JOIN KS0000.KS00008 c
+           ON c.CODCATEGORIA = p.CODCATEGORIA AND c.GUIDENTIDADE = p.GUIDENTIDADE
+         WHERE i.GUIDENTIDADE = '${session.guidEntidade}'
+           AND (
+             i.IMEI1 = '${busca}'
+             OR i.IMEI2 = '${busca}'
+             OR i.NUMEROSERIE = '${busca}'
+           )
+         ORDER BY i.ULTIMAALTERACAO DESC`
+      );
+
+      const row = rows[0];
+      if (!row) return null;
+      const faixasPreco = await listarFaixasProduto(session.guidEntidade, String(row.GUIDPRODUTO));
+      return { produto: { ...row, faixasPreco }, imei: {
+        guidImei: row.GUIDIMEI,
+        imei1: row.IMEI1 ?? "",
+        imei2: row.IMEI2 ?? "",
+        numeroSerie: row.NUMEROSERIE ?? "",
+        situacao: row.SITUACAOIMEI ?? "",
+        dataEntrada: row.DATAENTRADAIMEI?.toISOString().slice(0, 10),
+        custo: Number(row.CUSTOIMEI ?? 0),
+        precoVenda: Number(row.PRECOVENDAIMEI ?? 0),
+      } };
+    }),
+
+  atualizarSituacaoImei: publicProcedure
+    .input(z.object({
+      guidImei: z.string().uuid(),
+      situacao: z.enum(imeiSituacoes),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const session = await getKsSession(ctx.req);
+      await ensureProdutosImeiTable();
+      await querySql(
+        `UPDATE KS0005.KS_PRODUTOS_IMEI SET
+           SITUACAO = '${input.situacao}',
+           ULTIMAALTERACAO = '${new Date().toISOString()}',
+           SINCRONIZADO = 0
+         WHERE GUIDIMEI = '${input.guidImei}'
+           AND GUIDENTIDADE = '${session.guidEntidade}'`
+      );
+      return { mensagem: "SituaÃ§Ã£o do IMEI atualizada" };
+    }),
+
+  salvarImei: publicProcedure
+    .input(produtoImeiInput)
+    .mutation(async ({ ctx, input }) => {
+      const session = await getKsSession(ctx.req);
+      await ensureProdutosImeiTable();
+
+      const produtoRows = await querySql<{ TOTAL: number }>(
+        `SELECT COUNT(*) AS TOTAL
+         FROM KS0000.KS00009
+         WHERE GUIDPRODUTO = '${input.guidProduto}'
+           AND GUIDENTIDADE = '${session.guidEntidade}'`
+      );
+      if ((produtoRows[0]?.TOTAL ?? 0) === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Produto nÃ£o encontrado para esta empresa." });
+      }
+
+      if (!input.imei1 && !input.imei2 && !input.numeroSerie) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Informe IMEI 1, IMEI 2 ou nÃºmero de sÃ©rie." });
+      }
+
+      const duplicatedWhere = [
+        input.imei1 ? `IMEI1 = ${sqlStr(input.imei1)} OR IMEI2 = ${sqlStr(input.imei1)} OR NUMEROSERIE = ${sqlStr(input.imei1)}` : "",
+        input.imei2 ? `IMEI1 = ${sqlStr(input.imei2)} OR IMEI2 = ${sqlStr(input.imei2)} OR NUMEROSERIE = ${sqlStr(input.imei2)}` : "",
+        input.numeroSerie ? `IMEI1 = ${sqlStr(input.numeroSerie)} OR IMEI2 = ${sqlStr(input.numeroSerie)} OR NUMEROSERIE = ${sqlStr(input.numeroSerie)}` : "",
+      ].filter(Boolean).join(" OR ");
+
+      const duplicates = await querySql<{ TOTAL: number }>(
+        `SELECT COUNT(*) AS TOTAL
+         FROM KS0005.KS_PRODUTOS_IMEI
+         WHERE GUIDENTIDADE = '${session.guidEntidade}'
+           AND GUIDIMEI <> '${input.guidImei}'
+           AND (${duplicatedWhere})`
+      );
+      if ((duplicates[0]?.TOTAL ?? 0) > 0) {
+        throw new TRPCError({ code: "CONFLICT", message: "IMEI ou nÃºmero de sÃ©rie jÃ¡ cadastrado." });
+      }
+
+      const exists = await querySql<{ TOTAL: number }>(
+        `SELECT COUNT(*) AS TOTAL
+         FROM KS0005.KS_PRODUTOS_IMEI
+         WHERE GUIDIMEI = '${input.guidImei}'
+           AND GUIDENTIDADE = '${session.guidEntidade}'`
+      );
+      const now = new Date().toISOString();
+      const dataEntrada = input.dataEntrada || now.slice(0, 10);
+
+      if ((exists[0]?.TOTAL ?? 0) > 0) {
+        await querySql(
+          `UPDATE KS0005.KS_PRODUTOS_IMEI SET
+             GUIDPRODUTO = '${input.guidProduto}',
+             IMEI1 = ${sqlStr(input.imei1)},
+             IMEI2 = ${sqlStr(input.imei2)},
+             NUMEROSERIE = ${sqlStr(input.numeroSerie)},
+             COR = ${sqlStr(input.cor ? input.cor.toUpperCase() : undefined)},
+             CAPACIDADE = ${sqlStr(input.capacidade ? input.capacidade.toUpperCase() : undefined)},
+             ESTADO = '${input.estado}',
+             SITUACAO = '${input.situacao}',
+             DATAENTRADA = ${sqlDate(dataEntrada)},
+             CUSTO = ${sqlNum(input.custo)},
+             PRECOVENDA = ${sqlNum(input.precoVenda)},
+             OBSERVACAO = ${sqlStr(input.observacao)},
+             ULTIMAALTERACAO = '${now}',
+             SINCRONIZADO = 0
+           WHERE GUIDIMEI = '${input.guidImei}'
+             AND GUIDENTIDADE = '${session.guidEntidade}'`
+        );
+      } else {
+        await querySql(
+          `INSERT INTO KS0005.KS_PRODUTOS_IMEI
+             (GUIDIMEI, GUIDPRODUTO, GUIDENTIDADE, IMEI1, IMEI2, NUMEROSERIE,
+              COR, CAPACIDADE, ESTADO, SITUACAO, DATAENTRADA, CUSTO, PRECOVENDA,
+              OBSERVACAO, ULTIMAALTERACAO, SINCRONIZADO)
+           VALUES
+             ('${input.guidImei}', '${input.guidProduto}', '${session.guidEntidade}',
+              ${sqlStr(input.imei1)}, ${sqlStr(input.imei2)}, ${sqlStr(input.numeroSerie)},
+              ${sqlStr(input.cor ? input.cor.toUpperCase() : undefined)},
+              ${sqlStr(input.capacidade ? input.capacidade.toUpperCase() : undefined)},
+              '${input.estado}', '${input.situacao}', ${sqlDate(dataEntrada)},
+              ${sqlNum(input.custo)}, ${sqlNum(input.precoVenda)}, ${sqlStr(input.observacao)},
+              '${now}', 0)`
+        );
+      }
+
+      return { mensagem: "IMEI salvo com sucesso" };
+    }),
+
+  excluirImei: publicProcedure
+    .input(z.object({ guidImei: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const session = await getKsSession(ctx.req);
+      await ensureProdutosImeiTable();
+      await querySql(
+        `DELETE FROM KS0005.KS_PRODUTOS_IMEI
+         WHERE GUIDIMEI = '${input.guidImei}'
+           AND GUIDENTIDADE = '${session.guidEntidade}'`
+      );
+      return { mensagem: "IMEI excluÃ­do com sucesso" };
     }),
 });

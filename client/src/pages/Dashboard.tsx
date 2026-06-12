@@ -18,6 +18,7 @@ import {
   Clock,
   CheckCircle2,
   AlertCircle,
+  Briefcase,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -67,10 +68,14 @@ const STAT_CARDS = [
 
 // ─── Atalhos rápidos ──────────────────────────────────────────────────────────
 const QUICK_ACTIONS = [
-  { label: "Novo Cliente",       icon: Users,        path: "/cadastros/clientes",       color: "text-blue-600",   bg: "bg-blue-50" },
-  { label: "Novo Fornecedor",    icon: Building2,    path: "/cadastros/fornecedores",   color: "text-emerald-600", bg: "bg-emerald-50" },
-  { label: "Nova Venda",         icon: ShoppingCart, path: "/vendas",                   color: "text-violet-600", bg: "bg-violet-50" },
+  { label: "Entidades",          icon: Users,        path: "/cadastros/entidades",      color: "text-slate-600",  bg: "bg-slate-100" },
+  { label: "Clientes",           icon: Users,        path: "/cadastros/clientes",       color: "text-blue-600",   bg: "bg-blue-50" },
+  { label: "Fornecedores",       icon: Building2,    path: "/cadastros/fornecedores",   color: "text-emerald-600", bg: "bg-emerald-50" },
+  { label: "Funcionários",       icon: Users,        path: "/cadastros/funcionarios",   color: "text-cyan-600",   bg: "bg-cyan-50" },
   { label: "Transportadoras",    icon: Truck,        path: "/cadastros/transportadoras",color: "text-orange-600", bg: "bg-orange-50" },
+  { label: "Empresas",           icon: Building2,    path: "/cadastros/empresas",       color: "text-indigo-600", bg: "bg-indigo-50" },
+  { label: "Cargos",             icon: Briefcase,    path: "/cadastros/cargos",         color: "text-amber-600",  bg: "bg-amber-50" },
+  { label: "Nova Venda",         icon: ShoppingCart, path: "/vendas",                   color: "text-violet-600", bg: "bg-violet-50" },
   { label: "Contas a Pagar",     icon: CreditCard,   path: "/financeiro/pagar",         color: "text-red-600",    bg: "bg-red-50" },
   { label: "Contas a Receber",   icon: TrendingUp,   path: "/financeiro/receber",       color: "text-teal-600",   bg: "bg-teal-50" },
   { label: "Pedidos",            icon: FileText,     path: "/pedidos",                  color: "text-indigo-600", bg: "bg-indigo-50" },
@@ -84,7 +89,7 @@ const MODULE_STATUS = [
   { label: "Cadastro de Entidades", status: "dev",   desc: "Em desenvolvimento" },
   { label: "Módulo de Vendas",    status: "pending", desc: "Aguardando implementação" },
   { label: "Módulo Financeiro",   status: "pending", desc: "Aguardando implementação" },
-  { label: "Sincronização Delphi", status: "dev",    desc: "API base implementada" },
+  { label: "Sincronização", status: "dev",    desc: "API base implementada" },
 ];
 
 export default function Dashboard() {

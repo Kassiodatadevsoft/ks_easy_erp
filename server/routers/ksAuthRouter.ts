@@ -8,8 +8,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { ENV } from "../_core/env";
 import type { KsSessionUser } from "../../shared/ksTypes";
 
-const KS_SESSION_COOKIE = "ks_session";
-
+const KS_SESSION_COOKIE = COOKIE_NAME;
 function getJwtSecret() {
   return new TextEncoder().encode(ENV.cookieSecret);
 }
@@ -88,7 +87,11 @@ export const ksAuthRouter = router({
       // Atualiza último acesso em background (fire-and-forget)
       void Promise.resolve(updateLastAccess(ksUser.GUIDPESSOA)).catch(console.error);
 
-      return { success: true, user: sessionUser };
+      return {
+  success: true,
+  guidPessoa: sessionUser.guidPessoa,
+  nome: sessionUser.nome,
+};
     }),
 
   /**

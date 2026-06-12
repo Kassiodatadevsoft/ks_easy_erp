@@ -2,12 +2,15 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure } from "../_core/trpc";
 import { getSqlPool, sql } from "../sqlserver";
-import { verifyKsSession } from "./ksAuthRouter";
+import { COOKIE_NAME } from "@shared/const";
 import crypto from "crypto";
+import { verifyKsSession } from "./ksAuthRouter";
 
 async function getKsSession(req: { headers: { cookie?: string } }) {
   const cookies = req.headers.cookie ?? "";
-  const match = cookies.match(/ks_session=([^;]+)/);
+  const match = cookies.match(
+  new RegExp(`${COOKIE_NAME}=([^;]+)`)
+);
   const session = await verifyKsSession(match?.[1]);
   if (!session) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
   return session;

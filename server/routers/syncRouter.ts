@@ -3,9 +3,10 @@ import { z } from "zod";
 import { publicProcedure, router } from "../_core/trpc";
 import { querySql, sql } from "../sqlserver";
 import { verifyKsSession } from "./ksAuthRouter";
+import { COOKIE_NAME } from "@shared/const";
 import { parse as parseCookieHeader } from "cookie";
 
-const KS_SESSION_COOKIE = "ks_session";
+const KS_SESSION_COOKIE = COOKIE_NAME;
 
 async function getKsSession(cookieHeader: string | undefined) {
   if (!cookieHeader) return null;
