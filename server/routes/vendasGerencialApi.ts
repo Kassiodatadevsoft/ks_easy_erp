@@ -51,6 +51,10 @@ function bindOptionalGuid(request: sql.Request, name: string, value: string) {
   if (value && value !== "todos") request.input(name, sql.UniqueIdentifier, value);
 }
 
+function limitarTexto(value: unknown, max: number) {
+  return String(value ?? "").trim().slice(0, max);
+}
+
 async function garantirSuporteCancelamento(pool: Awaited<ReturnType<typeof getSqlPool>>) {
   await garantirTabelasConciliacaoFinanceira(pool);
   await pool.request().query(`
@@ -121,13 +125,13 @@ async function auditarCancelamento(request: () => sql.Request, params: {
     .input("codfilial", sql.Int, params.codFilial ?? null)
     .input("guidusuario", sql.UniqueIdentifier, params.guidUsuario ?? null)
     .input("origem", sql.NVarChar(60), "VENDAS_GERENCIAL")
-    .input("acao", sql.NVarChar(80), params.acao)
-    .input("tabela", sql.NVarChar(80), params.tabela)
+    .input("acao", sql.NVarChar(80), limitarTexto(params.acao, 80))
+    .input("tabela", sql.NVarChar(80), limitarTexto(params.tabela, 80))
     .input("guidregistro", sql.UniqueIdentifier, params.guidRegistro ?? null)
     .input("anterior", sql.NVarChar(sql.MAX), params.anterior ? JSON.stringify(params.anterior) : null)
     .input("novo", sql.NVarChar(sql.MAX), params.novo ? JSON.stringify(params.novo) : null)
-    .input("observacao", sql.NVarChar(500), params.observacao ?? null)
-    .input("identificacao", sql.NVarChar(120), params.identificacao)
+    .input("observacao", sql.NVarChar(500), params.observacao ? limitarTexto(params.observacao, 500) : null)
+    .input("identificacao", sql.NVarChar(120), limitarTexto(params.identificacao, 120))
     .query(`
       INSERT INTO KS0003.KS00022
         (GUIDAUDITORIA,GUIDENTIDADE,CODFILIAL,GUIDUSUARIO,ORIGEM,ACAO,TABELAAFETADA,GUIDREGISTRO,VALORANTERIOR,VALORNOVO,OBSERVACAO,IDENTIFICACAO)
@@ -448,7 +452,7 @@ export function registerVendasGerencialApiRoutes(app: Express) {
     let txStarted = false;
     try {
       const session = await getSession(req);
-      const justificativa = String(req.body?.justificativa ?? "").trim();
+      const justificativa = limitarTexto(req.body?.justificativa, 80);
       if (!justificativa) throw new Error("Informe a justificativa do cancelamento.");
       if (req.body?.guidEntidade && String(req.body.guidEntidade).toLowerCase() !== session.guidEntidade.toLowerCase()) {
         const error = new Error("GUIDENTIDADE não confere com a empresa logada.");
@@ -520,16 +524,16 @@ export function registerVendasGerencialApiRoutes(app: Express) {
 
       const identificacao = `VENDA ${vendaRow.NUMEROVENDA ?? guidVenda}`;
       const contasReceberSet = [
-        schema.contasReceberMotivo ? "MOTIVOCANCELAMENTO=@justificativa" : null,
+        schema.contasReceberMotivo ? "MOTIVOCANCELAMENTO=LEFT(@justificativa, 80)" : null,
         schema.contasReceberUltimaAlteracao ? "ULTIMAALTERACAO=GETDATE()" : null,
       ].filter(Boolean).join(", ") || "GUIDLANCAMENTO=GUIDLANCAMENTO";
       const lancamentosCaixaSet = [
-        schema.caixaMotivo ? "MOTIVOCANCELAMENTO=@justificativa" : null,
+        schema.caixaMotivo ? "MOTIVOCANCELAMENTO=LEFT(@justificativa, 80)" : null,
         schema.caixaOrigem ? "ORIGEM=ISNULL(ORIGEM,'VENDA')" : null,
-        "OBSERVACAO=CONCAT(ISNULL(OBSERVACAO,''), ' | CANCELADO POR CANCELAMENTO DA VENDA: ', @justificativa)",
+        "OBSERVACAO=LEFT(CONCAT(ISNULL(CONVERT(nvarchar(max), OBSERVACAO),''), ' | CANC.VENDA: ', @justificativa), 120)",
       ].filter(Boolean).join(", ");
       const comissoesSet = [
-        "OBSERVACAO=CONCAT(ISNULL(OBSERVACAO,''), ' | CANCELADO: ', @justificativa)",
+        "OBSERVACAO=LEFT(CONCAT(ISNULL(CONVERT(nvarchar(max), OBSERVACAO),''), ' | CANC.: ', @justificativa), 120)",
         schema.comissoesUltimaAlteracao ? "ULTIMAALTERACAO=GETDATE()" : null,
       ].filter(Boolean).join(", ");
 
@@ -540,10 +544,10 @@ export function registerVendasGerencialApiRoutes(app: Express) {
         .input("guidusuario", sql.UniqueIdentifier, guidUsuario)
         .query(`
           UPDATE KS0005.KS00016
-          SET SITUACAO='CANCELADA',
-              STATUSNFE=CASE WHEN ISNULL(STATUSNFE,'')='' THEN STATUSNFE ELSE 'CANCELADA' END,
-              MOTIVOCANCELAMENTO=@justificativa,
-              OBSERVACAO=CONCAT(ISNULL(OBSERVACAO,''), ' | CANCELADA EM ', CONVERT(varchar(19), GETDATE(), 120), ' POR ', CONVERT(varchar(36), @guidusuario), ': ', @justificativa),
+          SET SITUACAO='C',
+              STATUSNFE=CASE WHEN ISNULL(STATUSNFE,'')='' THEN STATUSNFE ELSE 'C' END,
+              MOTIVOCANCELAMENTO=LEFT(@justificativa, 80),
+              OBSERVACAO=LEFT(CONCAT(ISNULL(CONVERT(nvarchar(max), OBSERVACAO),''), ' | CANC. ', CONVERT(varchar(10), GETDATE(), 120), ': ', @justificativa), 120),
               ULTIMAALTERACAO=GETDATE(),
               SINCRONIZADO=0
           WHERE GUIDVENDA=@guidvenda AND GUIDENTIDADE=@guidentidade
@@ -556,7 +560,7 @@ export function registerVendasGerencialApiRoutes(app: Express) {
         tabela: "KS0005.KS00016",
         guidRegistro: guidVenda,
         anterior: vendaRow,
-        novo: { situacao: "CANCELADA", justificativa, guidVenda },
+        novo: { situacao: "C", justificativa, guidVenda },
         observacao: justificativa,
         identificacao,
       });
@@ -640,8 +644,8 @@ export function registerVendasGerencialApiRoutes(app: Express) {
       await request()
         .input("guidvenda", sql.UniqueIdentifier, guidVenda)
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-        .input("justificativa", sql.NVarChar(255), `Cancelamento venda ${vendaRow.NUMEROVENDA}: ${justificativa}`.slice(0, 255))
-        .query("UPDATE KS0005.KS_CAIXA_MOVIMENTO_ITEM SET TIPO='VENDA_CANCELADA', HISTORICO=@justificativa, SINCRONIZADO=0 WHERE GUIDENTIDADE=@guidentidade AND GUIDVENDA=@guidvenda");
+        .input("justificativa", sql.NVarChar(100), limitarTexto(`Canc. venda ${vendaRow.NUMEROVENDA}: ${justificativa}`, 100))
+        .query("UPDATE KS0005.KS_CAIXA_MOVIMENTO_ITEM SET TIPO='CANCELADA', HISTORICO=LEFT(@justificativa, 100), SINCRONIZADO=0 WHERE GUIDENTIDADE=@guidentidade AND GUIDVENDA=@guidvenda");
 
       await request()
         .input("totalvendas", sql.Decimal(18, 4), Number(vendaRow.TOTALVENDA ?? 0))
