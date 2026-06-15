@@ -39,6 +39,8 @@ import { movimentacoesEstoqueRouter } from "./routers/movimentacoesEstoqueRouter
 import { licencasRouter } from "./routers/licencasRouter";
 import { caixaMovimentoRouter } from "./routers/caixaMovimentoRouter";
 import { vendasOperacaoRouter } from "./routers/vendasOperacaoRouter";
+import { nfeAvulsaRouter } from "./routers/nfeAvulsaRouter";
+import { financeiroRelatoriosRouter } from "./routers/financeiroRelatoriosRouter";
 
 export const appRouter = router({
   system: systemRouter,
@@ -103,6 +105,7 @@ export const appRouter = router({
   conciliacaoFinanceira: conciliacaoFinanceiraRouter,
   cobrancaAprovacao: cobrancaAprovacaoRouter,
   sugestaoCompra: sugestaoCompraRouter,
+  financeiroRelatorios: financeiroRelatoriosRouter,
 
   // Módulo de Estoque ERP
   categoriasEstoque: categoriasEstoqueRouter,
@@ -114,6 +117,7 @@ export const appRouter = router({
   // Dashboard de Vendas
   vendasDashboard: vendasDashboardRouter,
   vendasOperacao: vendasOperacaoRouter,
+  nfeAvulsa: nfeAvulsaRouter,
 
   // Seed de dados padrão
   seed: seedRouter,

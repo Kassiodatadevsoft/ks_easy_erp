@@ -1,4 +1,5 @@
 import { useKsAuth } from "@/hooks/useKsAuth";
+import { trpc } from "@/lib/trpc";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,12 @@ import {
   ClipboardCheck,
   ClipboardList,
   KeyRound,
+  FilePlus2,
+  ReceiptText,
+  BarChart3,
+  CalendarClock,
+  Percent,
+  AlertTriangle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -64,6 +71,8 @@ type MenuItem = {
   icon: LucideIcon;
   label: string;
   path: string;
+  reportId?: string;
+  status?: "development";
 };
 
 type MenuSection = {
@@ -117,7 +126,33 @@ const MENU_GROUPS: MenuGroup[] = [
     items: [
       { icon: BarChart2,    label: "Dashboard",  path: "/vendas/dashboard" },
       { icon: MonitorCog, label: "PDV / Operacao", path: "/vendas" },
-      { icon: FileText,     label: "Pedidos",    path: "/pedidos" },
+    ],
+  },
+  {
+    label: "Gerencial",
+    items: [
+      { icon: ReceiptText, label: "Vendas Finalizadas", path: "/gerencial/vendas-finalizadas" },
+    ],
+  },
+  {
+    label: "Fiscal",
+    sections: [
+      {
+        id: "fiscal-cadastros",
+        label: "Cadastros",
+        icon: BookOpen,
+        items: [
+          { icon: FileText, label: "Natureza da Operacao / NOP", path: "/fiscal/natureza-operacao" },
+        ],
+      },
+      {
+        id: "fiscal-documentos",
+        label: "Documentos fiscais",
+        icon: FilePlus2,
+        items: [
+          { icon: FilePlus2, label: "Emissao de NF-e Avulsa", path: "/fiscal/nfe-avulsa" },
+        ],
+      },
     ],
   },
   {
@@ -171,9 +206,18 @@ const MENU_GROUPS: MenuGroup[] = [
       },
       {
         id: "financeiro-relatorios",
-        label: "Relatórios e folha",
-        icon: Scale,
+        label: "Relatórios",
+        icon: BarChart3,
         items: [
+          { icon: LayoutDashboard, label: "Visão Geral", path: "/financeiro/relatorios" },
+          { icon: ReceiptText, label: "Movimentação de Caixa", path: "/financeiro/relatorios/movimentacao-caixa", reportId: "movimentacao-caixa" },
+          { icon: CreditCard, label: "Vendas por Forma de Pagamento", path: "/financeiro/relatorios/vendas-forma-pagamento", reportId: "vendas-forma-pagamento" },
+          { icon: TrendingUp, label: "Contas a Receber", path: "/financeiro/relatorios/contas-receber", reportId: "contas-receber" },
+          { icon: TrendingDown, label: "Contas a Pagar", path: "/financeiro/relatorios/contas-pagar", reportId: "contas-pagar" },
+          { icon: CalendarClock, label: "Fluxo de Caixa", path: "/financeiro/relatorios/fluxo-caixa", reportId: "fluxo-caixa" },
+          { icon: Percent, label: "Comissões", path: "/financeiro/relatorios/comissoes", reportId: "comissoes" },
+          { icon: Scale, label: "DRE Gerencial", path: "/financeiro/relatorios/dre-gerencial", reportId: "dre-gerencial" },
+          { icon: AlertTriangle, label: "Inadimplência", path: "/financeiro/relatorios/inadimplencia", reportId: "inadimplencia" },
           { icon: Scale, label: "Balanço Patrimonial", path: "/financeiro/balanco-patrimonial" },
           { icon: HandCoins, label: "Funcionários e Pagamentos", path: "/financeiro/funcionarios-pagamentos" },
         ],
@@ -224,18 +268,27 @@ function normalizeCnpj(value: string | null | undefined) {
   return String(value ?? "").replace(/\D/g, "");
 }
 
-function canViewLicencas(user: { entDocumento?: string | null } | null | undefined) {
-  return normalizeCnpj(user?.entDocumento) === LICENCAS_ADMIN_CNPJ;
+function canViewLicencas(user: { entDocumento?: string | null; documento?: string | null } | null | undefined) {
+  return normalizeCnpj(user?.entDocumento) === LICENCAS_ADMIN_CNPJ || normalizeCnpj(user?.documento) === LICENCAS_ADMIN_CNPJ;
 }
 
-function getVisibleMenuGroups(user: { entDocumento?: string | null } | null | undefined) {
+function getVisibleMenuGroups(
+  user: { entDocumento?: string | null; documento?: string | null } | null | undefined,
+  authorizedReportIds?: Set<string>,
+) {
   const showLicencas = canViewLicencas(user);
+  const canViewItem = (item: MenuItem) => {
+    if (item.path === "/licencas" && !showLicencas) return false;
+    if (!item.reportId || !authorizedReportIds) return true;
+    return authorizedReportIds.has(item.reportId);
+  };
+
   return MENU_GROUPS.map((group) => ({
     ...group,
-    items: group.items?.filter((item) => item.path !== "/licencas" || showLicencas),
+    items: group.items?.filter(canViewItem),
     sections: group.sections?.map((section) => ({
       ...section,
-      items: section.items.filter((item) => item.path !== "/licencas" || showLicencas),
+      items: section.items.filter(canViewItem),
     })).filter((section) => section.items.length > 0),
   })).filter((group) => (group.items?.length ?? 0) > 0 || (group.sections?.length ?? 0) > 0);
 }
@@ -278,7 +331,18 @@ export default function KsDashboardLayout({
 function KsLayoutInner({ children }: { children: React.ReactNode }) {
   const { user, nomeEmpresa, logout } = useKsAuth();
   const [location, setLocation] = useLocation();
-  const menuGroups = useMemo(() => getVisibleMenuGroups(user), [user?.entDocumento]);
+  const { data: relatoriosAutorizados } = trpc.financeiroRelatorios.listar.useQuery(undefined, {
+    enabled: Boolean(user),
+    staleTime: 5 * 60 * 1000,
+  });
+  const authorizedReportIds = useMemo(
+    () => new Set((relatoriosAutorizados ?? []).map((report) => report.id)),
+    [relatoriosAutorizados],
+  );
+  const menuGroups = useMemo(
+    () => getVisibleMenuGroups(user, authorizedReportIds),
+    [user?.entDocumento, user?.documento, authorizedReportIds],
+  );
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const isMobile = useIsMobile();
@@ -354,6 +418,11 @@ function KsLayoutInner({ children }: { children: React.ReactNode }) {
             }`}
           />
           {showText && <span className="flex-1 text-left truncate">{item.label}</span>}
+          {showText && item.status === "development" && (
+            <span className="shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-white/45">
+              Dev
+            </span>
+          )}
         </button>
       );
     }

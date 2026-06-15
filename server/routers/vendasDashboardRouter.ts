@@ -48,14 +48,15 @@ export const vendasDashboardRouter = router({
       const r = await req2.query(`
         SELECT
           -- Período atual
-          ISNULL(SUM(CASE WHEN CONVERT(DATE,DTLANCAMENTO) BETWEEN CONVERT(DATE,@dtInicio) AND CONVERT(DATE,@dtFim) THEN VALOR ELSE 0 END), 0) AS faturamentoAtual,
-          COUNT(CASE WHEN CONVERT(DATE,DTLANCAMENTO) BETWEEN CONVERT(DATE,@dtInicio) AND CONVERT(DATE,@dtFim) THEN 1 END) AS qtdPedidosAtual,
+          ISNULL(SUM(CASE WHEN CONVERT(DATE,ISNULL(DATAVENDA,DATAEMISSAO)) BETWEEN CONVERT(DATE,@dtInicio) AND CONVERT(DATE,@dtFim) THEN ISNULL(TOTALVENDA,VALORFINAL) ELSE 0 END), 0) AS faturamentoAtual,
+          COUNT(CASE WHEN CONVERT(DATE,ISNULL(DATAVENDA,DATAEMISSAO)) BETWEEN CONVERT(DATE,@dtInicio) AND CONVERT(DATE,@dtFim) THEN 1 END) AS qtdPedidosAtual,
           -- Período anterior
-          ISNULL(SUM(CASE WHEN CONVERT(DATE,DTLANCAMENTO) BETWEEN CONVERT(DATE,@dtInicioAnt) AND CONVERT(DATE,@dtFimAnt) THEN VALOR ELSE 0 END), 0) AS faturamentoAnt,
-          COUNT(CASE WHEN CONVERT(DATE,DTLANCAMENTO) BETWEEN CONVERT(DATE,@dtInicioAnt) AND CONVERT(DATE,@dtFimAnt) THEN 1 END) AS qtdPedidosAnt
-        FROM KS0003.KS00005
+          ISNULL(SUM(CASE WHEN CONVERT(DATE,ISNULL(DATAVENDA,DATAEMISSAO)) BETWEEN CONVERT(DATE,@dtInicioAnt) AND CONVERT(DATE,@dtFimAnt) THEN ISNULL(TOTALVENDA,VALORFINAL) ELSE 0 END), 0) AS faturamentoAnt,
+          COUNT(CASE WHEN CONVERT(DATE,ISNULL(DATAVENDA,DATAEMISSAO)) BETWEEN CONVERT(DATE,@dtInicioAnt) AND CONVERT(DATE,@dtFimAnt) THEN 1 END) AS qtdPedidosAnt
+        FROM KS0005.KS00016
         WHERE GUIDENTIDADE = @guidentidade
-          AND STATUS NOT IN ('CANCELADO')
+          AND ISNULL(ORIGEM,'VENDA') <> 'NTA'
+          AND ISNULL(SITUACAO,'F') NOT IN ('C','CANCELADA','CANCELADO')
       `);
 
       // Clientes únicos no período atual
@@ -64,11 +65,13 @@ export const vendasDashboardRouter = router({
         .input("dtInicio",     sql.NVarChar(10),     dtInicio)
         .input("dtFim",        sql.NVarChar(10),     dtFim)
         .query(`
-          SELECT COUNT(DISTINCT GUIDDEVEDOR) AS clientesAtivos
-          FROM KS0003.KS00005
+          SELECT COUNT(DISTINCT GUIDCLIENTE) AS clientesAtivos
+          FROM KS0005.KS00016
           WHERE GUIDENTIDADE = @guidentidade
-            AND STATUS NOT IN ('CANCELADO')
-            AND CONVERT(DATE,DTLANCAMENTO) BETWEEN CONVERT(DATE,@dtInicio) AND CONVERT(DATE,@dtFim)
+            AND ISNULL(ORIGEM,'VENDA') <> 'NTA'
+            AND ISNULL(SITUACAO,'F') NOT IN ('C','CANCELADA','CANCELADO')
+            AND GUIDCLIENTE IS NOT NULL
+            AND CONVERT(DATE,ISNULL(DATAVENDA,DATAEMISSAO)) BETWEEN CONVERT(DATE,@dtInicio) AND CONVERT(DATE,@dtFim)
         `);
 
       // Contas a receber em aberto (total geral)
@@ -112,15 +115,16 @@ export const vendasDashboardRouter = router({
       .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
       .query(`
         SELECT TOP 12
-          FORMAT(DTLANCAMENTO, 'yyyy-MM') AS mes,
-          FORMAT(DTLANCAMENTO, 'MMM/yy', 'pt-BR') AS mesLabel,
-          ISNULL(SUM(VALOR),0) AS total,
+          FORMAT(ISNULL(DATAVENDA,DATAEMISSAO), 'yyyy-MM') AS mes,
+          FORMAT(ISNULL(DATAVENDA,DATAEMISSAO), 'MMM/yy', 'pt-BR') AS mesLabel,
+          ISNULL(SUM(ISNULL(TOTALVENDA,VALORFINAL)),0) AS total,
           COUNT(*) AS qtd
-        FROM KS0003.KS00005
+        FROM KS0005.KS00016
         WHERE GUIDENTIDADE = @guidentidade
-          AND STATUS NOT IN ('CANCELADO')
-          AND DTLANCAMENTO >= DATEADD(MONTH, -11, DATEFROMPARTS(YEAR(GETDATE()), MONTH(GETDATE()), 1))
-        GROUP BY FORMAT(DTLANCAMENTO, 'yyyy-MM'), FORMAT(DTLANCAMENTO, 'MMM/yy', 'pt-BR')
+          AND ISNULL(ORIGEM,'VENDA') <> 'NTA'
+          AND ISNULL(SITUACAO,'F') NOT IN ('C','CANCELADA','CANCELADO')
+          AND ISNULL(DATAVENDA,DATAEMISSAO) >= DATEADD(MONTH, -11, DATEFROMPARTS(YEAR(GETDATE()), MONTH(GETDATE()), 1))
+        GROUP BY FORMAT(ISNULL(DATAVENDA,DATAEMISSAO), 'yyyy-MM'), FORMAT(ISNULL(DATAVENDA,DATAEMISSAO), 'MMM/yy', 'pt-BR')
         ORDER BY mes ASC
       `);
 
@@ -156,15 +160,17 @@ export const vendasDashboardRouter = router({
         .input("limite",       sql.Int,              limite)
         .query(`
           SELECT TOP (@limite)
-            NOMEDEVEDOR AS nome,
-            ISNULL(SUM(VALOR),0) AS total,
+            ISNULL(c.NOME, 'Cliente padrao') AS nome,
+            ISNULL(SUM(ISNULL(v.TOTALVENDA,v.VALORFINAL)),0) AS total,
             COUNT(*) AS qtdPedidos,
-            ISNULL(SUM(VALOR - ISNULL(VALORRECEBIDO,0)),0) AS saldoAberto
-          FROM KS0003.KS00005
-          WHERE GUIDENTIDADE = @guidentidade
-            AND STATUS NOT IN ('CANCELADO')
-            AND CONVERT(DATE,DTLANCAMENTO) BETWEEN CONVERT(DATE,@dtInicio) AND CONVERT(DATE,@dtFim)
-          GROUP BY NOMEDEVEDOR
+            0 AS saldoAberto
+          FROM KS0005.KS00016 v
+          LEFT JOIN KS0002.KS00001 c ON c.GUIDPESSOA = v.GUIDCLIENTE AND c.GUIDENTIDADE = v.GUIDENTIDADE
+          WHERE v.GUIDENTIDADE = @guidentidade
+            AND ISNULL(v.ORIGEM,'VENDA') <> 'NTA'
+            AND ISNULL(v.SITUACAO,'F') NOT IN ('C','CANCELADA','CANCELADO')
+            AND CONVERT(DATE,ISNULL(v.DATAVENDA,v.DATAEMISSAO)) BETWEEN CONVERT(DATE,@dtInicio) AND CONVERT(DATE,@dtFim)
+          GROUP BY ISNULL(c.NOME, 'Cliente padrao')
           ORDER BY total DESC
         `);
 
@@ -200,10 +206,11 @@ export const vendasDashboardRouter = router({
             ISNULL(n.NATUREZA, 'Sem natureza') AS natureza,
             ISNULL(SUM(cr.VALOR),0) AS total,
             COUNT(*) AS qtd
-          FROM KS0003.KS00005 cr
+          FROM KS0003.KS00010 cr
           LEFT JOIN KS0003.KS00003 n ON n.GUIDNATUREZA = cr.GUIDNATUREZA AND n.GUIDENTIDADE = cr.GUIDENTIDADE
           WHERE cr.GUIDENTIDADE = @guidentidade
-            AND cr.STATUS NOT IN ('CANCELADO')
+            AND cr.TIPO='E'
+            AND cr.GUIDVENDA IS NOT NULL
             AND CONVERT(DATE,cr.DTLANCAMENTO) BETWEEN CONVERT(DATE,@dtInicio) AND CONVERT(DATE,@dtFim)
           GROUP BY ISNULL(n.NATUREZA,'Sem natureza')
           ORDER BY total DESC

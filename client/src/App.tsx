@@ -48,9 +48,20 @@ import ImportarCnab from "./pages/financeiro/ImportarCnab";
 import AuditoriaFinanceira from "./pages/financeiro/AuditoriaFinanceira";
 import CobrancaAutomatica from "./pages/financeiro/CobrancaAutomatica";
 import AprovacaoPagamentos from "./pages/financeiro/AprovacaoPagamentos";
+import RelatoriosFinanceiros from "./pages/financeiro/RelatoriosFinanceiros";
+import RelatorioVendasFormaPagamento from "./pages/financeiro/RelatorioVendasFormaPagamento";
+import RelatorioContasReceber from "./pages/financeiro/RelatorioContasReceber";
+import RelatorioContasPagar from "./pages/financeiro/RelatorioContasPagar";
+import RelatorioExtratoFluxoCaixa from "./pages/financeiro/RelatorioExtratoFluxoCaixa";
+import RelatorioComissoes from "./pages/financeiro/RelatorioComissoes";
+import RelatorioDreGerencial from "./pages/financeiro/RelatorioDreGerencial";
+import RelatorioInadimplencia from "./pages/financeiro/RelatorioInadimplencia";
 // Vendas
 import DashboardVendas from "./pages/vendas/DashboardVendas";
 import VendasOperacao from "./pages/vendas/VendasOperacao";
+import VendasFinalizadas from "./pages/vendas/VendasFinalizadas";
+import NfeAvulsa from "./pages/fiscal/NfeAvulsa";
+import NaturezaOperacao from "./pages/fiscal/NaturezaOperacao";
 // Estoque ERP
 import EstoqueDashboard from "./pages/estoque/EstoqueDashboard";
 import MovimentacoesEstoque from "./pages/estoque/MovimentacoesEstoque";
@@ -123,8 +134,19 @@ function Router() {
       <Route path="/vendas/dashboard">
         <ProtectedRoute><DashboardVendas /></ProtectedRoute>
       </Route>
+      <Route path="/gerencial/vendas-finalizadas">
+        <ProtectedRoute><VendasFinalizadas /></ProtectedRoute>
+      </Route>
       <Route path="/pedidos">
         <ProtectedRoute><ComingSoon title="Módulo de Pedidos" /></ProtectedRoute>
+      </Route>
+
+      {/* Fiscal */}
+      <Route path="/fiscal/natureza-operacao">
+        <ProtectedRoute><NaturezaOperacao /></ProtectedRoute>
+      </Route>
+      <Route path="/fiscal/nfe-avulsa">
+        <ProtectedRoute><NfeAvulsa /></ProtectedRoute>
       </Route>
 
       {/* Financeiro */}
@@ -181,6 +203,33 @@ function Router() {
       </Route>
       <Route path="/financeiro/aprovacao-pagamentos">
         <ProtectedRoute><AprovacaoPagamentos /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/relatorios">
+        <ProtectedRoute><RelatoriosFinanceiros /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/relatorios/movimentacao-caixa">
+        <ProtectedRoute><LancamentosCaixa /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/relatorios/vendas-forma-pagamento">
+        <ProtectedRoute><RelatorioVendasFormaPagamento /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/relatorios/contas-receber">
+        <ProtectedRoute><RelatorioContasReceber /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/relatorios/contas-pagar">
+        <ProtectedRoute><RelatorioContasPagar /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/relatorios/fluxo-caixa">
+        <ProtectedRoute><RelatorioExtratoFluxoCaixa /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/relatorios/comissoes">
+        <ProtectedRoute><RelatorioComissoes /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/relatorios/dre-gerencial">
+        <ProtectedRoute><RelatorioDreGerencial /></ProtectedRoute>
+      </Route>
+      <Route path="/financeiro/relatorios/inadimplencia">
+        <ProtectedRoute><RelatorioInadimplencia /></ProtectedRoute>
       </Route>
       <Route path="/financeiro/balanco-patrimonial">
         <ProtectedRoute><BalancoPatrimonial /></ProtectedRoute>

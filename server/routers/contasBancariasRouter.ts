@@ -80,6 +80,54 @@ export const contasBancariasRouter = router({
     return r.recordset;
   }),
 
+  movimentacoes: publicProcedure
+    .input(z.object({
+      guidConta: z.string().uuid().optional().nullable(),
+      limite: z.number().int().min(1).max(100).default(20),
+    }).optional())
+    .query(async ({ input, ctx }) => {
+      const session = await getKsSession(ctx.req);
+      const pool = await getSqlPool();
+      const guidConta = input?.guidConta ?? null;
+      const limite = input?.limite ?? 20;
+      const whereConta = guidConta ? "AND m.GUIDCONTA = @guidconta" : "";
+
+      const movimentos = await pool.request()
+        .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
+        .input("guidconta", sql.UniqueIdentifier, guidConta)
+        .input("limite", sql.Int, limite)
+        .query(`
+          SELECT TOP (@limite)
+            CAST(m.GUIDLANCAMENTO AS NVARCHAR(36)) AS guidLancamento,
+            CAST(m.GUIDVENDA AS NVARCHAR(36)) AS guidVenda,
+            CAST(m.GUIDCONTA AS NVARCHAR(36)) AS guidConta,
+            m.DTLANCAMENTO, m.TIPO, m.VALOR, m.DESCRICAO, m.NUMERODOC, m.DATACADASTRO,
+            c.CONTA AS nomeConta
+          FROM KS0003.KS00010 m
+          LEFT JOIN KS0003.KS00008 c ON c.GUIDCONTA = m.GUIDCONTA
+          WHERE m.GUIDENTIDADE = @guidentidade ${whereConta}
+          ORDER BY m.DATACADASTRO DESC, m.DTLANCAMENTO DESC
+        `);
+
+      const totais = await pool.request()
+        .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
+        .input("guidconta", sql.UniqueIdentifier, guidConta)
+        .query(`
+          SELECT
+            ISNULL(SUM(CASE WHEN m.TIPO = 'E' THEN m.VALOR ELSE 0 END), 0) AS totalEntradas,
+            ISNULL(SUM(CASE WHEN m.TIPO = 'S' THEN m.VALOR ELSE 0 END), 0) AS totalSaidas,
+            COUNT(1) AS totalMovimentos,
+            SUM(CASE WHEN m.GUIDVENDA IS NOT NULL THEN 1 ELSE 0 END) AS totalVendas
+          FROM KS0003.KS00010 m
+          WHERE m.GUIDENTIDADE = @guidentidade ${whereConta}
+        `);
+
+      return {
+        dados: movimentos.recordset,
+        totais: totais.recordset[0] ?? { totalEntradas: 0, totalSaidas: 0, totalMovimentos: 0, totalVendas: 0 },
+      };
+    }),
+
   criar: publicProcedure
     .input(z.object({
       conta:       z.string().min(1).max(60),

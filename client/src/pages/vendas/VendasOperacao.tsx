@@ -571,7 +571,7 @@ export default function VendasOperacao() {
   const [imeiOrdenacao, setImeiOrdenacao] = useState<ImeiOrdenacao>("PRECO_ASC");
   const utils = trpc.useUtils();
   const atualizarSituacaoImei = trpc.produtos.atualizarSituacaoImei.useMutation();
-  const finalizarVenda = trpc.vendasOperacao.finalizar.useMutation();
+  const [finalizandoVenda, setFinalizandoVenda] = useState(false);
   const abrirCaixa = trpc.caixaMovimento.abrir.useMutation();
   const { data: caixaAbertoData, isLoading: carregandoCaixa } = trpc.caixaMovimento.atual.useQuery();
   const { data: vendedoresData, isLoading: carregandoVendedores } = trpc.funcionarios.listarVendedoresAtivos.useQuery();
@@ -1061,19 +1061,20 @@ export default function VendasOperacao() {
   }
 
   async function finishDocument() {
+    if (finalizandoVenda) return;
     const blocked = items.some((item) => item.status === "BLOCKED");
     if (!items.length) {
       toast.error("Inclua ao menos um item.");
       return;
     }
     if (!caixaAberto || caixaAberto.SITUACAO !== "ABERTO") {
-      toast.error("Caixa invalido ou fechado. Abra um caixa antes de finalizar a venda.");
+      toast.error("Abra o caixa antes de finalizar a venda.");
       return;
     }
     const caixaValido = await utils.caixaMovimento.validarAberto.fetch({ guidCaixa: caixaAberto.GUIDCAIXA });
     if (!caixaValido.valido) {
       await utils.caixaMovimento.atual.invalidate();
-      toast.error("Caixa invalido ou fechado. Abra um caixa antes de finalizar a venda.");
+      toast.error("Abra o caixa antes de finalizar a venda.");
       return;
     }
     if (!vendedorSelecionado) {
@@ -1122,7 +1123,9 @@ export default function VendasOperacao() {
     }
     const pagamentosComValor = payments.filter((payment) => payment.valor > 0);
     try {
-      const result = await finalizarVenda.mutateAsync({
+      setFinalizandoVenda(true);
+      const payload = {
+        ORIGEM: "VENDA",
         guidVenda,
         guidCaixa: caixaAberto.GUIDCAIXA,
         numeroCaixa: caixaAberto.NUMEROCAIXA,
@@ -1170,9 +1173,20 @@ export default function VendasOperacao() {
             troco: index === pagamentosComValor.length - 1 ? totals.troco : 0,
           };
         }),
+      };
+      const response = await fetch("/api/vendas/finalizar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
       });
-      toast.success(`Venda ${result.numeroVenda} finalizada com sucesso.`);
-      imprimirVenda(result.numeroVenda, result.dataHora, result.empresa);
+      const result = await response.json();
+      if (!response.ok || result.sucesso === false || result.success === false) {
+        throw new Error(result.mensagem ?? result.message ?? "Nao foi possivel finalizar a venda.");
+      }
+      const numeroFinalizado = result.CODPREVENDA ?? result.codPreVenda ?? result.numeroVenda;
+      toast.success("Venda finalizada com sucesso.");
+      imprimirVenda(numeroFinalizado, result.dataHora, result.empresa);
       setItems([]);
       setGeneralDiscount(0);
       setPayments([{ id: `pay-${Date.now()}`, guidFormaPagamento: formasPagamentoAtivas[0]?.guidPagamento ?? "", valor: 0, parcelas: 1, jurosPercentual: 0 }]);
@@ -1181,6 +1195,8 @@ export default function VendasOperacao() {
       await utils.produtos.listar.invalidate();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Nao foi possivel finalizar a venda.");
+    } finally {
+      setFinalizandoVenda(false);
     }
   }
 
@@ -1249,11 +1265,11 @@ export default function VendasOperacao() {
             </Button>
             <Button
               onClick={() => void finishDocument()}
-              disabled={!caixaAberto || caixaAberto.SITUACAO !== "ABERTO" || finalizarVenda.isPending}
+              disabled={finalizandoVenda}
               className="gap-2 bg-slate-900 hover:bg-slate-800"
             >
               <PackageCheck className="h-4 w-4" />
-              {finalizarVenda.isPending ? "Finalizando..." : "Finalizar"}
+              {finalizandoVenda ? "Finalizando..." : "Finalizar"}
             </Button>
           </div>
         </div>

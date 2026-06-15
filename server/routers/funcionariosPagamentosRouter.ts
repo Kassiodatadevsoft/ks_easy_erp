@@ -16,6 +16,10 @@ async function getKsSession(req: { headers: { cookie?: string } }) {
 }
 
 const tipoMovimento = z.enum(["SALARIO", "COMISSAO", "VALE"]);
+const optionalUuid = z.preprocess(
+  (value) => value === "" || value === "none" || value === "todos" ? null : value,
+  z.string().uuid().optional().nullable()
+);
 
 const movimentoBase = z.object({
   guidFuncionario: z.string().uuid("Funcionário obrigatório"),
@@ -25,9 +29,9 @@ const movimentoBase = z.object({
   dataMovimento: z.string().min(10).max(10),
   competencia: z.string().regex(/^\d{4}-\d{2}$/, "Competência inválida"),
   observacao: z.string().max(500).optional().nullable(),
-  guidContaCaixa: z.string().uuid().optional().nullable(),
-  guidNatureza: z.string().uuid().optional().nullable(),
-  guidCentro: z.string().uuid().optional().nullable(),
+  guidContaCaixa: optionalUuid,
+  guidNatureza: optionalUuid,
+  guidCentro: optionalUuid,
 });
 
 function competenciaAtual() {
@@ -232,12 +236,13 @@ export const funcionariosPagamentosRouter = router({
       .input("guidcontacaixa", sql.UniqueIdentifier, input.tipo === "VALE" ? input.guidContaCaixa : null)
       .input("guidnatureza", sql.UniqueIdentifier, input.tipo === "VALE" ? input.guidNatureza : null)
       .input("guidcentro", sql.UniqueIdentifier, input.tipo === "VALE" ? input.guidCentro : null)
+      .input("status", sql.NVarChar(20), "ABERTO")
       .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
       .query(`
         INSERT INTO KS0005.KS00001
-          (GUIDMOVIMENTO, GUIDFUNCIONARIO, TIPO, DESCRICAO, VALOR, DATAMOVIMENTO, COMPETENCIA, OBSERVACAO, GUIDLANCCAIXA, GUIDCONTACAIXA, GUIDNATUREZA, GUIDCENTRO, GUIDENTIDADE)
+          (GUIDMOVIMENTO, GUIDFUNCIONARIO, TIPO, DESCRICAO, VALOR, DATAMOVIMENTO, COMPETENCIA, OBSERVACAO, GUIDLANCCAIXA, GUIDCONTACAIXA, GUIDNATUREZA, GUIDCENTRO, STATUS, GUIDENTIDADE)
         VALUES
-          (@guidmovimento, @guidfuncionario, @tipo, @descricao, @valor, @datamovimento, @competencia, @observacao, @guidlanccaixa, @guidcontacaixa, @guidnatureza, @guidcentro, @guidentidade)
+          (@guidmovimento, @guidfuncionario, @tipo, @descricao, @valor, @datamovimento, @competencia, @observacao, @guidlanccaixa, @guidcontacaixa, @guidnatureza, @guidcentro, @status, @guidentidade)
       `);
 
     console.log(`[FuncionariosPagamentos] Movimento ${input.tipo} criado: ${guid}`);

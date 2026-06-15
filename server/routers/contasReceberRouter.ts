@@ -4,6 +4,7 @@ import { getSqlPool, sql } from "../sqlserver";
 import { COOKIE_NAME } from "@shared/const";
 import { verifyKsSession } from "./ksAuthRouter";
 import { getBoletoConfig, getBoletoProvider, type BoletoBanco, type BoletoStatus } from "../services/boletos";
+import { excluirArquivoSeLocal, garantirTabelaFinanceiroAnexos } from "../services/financeiroAnexos";
 
 async function getKsSession(req: { headers: { cookie?: string } }) {
   const cookies = req.headers.cookie ?? "";
@@ -168,6 +169,7 @@ export const contasReceberRouter = router({
       if (!session) return { items: [], total: 0 };
       const pool = await getSqlPool();
       await garantirTabelasBoletos(pool);
+      await garantirTabelaFinanceiroAnexos(pool);
       const page = input?.page ?? 1;
       const pageSize = input?.pageSize ?? 20;
       const offset = (page - 1) * pageSize;
@@ -219,6 +221,7 @@ export const contasReceberRouter = router({
             b.LINHADIGITAVEL AS boletoLinhaDigitavel,
             b.URLPDF AS boletoUrlPdf,
             b.MENSAGEMERRO AS boletoMensagemErro,
+            ISNULL(ax.QTDANEXOS, 0) AS qtdAnexos,
             cr.DATACADASTRO, cr.ULTIMAALTERACAO
           FROM KS0003.KS00005 cr
           LEFT JOIN KS0003.KS00003 n  ON n.GUIDNATUREZA   = cr.GUIDNATUREZA
@@ -230,6 +233,12 @@ export const contasReceberRouter = router({
             WHERE GUIDLANCAMENTO = cr.GUIDLANCAMENTO AND GUIDENTIDADE = cr.GUIDENTIDADE
             ORDER BY DATACADASTRO DESC
           ) b
+          OUTER APPLY (
+            SELECT COUNT(1) AS QTDANEXOS
+            FROM FINANCEIROANEXOS a
+            WHERE a.GUIDENTIDADE=CAST(cr.GUIDENTIDADE AS CHAR(36))
+              AND a.GUIDCONTARECEBER=CAST(cr.GUIDLANCAMENTO AS CHAR(36))
+          ) ax
           WHERE ${where}
           ORDER BY cr.DTVENCIMENTO ASC
           OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
@@ -394,7 +403,60 @@ export const contasReceberRouter = router({
           VALUES
             (@guidmovimento,@dtmov,'R',@descricao,@valor,@guidnatureza,@guidcentro,@guidpagamento,@guidlancreceber,'BAIXA',@guidentidade)
         `);
-      return { success: true, status };
+      return { success: true, status, guidRecebimento: guidMov };
+    }),
+
+  anexos: publicProcedure
+    .input(z.object({ guidLancamento: z.string().uuid() }))
+    .query(async ({ input, ctx }) => {
+      const session = await getKsSession(ctx.req);
+      if (!session) return [];
+      const pool = await getSqlPool();
+      await garantirTabelaFinanceiroAnexos(pool);
+      const r = await pool.request()
+        .input("guidlancamento", sql.Char(36), input.guidLancamento)
+        .input("guidentidade", sql.Char(36), session.guidEntidade)
+        .query(`
+          SELECT
+            GUIDANEXO AS guidAnexo,
+            GUIDCONTARECEBER AS guidContaReceber,
+            GUIDRECEBIMENTO AS guidRecebimento,
+            TIPO AS tipo,
+            NOMEARQUIVO AS nomeArquivo,
+            CAMINHOARQUIVO AS caminhoArquivo,
+            CAST(TAMANHOARQUIVO AS BIGINT) AS tamanhoArquivo,
+            CONVERT(NVARCHAR(19), DATACADASTRO, 120) AS dataCadastro,
+            USUARIOCADASTRO AS usuarioCadastro
+          FROM FINANCEIROANEXOS
+          WHERE GUIDENTIDADE=@guidentidade
+            AND GUIDCONTARECEBER=@guidlancamento
+          ORDER BY DATACADASTRO DESC
+        `);
+      return r.recordset;
+    }),
+
+  excluirAnexo: publicProcedure
+    .input(z.object({ guidAnexo: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const session = await getKsSession(ctx.req);
+      if (!session) throw new Error("Nao autenticado");
+      const pool = await getSqlPool();
+      await garantirTabelaFinanceiroAnexos(pool);
+      const anexo = await pool.request()
+        .input("guidanexo", sql.Char(36), input.guidAnexo)
+        .input("guidentidade", sql.Char(36), session.guidEntidade)
+        .query(`
+          SELECT TOP 1 CAMINHOARQUIVO
+          FROM FINANCEIROANEXOS
+          WHERE GUIDANEXO=@guidanexo AND GUIDENTIDADE=@guidentidade
+        `);
+      const caminho = anexo.recordset[0]?.CAMINHOARQUIVO as string | undefined;
+      await pool.request()
+        .input("guidanexo", sql.Char(36), input.guidAnexo)
+        .input("guidentidade", sql.Char(36), session.guidEntidade)
+        .query("DELETE FROM FINANCEIROANEXOS WHERE GUIDANEXO=@guidanexo AND GUIDENTIDADE=@guidentidade");
+      await excluirArquivoSeLocal(caminho);
+      return { success: true };
     }),
 
   cancelar: publicProcedure.input(z.object({

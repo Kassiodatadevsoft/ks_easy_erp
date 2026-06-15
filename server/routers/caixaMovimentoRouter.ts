@@ -43,7 +43,7 @@ type FormaResumo = {
   valor: number;
 };
 
-async function ensureCaixaMovimentoTable() {
+export async function ensureCaixaMovimentoTable() {
   await querySql(`
     IF SCHEMA_ID('KS0005') IS NULL
       EXEC('CREATE SCHEMA KS0005');

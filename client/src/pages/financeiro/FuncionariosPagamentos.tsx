@@ -209,7 +209,12 @@ export default function FuncionariosPagamentos() {
       if (!movimento.guidNatureza) { toast.error("Selecione a natureza de caixa"); return; }
       if (!movimento.guidCentro) { toast.error("Selecione o centro de custo"); return; }
     }
-    criarMovimento.mutate(movimento);
+    criarMovimento.mutate({
+      ...movimento,
+      guidContaCaixa: movimento.tipo === "VALE" ? movimento.guidContaCaixa : null,
+      guidNatureza: movimento.tipo === "VALE" ? movimento.guidNatureza : null,
+      guidCentro: movimento.tipo === "VALE" ? movimento.guidCentro : null,
+    });
   }
 
   function abrirFechamento() {

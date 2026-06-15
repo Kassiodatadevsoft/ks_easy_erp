@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Pencil, Landmark, Wallet, PiggyBank, CircleDollarSign, RefreshCw, ReceiptText } from "lucide-react";
+import { Plus, Pencil, Landmark, Wallet, PiggyBank, CircleDollarSign, RefreshCw, ReceiptText, TrendingUp, TrendingDown } from "lucide-react";
 
 const TIPO_LABEL: Record<string, string> = { C: "Corrente", P: "Poupança", X: "Caixa", O: "Outro" };
 const TIPO_ICON: Record<string, React.ReactNode> = {
@@ -73,6 +73,11 @@ export default function ContasBancarias() {
   const [modal, setModal] = useState(false);
   const [editGuid, setEditGuid] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>({ ...EMPTY });
+  const [contaSelecionada, setContaSelecionada] = useState<string | null>(null);
+  const { data: movimentacoes, isLoading: carregandoMovimentos } = trpc.contasBancarias.movimentacoes.useQuery({
+    guidConta: contaSelecionada ?? undefined,
+    limite: 20,
+  });
 
   function abrirNovo() { setEditGuid(null); setForm({ ...EMPTY, boleto: { ...EMPTY_BOLETO } }); setModal(true); }
   function abrirEditar(c: typeof contas[0]) {
@@ -133,6 +138,8 @@ export default function ContasBancarias() {
 
   const ativas = contas.filter(c => c.SITUACAO === "A");
   const totalSaldo = ativas.reduce((s, c) => s + (Number(c.SALDOATUAL) || 0), 0);
+  const contaSelecionadaNome = contaSelecionada ? contas.find(c => c.guidConta === contaSelecionada)?.CONTA : null;
+  const resumoMovimentos = movimentacoes?.totais ?? { totalEntradas: 0, totalSaidas: 0, totalMovimentos: 0, totalVendas: 0 };
 
   return (
     <div className="p-6 space-y-6">
@@ -146,12 +153,12 @@ export default function ContasBancarias() {
 
       {/* Cards de resumo */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="col-span-full sm:col-span-2 lg:col-span-1 border-primary/30 bg-primary/5">
+        <Card className={`col-span-full sm:col-span-2 lg:col-span-1 border-primary/30 bg-primary/5 cursor-pointer transition-colors ${contaSelecionada === null ? "ring-2 ring-primary/40" : ""}`} onClick={() => setContaSelecionada(null)}>
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Saldo Total</CardTitle></CardHeader>
           <CardContent><p className="text-2xl font-bold text-primary">R$ {totalSaldo.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p></CardContent>
         </Card>
         {ativas.map(c => (
-          <Card key={c.guidConta} className="cursor-pointer hover:border-primary/40 transition-colors" onClick={() => abrirEditar(c)}>
+          <Card key={c.guidConta} className={`cursor-pointer hover:border-primary/40 transition-colors ${contaSelecionada === c.guidConta ? "ring-2 ring-primary/40" : ""}`} onClick={() => setContaSelecionada(c.guidConta)}>
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">{TIPO_ICON[c.TIPOCONTA] ?? TIPO_ICON.O}</span>
@@ -172,6 +179,83 @@ export default function ContasBancarias() {
           </Card>
         ))}
       </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle className="text-base">Ultimos lancamentos</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {contaSelecionadaNome ? `Movimentos da conta ${contaSelecionadaNome}` : "Movimentos de todas as contas"}
+              </p>
+            </div>
+            <Select value={contaSelecionada ?? "__todas__"} onValueChange={v => setContaSelecionada(v === "__todas__" ? null : v)}>
+              <SelectTrigger className="w-full md:w-72"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__todas__">Todas as contas</SelectItem>
+                {contas.map(c => <SelectItem key={c.guidConta} value={c.guidConta}>{c.CONTA}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="rounded-md border border-green-500/25 bg-green-500/5 p-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground"><TrendingUp className="w-4 h-4 text-green-600" />Entradas</div>
+              <p className="mt-1 text-lg font-semibold text-green-600">R$ {Number(resumoMovimentos.totalEntradas).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+            </div>
+            <div className="rounded-md border border-red-500/25 bg-red-500/5 p-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground"><TrendingDown className="w-4 h-4 text-red-600" />Saidas</div>
+              <p className="mt-1 text-lg font-semibold text-red-600">R$ {Number(resumoMovimentos.totalSaidas).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Movimentos</p>
+              <p className="mt-1 text-lg font-semibold">{Number(resumoMovimentos.totalMovimentos).toLocaleString("pt-BR")}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Vendas lancadas</p>
+              <p className="mt-1 text-lg font-semibold">{Number(resumoMovimentos.totalVendas).toLocaleString("pt-BR")}</p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Origem</TableHead>
+                  <TableHead>Descricao</TableHead>
+                  <TableHead>Conta</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {carregandoMovimentos && (
+                  <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando lancamentos...</TableCell></TableRow>
+                )}
+                {!carregandoMovimentos && (movimentacoes?.dados ?? []).length === 0 && (
+                  <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhum lancamento localizado.</TableCell></TableRow>
+                )}
+                {(movimentacoes?.dados ?? []).map(l => (
+                  <TableRow key={l.guidLancamento}>
+                    <TableCell className="text-sm">{new Date(l.DTLANCAMENTO).toLocaleDateString("pt-BR")}</TableCell>
+                    <TableCell>
+                      <Badge variant={l.guidVenda ? "default" : "secondary"} className="text-xs">
+                        {l.guidVenda ? "Venda" : l.TIPO === "E" ? "Entrada" : "Saida"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-medium">{l.DESCRICAO}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{l.nomeConta ?? "—"}</TableCell>
+                    <TableCell className={`text-right font-semibold ${l.TIPO === "E" ? "text-green-600" : "text-red-600"}`}>
+                      {l.TIPO === "S" ? "- " : "+ "}R$ {Number(l.VALOR).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Tabela */}
       <Card>

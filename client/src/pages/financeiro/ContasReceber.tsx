@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Plus, Search, Edit2, CheckCircle, XCircle, TrendingUp, AlertTriangle, MoreHorizontal, ReceiptText, RefreshCw, Download, Copy, Ban } from "lucide-react";
+import { Plus, Search, Edit2, CheckCircle, XCircle, TrendingUp, AlertTriangle, MoreHorizontal, ReceiptText, RefreshCw, Download, Copy, Ban, Paperclip, Eye, Trash2, FileText } from "lucide-react";
 
 type Lanc = {
   guidLancamento: string;
@@ -40,15 +40,29 @@ type Lanc = {
   boletoLinhaDigitavel: string | null;
   boletoUrlPdf: string | null;
   boletoMensagemErro: string | null;
+  qtdAnexos: number;
 };
 
 type Cliente = { guidPessoa: string; nome: string; documento: string };
+type AnexoFinanceiro = {
+  guidAnexo: string;
+  tipo: "LANCAMENTO" | "RECEBIMENTO";
+  nomeArquivo: string;
+  caminhoArquivo: string;
+  tamanhoArquivo: number;
+  dataCadastro: string;
+  usuarioCadastro: string | null;
+};
+type PendingAnexo = { id: string; file: File; previewUrl: string | null };
 
 function fmt(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0); }
 function fmtDate(d: string | null) { if (!d) return "—"; return new Date(d).toLocaleDateString("pt-BR"); }
 function hoje() { return new Date().toISOString().slice(0, 10); }
 function mesInicio() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; }
 function mesFim() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${new Date(d.getFullYear(), d.getMonth()+1, 0).getDate()}`; }
+function isImagem(nome: string) { return /\.(png|jpe?g|webp)$/i.test(nome); }
+function fmtBytes(v: number) { return `${(Number(v || 0) / 1024 / 1024).toFixed(2)} MB`; }
+function anexoUrl(guidAnexo: string, download = false) { return `/api/financeiro/anexos/${guidAnexo}/download${download ? "?download=1" : ""}`; }
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
   ABERTO: { label: "Aberto", cls: "text-yellow-400 border-yellow-500/30" },
@@ -97,7 +111,10 @@ export default function ContasReceber() {
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const [modalEmitirBoleto, setModalEmitirBoleto] = useState<Lanc | null>(null);
   const [bancoBoleto, setBancoBoleto] = useState<"ITAU" | "CORA">("ITAU");
+  const [anexosLancamento, setAnexosLancamento] = useState<PendingAnexo[]>([]);
+  const [anexosBaixa, setAnexosBaixa] = useState<PendingAnexo[]>([]);
   const utils = trpc.useUtils();
+  const tituloAnexosGuid = editando?.guidLancamento ?? modalBaixa?.guidLancamento ?? "";
 
   const { data, isLoading } = trpc.contasReceber.listar.useQuery({ status: filtroStatus !== "todos" ? filtroStatus : undefined, dtInicio, dtFim, busca: busca || undefined, page: pagina, pageSize: 50 });
   const { data: totaisData } = trpc.contasReceber.totais.useQuery({ dtInicio, dtFim });
@@ -105,6 +122,10 @@ export default function ContasReceber() {
   const { data: centros = [] } = trpc.centroCusto.listarTodos.useQuery();
   const { data: contas = [] } = trpc.planoContas.listarTodas.useQuery();
   const { data: contasBancarias = [] } = trpc.contasBancarias.listarTodas.useQuery();
+  const { data: anexosTitulo = [] } = trpc.contasReceber.anexos.useQuery(
+    { guidLancamento: tituloAnexosGuid },
+    { enabled: !!tituloAnexosGuid }
+  );
   const { data: clientesSugestoes = [] } = trpc.contasReceber.buscarClientes.useQuery(
     { busca: buscaDevedor },
     { enabled: buscaDevedor.length >= 2 }
@@ -114,6 +135,14 @@ export default function ContasReceber() {
   const atualizar = trpc.contasReceber.atualizar.useMutation({ onSuccess: () => { utils.contasReceber.listar.invalidate(); toast.success("Lançamento atualizado!"); fecharModal(); } });
   const baixarMut = trpc.contasReceber.baixar.useMutation({ onSuccess: (r) => { utils.contasReceber.listar.invalidate(); utils.contasBancarias.listarTodas.invalidate(); toast.success(`Recebimento registrado! Status: ${r.status}`); setModalBaixa(null); setBaixa(BAIXA_INICIAL); } });
   const cancelar = trpc.contasReceber.cancelar.useMutation({ onSuccess: () => { utils.contasReceber.listar.invalidate(); toast.success("Lançamento cancelado!"); setModalCancelamento(null); setMotivoCancelamento(""); } });
+  const excluirAnexo = trpc.contasReceber.excluirAnexo.useMutation({
+    onSuccess: () => {
+      utils.contasReceber.anexos.invalidate();
+      utils.contasReceber.listar.invalidate();
+      toast.success("Anexo excluido.");
+    },
+    onError: (err) => toast.error(err.message),
+  });
   const emitirBoleto = trpc.contasReceber.emitirBoleto.useMutation({
     onSuccess: () => {
       utils.contasReceber.listar.invalidate();
@@ -150,7 +179,63 @@ export default function ContasReceber() {
     setForm({ ...FORM_INICIAL, descricao: l.DESCRICAO, guidDevedor: l.guidDevedor ?? "", nomeDevedor: l.NOMEDEVEDOR ?? "", valor: Number(l.VALOR), dtLancamento: l.dtLancamento?.slice(0,10) ?? hoje(), dtVencimento: l.dtVencimento?.slice(0,10) ?? hoje(), guidNatureza: l.guidNatureza ?? "", guidCentro: l.guidCentro ?? "", guidConta: l.guidConta ?? "", numerodoc: l.NUMERODOC ?? "", parcela: l.PARCELA, totalParcelas: l.TOTALPARCELAS, observacao: l.OBSERVACAO ?? "" });
     setModalAberto(true);
   }
-  function fecharModal() { setModalAberto(false); setEditando(null); setForm(FORM_INICIAL); setBuscaDevedor(""); setMostrarSugestoes(false); }
+  function limparPendentes(items: PendingAnexo[]) {
+    items.forEach((item) => item.previewUrl && URL.revokeObjectURL(item.previewUrl));
+  }
+
+  function fecharModal() {
+    limparPendentes(anexosLancamento);
+    setAnexosLancamento([]);
+    setModalAberto(false);
+    setEditando(null);
+    setForm(FORM_INICIAL);
+    setBuscaDevedor("");
+    setMostrarSugestoes(false);
+  }
+
+  function selecionarAnexos(files: FileList | null, destino: "lancamento" | "baixa") {
+    const validos: PendingAnexo[] = [];
+    Array.from(files ?? []).forEach((file) => {
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      if (!["jpg", "jpeg", "png", "webp", "pdf"].includes(ext ?? "")) {
+        toast.error(`${file.name}: tipo de arquivo nao permitido.`);
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error(`${file.name}: arquivo maior que 10MB.`);
+        return;
+      }
+      validos.push({
+        id: crypto.randomUUID(),
+        file,
+        previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
+      });
+    });
+    if (!validos.length) return;
+    if (destino === "lancamento") setAnexosLancamento((prev) => [...prev, ...validos]);
+    else setAnexosBaixa((prev) => [...prev, ...validos]);
+  }
+
+  function removerPendente(id: string, destino: "lancamento" | "baixa") {
+    const setter = destino === "lancamento" ? setAnexosLancamento : setAnexosBaixa;
+    setter((prev) => {
+      const item = prev.find((x) => x.id === id);
+      if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      return prev.filter((x) => x.id !== id);
+    });
+  }
+
+  async function uploadAnexos(guidContaReceber: string, tipo: "LANCAMENTO" | "RECEBIMENTO", anexos: PendingAnexo[], guidRecebimento?: string | null) {
+    if (!anexos.length) return;
+    const formData = new FormData();
+    formData.append("guidContaReceber", guidContaReceber);
+    formData.append("tipo", tipo);
+    if (guidRecebimento) formData.append("guidRecebimento", guidRecebimento);
+    anexos.forEach((anexo) => formData.append("arquivos", anexo.file));
+    const resp = await fetch("/api/financeiro/anexos/upload", { method: "POST", body: formData, credentials: "include" });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(json.message ?? "Falha ao enviar anexos.");
+  }
 
   function salvar() {
     if (!form.descricao.trim()) { toast.error("Informe a descrição"); return; }
@@ -161,15 +246,47 @@ export default function ContasReceber() {
     if (!form.guidCentro) { toast.error("Selecione o centro de custo"); return; }
     if (!form.guidConta) { toast.error("Selecione a conta da receita"); return; }
     const payload = { ...form, numeroDoc: form.numerodoc || undefined, guidDevedor: form.guidDevedor || undefined, guidNatureza: form.guidNatureza, guidCentro: form.guidCentro, guidConta: form.guidConta };
-    if (editando) atualizar.mutate({ ...payload, guidLancamento: editando.guidLancamento });
-    else criar.mutate(payload);
+    const anexos = [...anexosLancamento];
+    const onSuccess = async (guidLancamento: string) => {
+      try {
+        await uploadAnexos(guidLancamento, "LANCAMENTO", anexos);
+        utils.contasReceber.anexos.invalidate();
+        utils.contasReceber.listar.invalidate();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Falha ao enviar anexos.");
+      } finally {
+        limparPendentes(anexos);
+        setAnexosLancamento([]);
+      }
+    };
+    if (editando) atualizar.mutate({ ...payload, guidLancamento: editando.guidLancamento }, { onSuccess: () => void onSuccess(editando.guidLancamento) });
+    else criar.mutate(payload, { onSuccess: (r) => void onSuccess(r.guidLancamento) });
   }
 
   function registrarBaixa() {
     if (!modalBaixa) return;
     if (!baixa.valorRecebido || baixa.valorRecebido <= 0) { toast.error("Informe o valor recebido"); return; }
     if (!baixa.contaBancaria) { toast.error("Selecione a conta/caixa do recebimento"); return; }
-    baixarMut.mutate({ guidLancamento: modalBaixa.guidLancamento, ...baixa });
+    const anexos = [...anexosBaixa];
+    baixarMut.mutate({ guidLancamento: modalBaixa.guidLancamento, ...baixa }, {
+      onSuccess: async (r) => {
+        try {
+          await uploadAnexos(modalBaixa.guidLancamento, "RECEBIMENTO", anexos, r.guidRecebimento);
+          utils.contasReceber.anexos.invalidate();
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Falha ao enviar comprovantes.");
+        } finally {
+          limparPendentes(anexos);
+          setAnexosBaixa([]);
+          utils.contasReceber.listar.invalidate();
+          utils.contasBancarias.listarTodas.invalidate();
+          toast.success(`Recebimento registrado! Status: ${r.status}`);
+          setModalBaixa(null);
+          setBaixa(BAIXA_INICIAL);
+        }
+      },
+      onError: (err) => toast.error(err.message),
+    });
   }
 
   function confirmarCancelamento() {
@@ -271,14 +388,15 @@ export default function ContasReceber() {
                 <th className="px-4 py-3 text-center">Parcela</th>
                 <th className="px-4 py-3 text-center">Status</th>
                 <th className="px-4 py-3 text-center">Boleto</th>
+                <th className="px-4 py-3 text-center">Anexos</th>
                 <th className="px-4 py-3 text-center">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {isLoading ? (
-                <tr><td colSpan={10} className="p-8 text-center text-muted-foreground">Carregando...</td></tr>
+                <tr><td colSpan={11} className="p-8 text-center text-muted-foreground">Carregando...</td></tr>
               ) : itens.length === 0 ? (
-                <tr><td colSpan={10} className="p-12 text-center">
+                <tr><td colSpan={11} className="p-12 text-center">
                   <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
                   <p className="text-muted-foreground">Nenhum lançamento encontrado</p>
                   <Button variant="outline" className="mt-4" onClick={abrirNova}><Plus className="h-4 w-4 mr-2" /> Novo Lançamento</Button>
@@ -309,6 +427,11 @@ export default function ContasReceber() {
                       {l.boletoBanco && <span className="text-[10px] text-muted-foreground">{l.boletoBanco}</span>}
                       {l.boletoMensagemErro && <span className="text-[10px] text-red-400 max-w-28 truncate" title={l.boletoMensagemErro}>{l.boletoMensagemErro}</span>}
                     </div>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {Number(l.qtdAnexos ?? 0) > 0 ? (
+                      <Badge variant="outline" className="gap-1 text-blue-400 border-blue-500/30"><Paperclip className="h-3 w-3" />{l.qtdAnexos}</Badge>
+                    ) : <span className="text-xs text-muted-foreground">-</span>}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1 justify-center">
@@ -503,6 +626,41 @@ export default function ContasReceber() {
                 <Label>Observação</Label>
                 <Textarea placeholder="Observações..." value={form.observacao ?? ""} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} rows={2} />
               </div>
+              <div className="sm:col-span-2 space-y-3 rounded-lg border border-white/10 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">ANEXOS</p>
+                    <p className="text-xs text-muted-foreground">JPG, JPEG, PNG, WEBP ou PDF ate 10MB.</p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" className="gap-2" asChild>
+                    <label className="cursor-pointer"><Paperclip className="h-4 w-4" /> Anexar<input type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={(e) => { selecionarAnexos(e.target.files, "lancamento"); e.currentTarget.value = ""; }} /></label>
+                  </Button>
+                </div>
+                {anexosLancamento.length > 0 && (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {anexosLancamento.map((anexo) => (
+                      <div key={anexo.id} className="flex items-center gap-3 rounded-md border border-white/10 p-2">
+                        {anexo.previewUrl ? <img src={anexo.previewUrl} className="h-12 w-12 rounded object-cover" /> : <FileText className="h-10 w-10 text-muted-foreground" />}
+                        <div className="min-w-0 flex-1"><p className="truncate text-sm">{anexo.file.name}</p><p className="text-xs text-muted-foreground">{fmtBytes(anexo.file.size)}</p></div>
+                        <Button type="button" variant="ghost" size="icon" onClick={() => removerPendente(anexo.id, "lancamento")}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {(anexosTitulo as AnexoFinanceiro[]).length > 0 && (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {(anexosTitulo as AnexoFinanceiro[]).map((anexo) => (
+                      <div key={anexo.guidAnexo} className="flex items-center gap-3 rounded-md border border-white/10 p-2">
+                        {isImagem(anexo.nomeArquivo) ? <img src={anexoUrl(anexo.guidAnexo)} className="h-12 w-12 rounded object-cover" /> : <FileText className="h-10 w-10 text-muted-foreground" />}
+                        <div className="min-w-0 flex-1"><p className="truncate text-sm">{anexo.nomeArquivo}</p><p className="text-xs text-muted-foreground">{anexo.tipo} | {anexo.usuarioCadastro ?? "-"} | {anexo.dataCadastro}</p></div>
+                        <Button type="button" variant="ghost" size="icon" onClick={() => window.open(anexoUrl(anexo.guidAnexo), "_blank", "noopener,noreferrer")}><Eye className="h-4 w-4" /></Button>
+                        <Button type="button" variant="ghost" size="icon" asChild><a href={anexoUrl(anexo.guidAnexo, true)}><Download className="h-4 w-4" /></a></Button>
+                        <Button type="button" variant="ghost" size="icon" onClick={() => excluirAnexo.mutate({ guidAnexo: anexo.guidAnexo })}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -567,6 +725,28 @@ export default function ContasReceber() {
                 <div className="col-span-2 space-y-1.5">
                   <Label>Observação</Label>
                   <Textarea rows={2} value={baixa.observacao} onChange={e => setBaixa(b => ({ ...b, observacao: e.target.value }))} />
+                </div>
+                <div className="col-span-2 space-y-3 rounded-lg border border-white/10 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">Comprovantes do recebimento</p>
+                      <p className="text-xs text-muted-foreground">PIX, TED, recibos, boletos ou comprovantes assinados.</p>
+                    </div>
+                    <Button type="button" variant="outline" size="sm" className="gap-2" asChild>
+                      <label className="cursor-pointer"><Paperclip className="h-4 w-4" /> Anexar Comprovante<input type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={(e) => { selecionarAnexos(e.target.files, "baixa"); e.currentTarget.value = ""; }} /></label>
+                    </Button>
+                  </div>
+                  {anexosBaixa.length > 0 && (
+                    <div className="grid gap-2">
+                      {anexosBaixa.map((anexo) => (
+                        <div key={anexo.id} className="flex items-center gap-3 rounded-md border border-white/10 p-2">
+                          {anexo.previewUrl ? <img src={anexo.previewUrl} className="h-12 w-12 rounded object-cover" /> : <FileText className="h-10 w-10 text-muted-foreground" />}
+                          <div className="min-w-0 flex-1"><p className="truncate text-sm">{anexo.file.name}</p><p className="text-xs text-muted-foreground">{fmtBytes(anexo.file.size)}</p></div>
+                          <Button type="button" variant="ghost" size="icon" onClick={() => removerPendente(anexo.id, "baixa")}><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

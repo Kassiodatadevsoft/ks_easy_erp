@@ -14,8 +14,8 @@ function onlyDigits(value: string | null | undefined) {
 
 function isDataDevAdmin(session: Awaited<ReturnType<typeof verifyKsSession>>) {
   return Boolean(
-    session?.isGerente &&
-    onlyDigits(session.entDocumento) === CNPJ_MASTER
+    onlyDigits(session?.entDocumento) === CNPJ_MASTER ||
+    onlyDigits(session?.documento) === CNPJ_MASTER
   );
 }
 
@@ -50,7 +50,11 @@ export const empresasRouter = router({
       );
 
       const docLimpo = onlyDigits(rows[0]?.DOCUMENTO);
-      return { isMaster: session.isGerente && docLimpo === CNPJ_MASTER };
+      return {
+        isMaster:
+          isDataDevAdmin(session) ||
+          docLimpo === CNPJ_MASTER,
+      };
     }),
 
   /**
@@ -94,16 +98,46 @@ export const empresasRouter = router({
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const [countResult, rows] = await Promise.all([
-        querySql<{ total: number }>(`SELECT COUNT(*) AS total FROM KS0002.KS00001 c ${where}`, params as any),
+        querySql<{ total: number }>(`
+          WITH empresas_unicas AS (
+            SELECT
+              c.GUIDPESSOA,
+              ROW_NUMBER() OVER (
+                PARTITION BY REPLACE(REPLACE(REPLACE(c.DOCUMENTO,'.',''),'-',''),'/','')
+                ORDER BY c.DATACADASTRO DESC, c.CODIGO DESC
+              ) AS rn
+            FROM KS0002.KS00001 c
+            ${where}
+          )
+          SELECT COUNT(*) AS total FROM empresas_unicas WHERE rn = 1
+        `, params as any),
         querySql(
-          `SELECT c.GUIDPESSOA, c.CODIGO, c.CODENTIDADE, c.NOME, c.FANTASIA, c.DOCUMENTO,
-            c.CODTIPODOCUMENTO, c.TELEFONE, c.CELULAR, c.EMAIL,
-            c.SITUACAO, c.DATACADASTRO, c.ULTIMAALTERACAO,
-            c.CADEMPRESA, c.CADCLIENTE, c.CADFORNECEDOR,
-            cid.CIDADE, cid.UF
-           FROM KS0002.KS00001 c
-           LEFT JOIN KS0000.KS00005 cid ON cid.CODCIDADE = c.CODCIDADE
-           ${where}
+          `WITH empresas_unicas AS (
+            SELECT
+              c.GUIDPESSOA, c.CODIGO, c.CODENTIDADE, c.NOME, c.FANTASIA, c.DOCUMENTO,
+              c.CODTIPODOCUMENTO, c.TELEFONE, c.CELULAR, c.EMAIL,
+              c.SITUACAO, c.DATACADASTRO, c.ULTIMAALTERACAO,
+              c.CADEMPRESA, c.CADCLIENTE, c.CADFORNECEDOR, c.CODCIDADE,
+              ROW_NUMBER() OVER (
+                PARTITION BY REPLACE(REPLACE(REPLACE(c.DOCUMENTO,'.',''),'-',''),'/','')
+                ORDER BY c.DATACADASTRO DESC, c.CODIGO DESC
+              ) AS rn
+            FROM KS0002.KS00001 c
+            ${where}
+           )
+           SELECT c.GUIDPESSOA, c.CODIGO, c.CODENTIDADE, c.NOME, c.FANTASIA, c.DOCUMENTO,
+             c.CODTIPODOCUMENTO, c.TELEFONE, c.CELULAR, c.EMAIL,
+             c.SITUACAO, c.DATACADASTRO, c.ULTIMAALTERACAO,
+             c.CADEMPRESA, c.CADCLIENTE, c.CADFORNECEDOR,
+             cid.CIDADE, cid.UF
+           FROM empresas_unicas c
+           OUTER APPLY (
+             SELECT TOP 1 CIDADE, UF
+             FROM KS0000.KS00005 cid
+             WHERE cid.CODCIDADE = c.CODCIDADE
+             ORDER BY cid.CODCIDADE
+           ) cid
+           WHERE c.rn = 1
            ORDER BY c.NOME
            OFFSET @OFFSET ROWS FETCH NEXT @LIMIT ROWS ONLY`,
           params as any
@@ -141,7 +175,12 @@ export const empresasRouter = router({
       const rows = await querySql(
         `SELECT c.*, cid.CIDADE, cid.UF, cid.CIDADE + '-' + cid.UF AS DESCCIDADE
          FROM KS0002.KS00001 c
-         LEFT JOIN KS0000.KS00005 cid ON cid.CODCIDADE = c.CODCIDADE
+         OUTER APPLY (
+           SELECT TOP 1 CIDADE, UF
+           FROM KS0000.KS00005 cid
+           WHERE cid.CODCIDADE = c.CODCIDADE
+           ORDER BY cid.CODCIDADE
+         ) cid
          ${where}`,
         params as any
       );
@@ -271,6 +310,26 @@ export const empresasRouter = router({
     .mutation(async ({ input, ctx }) => {
       const session = await getKsSession(ctx.req);
       const dataDevAdmin = isDataDevAdmin(session);
+      const documentoLimpo = onlyDigits(input.documento);
+
+      const existente = await querySql<{ GUIDPESSOA: string; CODIGO: number; NOME: string }>(
+        `SELECT TOP 1 GUIDPESSOA, CODIGO, NOME
+         FROM KS0002.KS00001
+         WHERE CADEMPRESA = 1
+           AND REPLACE(REPLACE(REPLACE(DOCUMENTO,'.',''),'-',''),'/','') = @DOCUMENTO
+           ${dataDevAdmin ? "" : "AND GUIDENTIDADE = @GUIDENTIDADE"}`,
+        {
+          DOCUMENTO: { type: sql.VarChar(20), value: documentoLimpo },
+          ...(dataDevAdmin ? {} : { GUIDENTIDADE: { type: sql.UniqueIdentifier, value: session.guidEntidade } }),
+        }
+      );
+
+      if (existente[0]) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `Empresa ja cadastrada com este documento. Codigo: ${existente[0].CODIGO} - ${existente[0].NOME}`,
+        });
+      }
 
       const maxCod = await querySql<{ maxCod: number }>(
         dataDevAdmin

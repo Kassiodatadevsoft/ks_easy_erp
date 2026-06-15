@@ -5,6 +5,12 @@ import { getSqlPool, querySql, sql } from "../sqlserver";
 import { COOKIE_NAME } from "@shared/const";
 import { verifyKsSession } from "./ksAuthRouter";
 
+const ZERO_GUID = "00000000-0000-0000-0000-000000000000";
+
+function moneyMessage(value: number) {
+  return `R$ ${Math.abs(value).toFixed(2).replace(".", ",")}`;
+}
+
 async function getKsSession(req: { headers: { cookie?: string } }) {
   const cookies = req.headers.cookie ?? "";
   const match = cookies.match(new RegExp(`${COOKIE_NAME}=([^;]+)`));
@@ -13,7 +19,7 @@ async function getKsSession(req: { headers: { cookie?: string } }) {
   return session;
 }
 
-async function ensureVendasTables() {
+export async function ensureVendasTables() {
   await querySql(`
     IF SCHEMA_ID('KS0005') IS NULL EXEC('CREATE SCHEMA KS0005');
 
@@ -96,6 +102,7 @@ async function ensureVendasTables() {
     BEGIN
       IF COL_LENGTH('KS0005.KS00018','GUIDPAGAMENTO') IS NULL ALTER TABLE KS0005.KS00018 ADD GUIDPAGAMENTO uniqueidentifier NULL;
       IF COL_LENGTH('KS0005.KS00018','GUIDPAGAMENTOVENDA') IS NULL ALTER TABLE KS0005.KS00018 ADD GUIDPAGAMENTOVENDA uniqueidentifier NULL;
+      IF COL_LENGTH('KS0005.KS00018','GUIDLANCAMENTO') IS NULL ALTER TABLE KS0005.KS00018 ADD GUIDLANCAMENTO uniqueidentifier NULL;
       IF COL_LENGTH('KS0005.KS00018','GUIDCAIXA') IS NULL ALTER TABLE KS0005.KS00018 ADD GUIDCAIXA uniqueidentifier NULL;
       IF COL_LENGTH('KS0005.KS00018','DESCRICAOFORMAPAGAMENTO') IS NULL ALTER TABLE KS0005.KS00018 ADD DESCRICAOFORMAPAGAMENTO varchar(100) NULL;
       IF COL_LENGTH('KS0005.KS00018','VALORPAGO') IS NULL ALTER TABLE KS0005.KS00018 ADD VALORPAGO numeric(18,4) NOT NULL CONSTRAINT DF_KS00018_VALORPAGO_FINAL DEFAULT 0;
@@ -167,6 +174,31 @@ async function ensureVendasTables() {
       IF COL_LENGTH('KS0005.KS00016','OBSERVACAO') IS NULL ALTER TABLE KS0005.KS00016 ADD OBSERVACAO varchar(max) NULL;
       IF COL_LENGTH('KS0005.KS00016','ULTIMAALTERACAO') IS NULL ALTER TABLE KS0005.KS00016 ADD ULTIMAALTERACAO datetime NULL;
       IF COL_LENGTH('KS0005.KS00016','SINCRONIZADO') IS NULL ALTER TABLE KS0005.KS00016 ADD SINCRONIZADO bit NOT NULL CONSTRAINT DF_KS00016_SINCRONIZADO_FINAL DEFAULT 0;
+      IF COL_LENGTH('KS0005.KS00016','CODPREVENDA') IS NULL ALTER TABLE KS0005.KS00016 ADD CODPREVENDA int NULL;
+      IF COL_LENGTH('KS0005.KS00016','ORIGEM') IS NULL ALTER TABLE KS0005.KS00016 ADD ORIGEM varchar(10) NULL;
+      IF COL_LENGTH('KS0005.KS00016','GUIDNATUREZAOPERACAO') IS NULL ALTER TABLE KS0005.KS00016 ADD GUIDNATUREZAOPERACAO uniqueidentifier NULL;
+      IF COL_LENGTH('KS0005.KS00016','NATUREZAOPERACAO') IS NULL ALTER TABLE KS0005.KS00016 ADD NATUREZAOPERACAO varchar(100) NULL;
+      IF COL_LENGTH('KS0005.KS00016','TIPODOCUMENTOFISCAL') IS NULL ALTER TABLE KS0005.KS00016 ADD TIPODOCUMENTOFISCAL varchar(30) NULL;
+      IF COL_LENGTH('KS0005.KS00016','MODELOFISCAL') IS NULL ALTER TABLE KS0005.KS00016 ADD MODELOFISCAL int NULL;
+      IF COL_LENGTH('KS0005.KS00016','CHAVE') IS NULL ALTER TABLE KS0005.KS00016 ADD CHAVE varchar(44) NULL;
+      IF COL_LENGTH('KS0005.KS00016','PROTOCOLO') IS NULL ALTER TABLE KS0005.KS00016 ADD PROTOCOLO varchar(60) NULL;
+      IF COL_LENGTH('KS0005.KS00016','STATUSNFE') IS NULL ALTER TABLE KS0005.KS00016 ADD STATUSNFE varchar(30) NULL;
+      IF COL_LENGTH('KS0005.KS00016','XMLNFE') IS NULL ALTER TABLE KS0005.KS00016 ADD XMLNFE nvarchar(max) NULL;
+      IF COL_LENGTH('KS0005.KS00016','DATAEMISSAONFE') IS NULL ALTER TABLE KS0005.KS00016 ADD DATAEMISSAONFE datetime NULL;
+      IF COL_LENGTH('KS0005.KS00016','MOTIVOCANCELAMENTO') IS NULL ALTER TABLE KS0005.KS00016 ADD MOTIVOCANCELAMENTO varchar(500) NULL;
+    END;
+
+    IF OBJECT_ID('KS0005.KS00017', 'U') IS NOT NULL
+    BEGIN
+      IF COL_LENGTH('KS0005.KS00017','GUIDITEMVENDA') IS NULL ALTER TABLE KS0005.KS00017 ADD GUIDITEMVENDA uniqueidentifier NULL;
+      IF COL_LENGTH('KS0005.KS00017','GUIDPRODUTO') IS NULL ALTER TABLE KS0005.KS00017 ADD GUIDPRODUTO uniqueidentifier NULL;
+      IF COL_LENGTH('KS0005.KS00017','GUIDIMEI') IS NULL ALTER TABLE KS0005.KS00017 ADD GUIDIMEI uniqueidentifier NULL;
+      IF COL_LENGTH('KS0005.KS00017','DESCONTOPERCENTUAL') IS NULL ALTER TABLE KS0005.KS00017 ADD DESCONTOPERCENTUAL numeric(18,4) NOT NULL CONSTRAINT DF_KS00017_DESCONTOPERCENTUAL_FINAL DEFAULT 0;
+      IF COL_LENGTH('KS0005.KS00017','DESCONTOVALOR') IS NULL ALTER TABLE KS0005.KS00017 ADD DESCONTOVALOR numeric(18,4) NOT NULL CONSTRAINT DF_KS00017_DESCONTOVALOR_FINAL DEFAULT 0;
+      IF COL_LENGTH('KS0005.KS00017','TOTALITEM') IS NULL ALTER TABLE KS0005.KS00017 ADD TOTALITEM numeric(18,4) NOT NULL CONSTRAINT DF_KS00017_TOTALITEM_FINAL DEFAULT 0;
+      IF COL_LENGTH('KS0005.KS00017','FAIXAPRECOAPLICADA') IS NULL ALTER TABLE KS0005.KS00017 ADD FAIXAPRECOAPLICADA varchar(100) NULL;
+      IF COL_LENGTH('KS0005.KS00017','ULTIMAALTERACAO') IS NULL ALTER TABLE KS0005.KS00017 ADD ULTIMAALTERACAO datetime NULL;
+      IF COL_LENGTH('KS0005.KS00017','SINCRONIZADO') IS NULL ALTER TABLE KS0005.KS00017 ADD SINCRONIZADO bit NOT NULL CONSTRAINT DF_KS00017_SINCRONIZADO_FINAL DEFAULT 0;
     END;
   `);
 }
@@ -230,6 +262,16 @@ export const vendasOperacaoRouter = router({
     try {
       const request = () => new sql.Request(tx);
 
+      if (!input.itens.length) throw new Error("Inclua ao menos um produto.");
+      if (input.totais.totalLiquido <= 0) throw new Error("Total da venda deve ser maior que zero.");
+      for (const item of input.itens) {
+        if (item.quantidade <= 0) throw new Error(`Quantidade invalida para o produto ${item.descricao}.`);
+        if (item.precoVenda <= 0) throw new Error(`Valor unitario invalido para o produto ${item.descricao}.`);
+      }
+      if (!input.pagamentos.length) throw new Error("Selecione uma forma de pagamento valida.");
+      const diferencaPagamento = input.totais.pago - input.totais.totalLiquido;
+      if (diferencaPagamento < -0.009) throw new Error(`Falta receber ${moneyMessage(diferencaPagamento)}.`);
+
       const caixa = await request()
         .input("guidcaixa", sql.UniqueIdentifier, input.guidCaixa)
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
@@ -239,13 +281,14 @@ export const vendasOperacaoRouter = router({
           FROM KS0005.KS_CAIXA_MOVIMENTO WITH (UPDLOCK, HOLDLOCK)
           WHERE GUIDCAIXA=@guidcaixa AND GUIDENTIDADE=@guidentidade AND GUIDUSUARIO=@guidusuario AND SITUACAO='ABERTO'
         `);
-      if (!caixa.recordset[0]) throw new Error("Caixa invalido ou fechado. Abra um caixa antes de finalizar a venda.");
+      if (!caixa.recordset[0]) throw new Error("Abra o caixa antes de finalizar a venda.");
 
       const vendedor = await request()
         .input("guidvendedor", sql.UniqueIdentifier, input.guidVendedor)
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-        .query("SELECT TOP 1 GUIDPESSOA FROM KS0002.KS00001 WHERE GUIDPESSOA=@guidvendedor AND GUIDENTIDADE=@guidentidade AND CADUSUARIO=1 AND SITUACAO='A'");
-      if (!vendedor.recordset[0]) throw new Error("Selecione um vendedor ativo para continuar.");
+        .query("SELECT TOP 1 GUIDPESSOA, ISNULL(COMISSAO,0) AS COMISSAO FROM KS0002.KS00001 WHERE GUIDPESSOA=@guidvendedor AND GUIDENTIDADE=@guidentidade AND CADUSUARIO=1 AND SITUACAO='A'");
+      const vendedorRow = vendedor.recordset[0] as { GUIDPESSOA: string; COMISSAO: number } | undefined;
+      if (!vendedorRow) throw new Error("Selecione um vendedor ativo para continuar.");
 
       const formasFinanceiras = new Map<string, {
         guidConta: string | null;
@@ -284,12 +327,20 @@ export const vendasOperacaoRouter = router({
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
         .query("SELECT ISNULL(MAX(NUMEROVENDA),0)+1 AS NUMEROVENDA FROM KS0005.KS00016 WHERE GUIDENTIDADE=@guidentidade");
       const numeroVenda = Number(numeroVendaResult.recordset[0]?.NUMEROVENDA ?? 1);
+      const empresa = await request()
+        .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
+        .query("SELECT TOP 1 CODENTIDADE FROM KS0002.KS00001 WHERE GUIDENTIDADE=@guidentidade AND CADEMPRESA=1 AND SITUACAO='A'");
+      const codEntidade = Number(empresa.recordset[0]?.CODENTIDADE ?? 0);
+      if (!codEntidade) throw new Error("Empresa logada sem CODENTIDADE configurado.");
+      const guidPessoas = input.clientePadrao ? ZERO_GUID : input.guidCliente;
 
       await request()
         .input("guidvenda", sql.UniqueIdentifier, input.guidVenda)
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
+        .input("codentidade", sql.Int, codEntidade)
         .input("numerovenda", sql.Int, numeroVenda)
         .input("guidcliente", sql.UniqueIdentifier, input.clientePadrao ? null : input.guidCliente)
+        .input("guidpessoas", sql.UniqueIdentifier, guidPessoas)
         .input("codcliente", sql.Int, input.clientePadrao ? null : input.codCliente)
         .input("clientepadrao", sql.Bit, input.clientePadrao ? 1 : 0)
         .input("guidvendedor", sql.UniqueIdentifier, input.guidVendedor)
@@ -306,30 +357,44 @@ export const vendasOperacaoRouter = router({
         .input("valorpago", sql.Decimal(18, 4), input.totais.pago)
         .input("troco", sql.Decimal(18, 4), input.totais.troco)
         .input("observacao", sql.VarChar(sql.MAX), input.observacao ?? null)
+        .input("tipooperacao", sql.Int, 1)
+        .input("situacao", sql.VarChar(1), "F")
         .query(`
           MERGE KS0005.KS00016 AS t
           USING (SELECT @guidvenda AS GUIDVENDA) AS s ON t.GUIDVENDA=s.GUIDVENDA
           WHEN MATCHED THEN UPDATE SET
+            CODENTIDADE=@codentidade, CODPREVENDA=@numerovenda, GUIDPESSOAS=@guidpessoas, CODTRANSACAO=@numerovenda,
             GUIDCLIENTE=@guidcliente, CODCLIENTE=@codcliente, CLIENTEPADRAO=@clientepadrao,
             GUIDVENDEDOR=@guidvendedor, CODVENDEDOR=@codvendedor, GUIDCAIXA=@guidcaixa,
             NUMEROCAIXA=@numerocaixa, GUIDUSUARIOCAIXA=@guidusuariocaixa, CODCAIXA=@codcaixa,
-            DATAVENDA=GETDATE(), TIPOOPERACAO='VENDA', SITUACAO='FINALIZADA',
+            DATAVENDA=GETDATE(), TIPOOPERACAO=@tipooperacao, SITUACAO=@situacao,
             TOTALPRODUTOS=@totalprodutos, DESCONTOVALOR=@descontovalor, DESCONTOPERCENTUAL=@descontopercentual,
+            VALORPRODUTOS=@totalprodutos, DESCONTO=@descontovalor, VALORFINAL=@totalvenda,
             ACRESCIMOVALOR=@acrescimovalor, TOTALVENDA=@totalvenda, VALORPAGO=@valorpago, TROCO=@troco,
             OBSERVACAO=@observacao, ULTIMAALTERACAO=GETDATE(), SINCRONIZADO=0
           WHEN NOT MATCHED THEN INSERT
-            (GUIDVENDA,GUIDENTIDADE,NUMEROVENDA,GUIDCLIENTE,CODCLIENTE,CLIENTEPADRAO,GUIDVENDEDOR,CODVENDEDOR,
-             GUIDCAIXA,NUMEROCAIXA,GUIDUSUARIOCAIXA,CODCAIXA,DATAVENDA,TIPOOPERACAO,SITUACAO,
+            (CODENTIDADE,CODPREVENDA,GUIDVENDA,GUIDENTIDADE,GUIDPESSOAS,CODTRANSACAO,
+             NUMEROVENDA,GUIDCLIENTE,CODCLIENTE,CLIENTEPADRAO,GUIDVENDEDOR,CODVENDEDOR,
+             GUIDCAIXA,NUMEROCAIXA,GUIDUSUARIOCAIXA,CODCAIXA,DATAVENDA,DATAEMISSAO,TIPOOPERACAO,SITUACAO,
+             VALORPRODUTOS,VALORFRETE,OUTRASDESPESAS,VALORIPI,DESCONTO,VALORICMS,BASEICMS,VALORSEGURO,
+             VALORICMSST,BASEICMSST,VALORFINAL,VALORPIS,VALORCOFINS,VALORFINANCEIRA,FATURAR,
              TOTALPRODUTOS,DESCONTOVALOR,DESCONTOPERCENTUAL,ACRESCIMOVALOR,TOTALVENDA,VALORPAGO,TROCO,OBSERVACAO,ULTIMAALTERACAO,SINCRONIZADO)
           VALUES
-            (@guidvenda,@guidentidade,@numerovenda,@guidcliente,@codcliente,@clientepadrao,@guidvendedor,@codvendedor,
-             @guidcaixa,@numerocaixa,@guidusuariocaixa,@codcaixa,GETDATE(),'VENDA','FINALIZADA',
+            (@codentidade,@numerovenda,@guidvenda,@guidentidade,@guidpessoas,@numerovenda,
+             @numerovenda,@guidcliente,@codcliente,@clientepadrao,@guidvendedor,@codvendedor,
+             @guidcaixa,@numerocaixa,@guidusuariocaixa,@codcaixa,GETDATE(),GETDATE(),@tipooperacao,@situacao,
+             @totalprodutos,0,0,0,@descontovalor,0,0,0,
+             0,0,@totalvenda,0,0,0,0,
              @totalprodutos,@descontovalor,@descontopercentual,@acrescimovalor,@totalvenda,@valorpago,@troco,@observacao,GETDATE(),0);
         `);
 
       await request().input("guidvenda", sql.UniqueIdentifier, input.guidVenda).query("DELETE FROM KS0005.KS00017 WHERE GUIDVENDA=@guidvenda");
       await request().input("guidvenda", sql.UniqueIdentifier, input.guidVenda).query("DELETE FROM KS0005.KS00018 WHERE GUIDVENDA=@guidvenda");
       await request().input("guidvenda", sql.UniqueIdentifier, input.guidVenda).query("DELETE FROM KS0005.KS_CAIXA_MOVIMENTO_ITEM WHERE GUIDVENDA=@guidvenda");
+      await request()
+        .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
+        .input("guidvendaTexto", sql.NVarChar(80), `%GUIDVENDA: ${input.guidVenda}%`)
+        .query("DELETE FROM KS0005.KS00001 WHERE GUIDENTIDADE=@guidentidade AND TIPO='COMISSAO' AND STATUS='ABERTO' AND OBSERVACAO LIKE @guidvendaTexto");
 
       for (let index = 0; index < input.itens.length; index += 1) {
         const item = input.itens[index];
@@ -353,11 +418,15 @@ export const vendasOperacaoRouter = router({
           .input("guiditem", sql.UniqueIdentifier, crypto.randomUUID())
           .input("guidvenda", sql.UniqueIdentifier, input.guidVenda)
           .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
+          .input("codentidade", sql.Int, codEntidade)
+          .input("codprevenda", sql.Int, numeroVenda)
+          .input("guidvendedor", sql.UniqueIdentifier, input.guidVendedor)
           .input("guidproduto", sql.UniqueIdentifier, item.guidProduto)
           .input("codproduto", sql.Int, item.codProduto)
           .input("guidimei", sql.UniqueIdentifier, item.guidImei ?? null)
           .input("item", sql.Int, index + 1)
           .input("quantidade", sql.Decimal(18, 4), item.quantidade)
+          .input("estoque", sql.Decimal(18, 4), Number(produtoRow.ESTOQUE ?? 0))
           .input("precocusto", sql.Decimal(18, 4), item.precoCusto)
           .input("precovenda", sql.Decimal(18, 4), item.precoVenda)
           .input("precofinal", sql.Decimal(18, 4), item.precoFinal)
@@ -365,15 +434,27 @@ export const vendasOperacaoRouter = router({
           .input("descontopercentual", sql.Decimal(18, 4), item.descontoPercentual)
           .input("descontovalor", sql.Decimal(18, 4), item.descontoValor)
           .input("totalitem", sql.Decimal(18, 4), item.totalItem)
+          .input("comissaozero", sql.Decimal(18, 4), 0)
+          .input("cfop", sql.VarChar(4), "5102")
           .input("faixa", sql.VarChar(100), item.faixaPrecoAplicada ?? null)
           .input("observacao", sql.VarChar(sql.MAX), item.imeiLabel ?? null)
           .query(`
             INSERT INTO KS0005.KS00017
-              (GUIDITEMVENDA,GUIDVENDA,GUIDENTIDADE,GUIDPRODUTO,CODPRODUTO,GUIDIMEI,ITEM,QUANTIDADE,PRECOCUSTO,PRECOVENDA,
-               PRECOFINAL,PROMOCAO,DESCONTOPERCENTUAL,DESCONTOVALOR,TOTALITEM,FAIXAPRECOAPLICADA,OBSERVACAO,ULTIMAALTERACAO,SINCRONIZADO)
+              (CODENTIDADE,CODPREVENDA,GUIDITEMVENDA,GUIDVENDA,GUIDENTIDADE,GUIDVENDEDOR,
+               GUIDPRODUTO,CODPRODUTO,GUIDIMEI,ITEM,QUANTIDADE,ESTOQUE,PRECOCUSTO,PRECOVENDA,
+               PRECOFINAL,PROMOCAO,PORCENTAGEMCOMISSAO,COMISSAO,COMISSAOPAGA,
+               DESCONTOPERCENTUAL,DESCONTOVALOR,TOTALITEM,VALORTOTAL,CFOP,
+               BASEICMS,VALORICMS,PORCICMS,PORCIPI,VALORIPI,PORCPIS,VALORPIS,PORCPISST,VALORPISST,
+               PORCCOFINS,VALORCOFINS,PORCMVA,REDBASEICMS,REDBASEICMSST,BASEICMSST,PORCICMSST,VALORICMSST,
+               FATURAR,DTEMISSAO,FAIXAPRECOAPLICADA,OBSERVACAO,ULTIMAALTERACAO,SINCRONIZADO)
             VALUES
-              (@guiditem,@guidvenda,@guidentidade,@guidproduto,@codproduto,@guidimei,@item,@quantidade,@precocusto,@precovenda,
-               @precofinal,@promocao,@descontopercentual,@descontovalor,@totalitem,@faixa,@observacao,GETDATE(),0)
+              (@codentidade,@codprevenda,@guiditem,@guidvenda,@guidentidade,@guidvendedor,
+               @guidproduto,@codproduto,@guidimei,@item,@quantidade,@estoque,@precocusto,@precovenda,
+               @precofinal,@promocao,@comissaozero,@comissaozero,0,
+               @descontopercentual,@descontovalor,@totalitem,@totalitem,@cfop,
+               0,0,0,0,0,0,0,0,0,
+               0,0,0,0,0,0,0,0,
+               0,GETDATE(),@faixa,@observacao,GETDATE(),0)
           `);
 
         await request()
@@ -414,9 +495,9 @@ export const vendasOperacaoRouter = router({
           .input("parcelas", sql.Int, pagamento.parcelas)
           .query(`
             INSERT INTO KS0005.KS00018
-              (GUIDPAGAMENTO,GUIDPAGAMENTOVENDA,GUIDVENDA,GUIDCAIXA,GUIDENTIDADE,GUIDFORMAPAGAMENTO,CODFORMAPAGAMENTO,DESCRICAOFORMAPAGAMENTO,VALORPAGO,TROCO,PARCELAS,DATAHORA,SINCRONIZADO)
+              (GUIDPAGAMENTO,GUIDPAGAMENTOVENDA,GUIDVENDA,GUIDCAIXA,GUIDENTIDADE,GUIDFORMAPAGAMENTO,CODFORMAPAGAMENTO,DESCRICAOFORMAPAGAMENTO,VALORPAGO,TROCO,PARCELAS,DATAHORA,ULTIMAALTERACAO,SINCRONIZADO)
             VALUES
-              (@guidpagamento,@guidpagamento,@guidvenda,@guidcaixa,@guidentidade,@guidforma,@codforma,@descricao,@valorpago,@troco,@parcelas,GETDATE(),0)
+              (@guidpagamento,@guidpagamento,@guidvenda,@guidcaixa,@guidentidade,@guidforma,@codforma,@descricao,@valorpago,@troco,@parcelas,GETDATE(),GETDATE(),0)
           `);
 
         await request()
@@ -476,11 +557,41 @@ export const vendasOperacaoRouter = router({
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
         .query("UPDATE KS0005.KS_CAIXA_MOVIMENTO SET TOTALVENDAS=ISNULL(TOTALVENDAS,0)+@totalvendas, ULTIMAALTERACAO=GETDATE(), SINCRONIZADO=0 WHERE GUIDCAIXA=@guidcaixa AND GUIDENTIDADE=@guidentidade AND SITUACAO='ABERTO'");
 
+      const percentualComissao = Number(vendedorRow.COMISSAO ?? 0);
+      const valorComissao = Number(((input.totais.totalLiquido * percentualComissao) / 100).toFixed(2));
+      if (percentualComissao > 0 && valorComissao > 0) {
+        const hoje = new Date();
+        const competencia = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+        await request()
+          .input("guidmovimento", sql.UniqueIdentifier, crypto.randomUUID())
+          .input("guidfuncionario", sql.UniqueIdentifier, input.guidVendedor)
+          .input("tipo", sql.NVarChar(20), "COMISSAO")
+          .input("descricao", sql.NVarChar(200), `Comissao venda ${numeroVenda}`)
+          .input("valor", sql.Decimal(15, 2), valorComissao)
+          .input("datamovimento", sql.Date, hoje)
+          .input("competencia", sql.NVarChar(7), competencia)
+          .input("observacao", sql.NVarChar(500), `Comissao gerada automaticamente pela venda ${numeroVenda}. Percentual: ${percentualComissao.toFixed(4)}%. GUIDVENDA: ${input.guidVenda}`)
+          .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
+          .query(`
+            INSERT INTO KS0005.KS00001
+              (GUIDMOVIMENTO, GUIDFUNCIONARIO, TIPO, DESCRICAO, VALOR, DATAMOVIMENTO, COMPETENCIA, OBSERVACAO, GUIDENTIDADE)
+            VALUES
+              (@guidmovimento, @guidfuncionario, @tipo, @descricao, @valor, @datamovimento, @competencia, @observacao, @guidentidade)
+          `);
+      }
+
       await tx.commit();
       return {
         success: true,
+        sucesso: true,
+        mensagem: "Venda finalizada com sucesso.",
+        guidVenda: input.guidVenda,
+        CODPREVENDA: numeroVenda,
         numeroVenda,
+        total: input.totais.totalLiquido,
         dataHora: new Date().toISOString(),
+        comprovante: true,
+        impressao: true,
         empresa: {
           nomeFantasia: session.nomeEmpresa ?? "",
           razaoSocial: session.nomeEmpresa ?? "",

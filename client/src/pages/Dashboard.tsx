@@ -78,7 +78,6 @@ const QUICK_ACTIONS = [
   { label: "Nova Venda",         icon: ShoppingCart, path: "/vendas",                   color: "text-violet-600", bg: "bg-violet-50" },
   { label: "Contas a Pagar",     icon: CreditCard,   path: "/financeiro/pagar",         color: "text-red-600",    bg: "bg-red-50" },
   { label: "Contas a Receber",   icon: TrendingUp,   path: "/financeiro/receber",       color: "text-teal-600",   bg: "bg-teal-50" },
-  { label: "Pedidos",            icon: FileText,     path: "/pedidos",                  color: "text-indigo-600", bg: "bg-indigo-50" },
   { label: "Relatórios",         icon: BarChart3,    path: "/relatorios",               color: "text-slate-600",  bg: "bg-slate-100" },
 ];
 

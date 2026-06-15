@@ -25,13 +25,13 @@ export const fluxoCaixaRouter = router({
         .input("dtFim",        sql.NVarChar(10),             input.dtFim)
         .query(`
           SELECT
-            CONVERT(NVARCHAR(10), DATA, 23) AS DT,
-            SUM(CASE WHEN TIPO='R' THEN VALOR ELSE 0 END) AS ENTRADAS,
-            SUM(CASE WHEN TIPO='D' THEN VALOR ELSE 0 END) AS SAIDAS,
-            SUM(CASE WHEN TIPO='R' THEN VALOR ELSE -VALOR END) AS SALDO_DIA
-          FROM KS0003.KS00007
-          WHERE GUIDENTIDADE=@guidentidade AND DATA BETWEEN @dtInicio AND @dtFim
-          GROUP BY CONVERT(NVARCHAR(10), DATA, 23)
+            CONVERT(NVARCHAR(10), DTLANCAMENTO, 23) AS DT,
+            SUM(CASE WHEN TIPO='E' THEN VALOR ELSE 0 END) AS ENTRADAS,
+            SUM(CASE WHEN TIPO='S' THEN VALOR ELSE 0 END) AS SAIDAS,
+            SUM(CASE WHEN TIPO='E' THEN VALOR ELSE -VALOR END) AS SALDO_DIA
+          FROM KS0003.KS00010
+          WHERE GUIDENTIDADE=@guidentidade AND DTLANCAMENTO BETWEEN @dtInicio AND @dtFim
+          GROUP BY CONVERT(NVARCHAR(10), DTLANCAMENTO, 23)
           ORDER BY DT
         `);
       return r.recordset;
@@ -49,13 +49,13 @@ export const fluxoCaixaRouter = router({
         .input("dtFim",        sql.NVarChar(10),             input.dtFim)
         .query(`
           SELECT
-            ISNULL(SUM(CASE WHEN TIPO='R' THEN VALOR ELSE 0 END), 0) AS TOTAL_ENTRADAS,
-            ISNULL(SUM(CASE WHEN TIPO='D' THEN VALOR ELSE 0 END), 0) AS TOTAL_SAIDAS,
-            ISNULL(SUM(CASE WHEN TIPO='R' THEN VALOR ELSE -VALOR END), 0) AS SALDO_PERIODO,
-            COUNT(CASE WHEN TIPO='R' THEN 1 END) AS QTD_ENTRADAS,
-            COUNT(CASE WHEN TIPO='D' THEN 1 END) AS QTD_SAIDAS
-          FROM KS0003.KS00007
-          WHERE GUIDENTIDADE=@guidentidade AND DATA BETWEEN @dtInicio AND @dtFim
+            ISNULL(SUM(CASE WHEN TIPO='E' THEN VALOR ELSE 0 END), 0) AS TOTAL_ENTRADAS,
+            ISNULL(SUM(CASE WHEN TIPO='S' THEN VALOR ELSE 0 END), 0) AS TOTAL_SAIDAS,
+            ISNULL(SUM(CASE WHEN TIPO='E' THEN VALOR ELSE -VALOR END), 0) AS SALDO_PERIODO,
+            COUNT(CASE WHEN TIPO='E' THEN 1 END) AS QTD_ENTRADAS,
+            COUNT(CASE WHEN TIPO='S' THEN 1 END) AS QTD_SAIDAS
+          FROM KS0003.KS00010
+          WHERE GUIDENTIDADE=@guidentidade AND DTLANCAMENTO BETWEEN @dtInicio AND @dtFim
         `);
       return r.recordset[0] ?? null;
     }),
@@ -66,19 +66,19 @@ export const fluxoCaixaRouter = router({
       const session = await getKsSession(ctx.req);
       if (!session) return [];
       const pool = await getSqlPool();
-      let where = "m.GUIDENTIDADE=@guidentidade AND m.DATA BETWEEN @dtInicio AND @dtFim";
-      if (input.tipo) where += ` AND m.TIPO='${input.tipo}'`;
+      let where = "m.GUIDENTIDADE=@guidentidade AND m.DTLANCAMENTO BETWEEN @dtInicio AND @dtFim";
+      if (input.tipo) where += ` AND m.TIPO='${input.tipo === "R" ? "E" : "S"}'`;
       const r = await pool.request()
         .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
         .input("dtInicio",     sql.NVarChar(10),             input.dtInicio)
         .input("dtFim",        sql.NVarChar(10),             input.dtFim)
         .query(`
           SELECT
-            m.TIPO,
+            CASE WHEN m.TIPO='E' THEN 'R' ELSE 'D' END AS TIPO,
             ISNULL(n.NATUREZA, 'Sem Natureza') AS NATUREZA,
             SUM(m.VALOR) AS TOTAL,
             COUNT(*) AS QTD
-          FROM KS0003.KS00007 m
+          FROM KS0003.KS00010 m
           LEFT JOIN KS0003.KS00003 n ON n.GUIDNATUREZA = m.GUIDNATUREZA
           WHERE ${where}
           GROUP BY m.TIPO, n.NATUREZA
@@ -100,12 +100,12 @@ export const fluxoCaixaRouter = router({
         .query(`
           SELECT
             ISNULL(cc.CENTRO, 'Sem Centro') AS CENTRO,
-            SUM(CASE WHEN m.TIPO='R' THEN m.VALOR ELSE 0 END) AS ENTRADAS,
-            SUM(CASE WHEN m.TIPO='D' THEN m.VALOR ELSE 0 END) AS SAIDAS,
-            SUM(CASE WHEN m.TIPO='R' THEN m.VALOR ELSE -m.VALOR END) AS SALDO
-          FROM KS0003.KS00007 m
+            SUM(CASE WHEN m.TIPO='E' THEN m.VALOR ELSE 0 END) AS ENTRADAS,
+            SUM(CASE WHEN m.TIPO='S' THEN m.VALOR ELSE 0 END) AS SAIDAS,
+            SUM(CASE WHEN m.TIPO='E' THEN m.VALOR ELSE -m.VALOR END) AS SALDO
+          FROM KS0003.KS00010 m
           LEFT JOIN KS0003.KS00002 cc ON cc.GUIDCENTRO = m.GUIDCENTRO
-          WHERE m.GUIDENTIDADE=@guidentidade AND m.DATA BETWEEN @dtInicio AND @dtFim
+          WHERE m.GUIDENTIDADE=@guidentidade AND m.DTLANCAMENTO BETWEEN @dtInicio AND @dtFim
           GROUP BY cc.CENTRO
           ORDER BY SALDO DESC
         `);
@@ -124,11 +124,11 @@ export const fluxoCaixaRouter = router({
           .input("dtInicio",     sql.NVarChar(10),             input.dtInicio)
           .input("dtFim",        sql.NVarChar(10),             input.dtFim)
           .query(`
-            SELECT ISNULL(n.NATUREZA,'Sem Natureza') AS NATUREZA, SUM(cr.VALORRECEBIDO) AS TOTAL
-            FROM KS0003.KS00005 cr
-            LEFT JOIN KS0003.KS00003 n ON n.GUIDNATUREZA = cr.GUIDNATUREZA
-            WHERE cr.GUIDENTIDADE=@guidentidade AND cr.STATUS IN ('PAGO','PARCIAL')
-              AND cr.DTRECEBIMENTO BETWEEN @dtInicio AND @dtFim
+            SELECT ISNULL(n.NATUREZA,'Sem Natureza') AS NATUREZA, SUM(m.VALOR) AS TOTAL
+            FROM KS0003.KS00010 m
+            LEFT JOIN KS0003.KS00003 n ON n.GUIDNATUREZA = m.GUIDNATUREZA
+            WHERE m.GUIDENTIDADE=@guidentidade AND m.TIPO='E'
+              AND m.DTLANCAMENTO BETWEEN @dtInicio AND @dtFim
             GROUP BY n.NATUREZA ORDER BY TOTAL DESC
           `),
         pool.request()
@@ -136,11 +136,11 @@ export const fluxoCaixaRouter = router({
           .input("dtInicio",     sql.NVarChar(10),             input.dtInicio)
           .input("dtFim",        sql.NVarChar(10),             input.dtFim)
           .query(`
-            SELECT ISNULL(n.NATUREZA,'Sem Natureza') AS NATUREZA, SUM(cp.VALORPAGO) AS TOTAL
-            FROM KS0003.KS00004 cp
-            LEFT JOIN KS0003.KS00003 n ON n.GUIDNATUREZA = cp.GUIDNATUREZA
-            WHERE cp.GUIDENTIDADE=@guidentidade AND cp.STATUS IN ('PAGO','PARCIAL')
-              AND cp.DTPAGAMENTO BETWEEN @dtInicio AND @dtFim
+            SELECT ISNULL(n.NATUREZA,'Sem Natureza') AS NATUREZA, SUM(m.VALOR) AS TOTAL
+            FROM KS0003.KS00010 m
+            LEFT JOIN KS0003.KS00003 n ON n.GUIDNATUREZA = m.GUIDNATUREZA
+            WHERE m.GUIDENTIDADE=@guidentidade AND m.TIPO='S'
+              AND m.DTLANCAMENTO BETWEEN @dtInicio AND @dtFim
             GROUP BY n.NATUREZA ORDER BY TOTAL DESC
           `),
       ]);
@@ -205,8 +205,8 @@ export const fluxoCaixaRouter = router({
       if (!session) return { items: [], total: 0 };
       const pool = await getSqlPool();
       const offset = (input.page - 1) * input.pageSize;
-      let where = "m.GUIDENTIDADE=@guidentidade AND m.DATA BETWEEN @dtInicio AND @dtFim";
-      if (input.tipo) where += ` AND m.TIPO='${input.tipo}'`;
+      let where = "m.GUIDENTIDADE=@guidentidade AND m.DTLANCAMENTO BETWEEN @dtInicio AND @dtFim";
+      if (input.tipo) where += ` AND m.TIPO='${input.tipo === "R" ? "E" : "S"}'`;
       const [dataR, countR] = await Promise.all([
         pool.request()
           .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
@@ -216,29 +216,31 @@ export const fluxoCaixaRouter = router({
           .input("pageSize",     sql.Int,              input.pageSize)
           .query(`
             SELECT
-              CAST(m.GUIDMOVIMENTO AS NVARCHAR(36)) AS guidMovimento,
-              CONVERT(NVARCHAR(10), m.DATA, 23) AS DATA,
-              m.TIPO, m.DESCRICAO, m.VALOR,
+              CAST(m.GUIDLANCAMENTO AS NVARCHAR(36)) AS guidMovimento,
+              CONVERT(NVARCHAR(10), m.DTLANCAMENTO, 23) AS DATA,
+              CASE WHEN m.TIPO='E' THEN 'R' ELSE 'D' END AS TIPO,
+              m.DESCRICAO, m.VALOR,
               CAST(m.GUIDNATUREZA AS NVARCHAR(36)) AS guidNatureza,
               n.NATUREZA AS nomeNatureza,
               CAST(m.GUIDCENTRO AS NVARCHAR(36)) AS guidCentro,
               cc.CENTRO AS nomeCentro,
-              CAST(m.GUIDPAGAMENTO AS NVARCHAR(36)) AS guidPagamento,
+              CAST(m.GUIDFORMAPAGAMENTO AS NVARCHAR(36)) AS guidPagamento,
               fp.PAGAMENTO AS nomePagamento,
-              m.ORIGEM, m.DATACADASTRO
-            FROM KS0003.KS00007 m
+              CASE WHEN m.GUIDVENDA IS NOT NULL THEN 'VENDA' ELSE 'FINANCEIRO' END AS ORIGEM,
+              m.DATACADASTRO
+            FROM KS0003.KS00010 m
             LEFT JOIN KS0003.KS00003 n  ON n.GUIDNATUREZA   = m.GUIDNATUREZA
             LEFT JOIN KS0003.KS00002 cc ON cc.GUIDCENTRO    = m.GUIDCENTRO
-            LEFT JOIN KS0003.KS00006 fp ON fp.GUIDPAGAMENTO = m.GUIDPAGAMENTO
+            LEFT JOIN KS0003.KS00006 fp ON fp.GUIDPAGAMENTO = m.GUIDFORMAPAGAMENTO
             WHERE ${where}
-            ORDER BY m.DATA DESC, m.DATACADASTRO DESC
+            ORDER BY m.DTLANCAMENTO DESC, m.DATACADASTRO DESC
             OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
           `),
         pool.request()
           .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
           .input("dtInicio",     sql.NVarChar(10),             input.dtInicio)
           .input("dtFim",        sql.NVarChar(10),             input.dtFim)
-          .query(`SELECT COUNT(*) AS TOTAL FROM KS0003.KS00007 m WHERE ${where}`),
+          .query(`SELECT COUNT(*) AS TOTAL FROM KS0003.KS00010 m WHERE ${where}`),
       ]);
       return { items: dataR.recordset, total: (countR.recordset[0] as { TOTAL: number }).TOTAL };
     }),

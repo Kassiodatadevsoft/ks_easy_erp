@@ -20,6 +20,12 @@ import { registerNaturezaFinanceiraApiRoutes } from "../routes/naturezaFinanceir
 import { registerFormasPagamentoApiRoutes } from "../routes/formasPagamentoApi";
 import { registerContasBancariasApiRoutes } from "../routes/contasBancariasApi";
 import { registerProdutosApiRoutes } from "../routes/produtosApi";
+import { registerNaturezaOperacaoApiRoutes } from "../routes/naturezaOperacaoApi";
+import { registerVendasApiRoutes } from "../routes/vendasApi";
+import { registerVendasGerencialApiRoutes } from "../routes/vendasGerencialApi";
+import { registerComprovantesCaixaApiRoutes } from "../routes/comprovantesCaixaApi";
+import { registerFinanceiroAnexosApiRoutes } from "../routes/financeiroAnexosApi";
+import { registerFinanceiroRelatoriosApiRoutes } from "../routes/financeiroRelatoriosApi";
 // import { registerStorageProxy } from "./storageProxy";
 
 import { serveStatic, setupVite } from "./vite";
@@ -106,6 +112,12 @@ app.use(
   registerFormasPagamentoApiRoutes(app);
   registerContasBancariasApiRoutes(app);
   registerProdutosApiRoutes(app);
+  registerNaturezaOperacaoApiRoutes(app);
+  registerVendasApiRoutes(app);
+  registerVendasGerencialApiRoutes(app);
+  registerComprovantesCaixaApiRoutes(app);
+  registerFinanceiroAnexosApiRoutes(app);
+  registerFinanceiroRelatoriosApiRoutes(app);
 
   // =====================================================
   // Frontend
