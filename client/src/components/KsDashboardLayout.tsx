@@ -63,9 +63,9 @@ import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
+import { DATADEV_ADMIN_CNPJ, normalizeCnpj } from "@shared/datadev";
 
 const LOGO_URL = "/logo.png";
-const LICENCAS_ADMIN_CNPJ = "50303631000158";
 
 type MenuItem = {
   icon: LucideIcon;
@@ -117,6 +117,7 @@ const MENU_GROUPS: MenuGroup[] = [
         items: [
           { icon: Building2, label: "Empresas", path: "/cadastros/empresas" },
           { icon: Briefcase, label: "Cargos", path: "/cadastros/cargos" },
+          { icon: BookOpen, label: "Series/Niveis", path: "/cadastros/series-niveis" },
         ],
       },
     ],
@@ -264,21 +265,19 @@ const MENU_GROUPS: MenuGroup[] = [
   },
 ];
 
-function normalizeCnpj(value: string | null | undefined) {
-  return String(value ?? "").replace(/\D/g, "");
-}
-
 function canViewLicencas(user: { entDocumento?: string | null; documento?: string | null } | null | undefined) {
-  return normalizeCnpj(user?.entDocumento) === LICENCAS_ADMIN_CNPJ || normalizeCnpj(user?.documento) === LICENCAS_ADMIN_CNPJ;
+  return normalizeCnpj(user?.entDocumento) === DATADEV_ADMIN_CNPJ || normalizeCnpj(user?.documento) === DATADEV_ADMIN_CNPJ;
 }
 
 function getVisibleMenuGroups(
   user: { entDocumento?: string | null; documento?: string | null } | null | undefined,
+  isDataDevAdmin: boolean,
   authorizedReportIds?: Set<string>,
 ) {
   const showLicencas = canViewLicencas(user);
   const canViewItem = (item: MenuItem) => {
     if (item.path === "/licencas" && !showLicencas) return false;
+    if (item.path === "/cadastros/empresas" && !isDataDevAdmin) return false;
     if (!item.reportId || !authorizedReportIds) return true;
     return authorizedReportIds.has(item.reportId);
   };
@@ -335,13 +334,17 @@ function KsLayoutInner({ children }: { children: React.ReactNode }) {
     enabled: Boolean(user),
     staleTime: 5 * 60 * 1000,
   });
+  const { data: empresaPermissao } = trpc.empresas.verificarMaster.useQuery(undefined, {
+    enabled: Boolean(user),
+    staleTime: 5 * 60 * 1000,
+  });
   const authorizedReportIds = useMemo(
     () => new Set((relatoriosAutorizados ?? []).map((report) => report.id)),
     [relatoriosAutorizados],
   );
   const menuGroups = useMemo(
-    () => getVisibleMenuGroups(user, authorizedReportIds),
-    [user?.entDocumento, user?.documento, authorizedReportIds],
+    () => getVisibleMenuGroups(user, Boolean(empresaPermissao?.isMaster), authorizedReportIds),
+    [user?.entDocumento, user?.documento, empresaPermissao?.isMaster, authorizedReportIds],
   );
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);

@@ -19,6 +19,16 @@ import {
   listarFaixasProduto,
   salvarFaixasProduto,
 } from "../services/produtoUnidadePreco";
+import {
+  ensureEmpresaSegmentoColumn,
+} from "../services/dataDevAdmin";
+import {
+  ensureProdutoMontagemSchema,
+  listarOpcoesMontagem,
+  salvarOpcoesMontagem,
+  TIPOS_CALCULO_PRECO,
+  TIPOS_MONTAGEM,
+} from "../services/produtoMontagem";
 
 async function getKsSession(req: { headers: { cookie?: string } }) {
   const cookies = req.headers.cookie ?? "";
@@ -166,6 +176,19 @@ const produtoInputBase = {
   percReducaoForm: z.number().min(0).max(100).default(0),
   percFreteForm: z.number().min(0).max(100).default(0),
   percJurosForm: z.number().min(0).max(100).default(0),
+  permiteMontagem: z.boolean().default(false),
+  tipoMontagem: z.enum(TIPOS_MONTAGEM).default("PIZZA"),
+  qtdMinOpcoes: z.number().int().min(0).default(0),
+  qtdMaxOpcoes: z.number().int().min(0).default(0),
+  obrigaSelecaoMontagem: z.boolean().default(false),
+  tipoCalculoPrecoMontagem: z.enum(TIPOS_CALCULO_PRECO).default("MAIOR_VALOR"),
+  opcoesMontagem: z.array(z.object({
+    guidProdutoOpcao: z.string().uuid(),
+    descricao: z.string().max(100).optional(),
+    valorAdicional: z.number().default(0),
+    ordem: z.number().int().optional(),
+    situacao: z.enum(["A", "I"]).default("A"),
+  })).default([]),
   faixasPreco: z.array(z.object({
     id: z.number().int().positive().optional(),
     unidade: z.string().min(1).max(6),
@@ -235,6 +258,12 @@ type ProdutoRow = {
   PERCREDUCAOFORM: number;
   PERCFRETEFORM: number;
   PERCJUROSFORM: number;
+  PERMITEMONTAGEM: boolean;
+  TIPOMONTAGEM: string | null;
+  QTDMINOPCOES: number;
+  QTDMAXOPCOES: number;
+  OBRIGASELECAOMONTAGEM: boolean;
+  TIPOCALCULOPRECOMONTAGEM: string | null;
 };
 
 const SELECT_CAMPOS = `
@@ -272,7 +301,13 @@ const SELECT_CAMPOS = `
   ISNULL(p.ALIQICMSFORM,0) AS ALIQICMSFORM,
   ISNULL(p.PERCREDUCAOFORM,0) AS PERCREDUCAOFORM,
   ISNULL(p.PERCFRETEFORM,0) AS PERCFRETEFORM,
-  ISNULL(p.PERCJUROSFORM,0) AS PERCJUROSFORM
+  ISNULL(p.PERCJUROSFORM,0) AS PERCJUROSFORM,
+  ISNULL(p.PERMITEMONTAGEM,0) AS PERMITEMONTAGEM,
+  p.TIPOMONTAGEM,
+  ISNULL(p.QTDMINOPCOES,0) AS QTDMINOPCOES,
+  ISNULL(p.QTDMAXOPCOES,0) AS QTDMAXOPCOES,
+  ISNULL(p.OBRIGASELECAOMONTAGEM,0) AS OBRIGASELECAOMONTAGEM,
+  ISNULL(p.TIPOCALCULOPRECOMONTAGEM,'MAIOR_VALOR') AS TIPOCALCULOPRECOMONTAGEM
 `;
 
 // ─── Router ───────────────────────────────────────────────────────────────────
@@ -282,18 +317,21 @@ export const produtosRouter = router({
   regimeEmpresa: publicProcedure
     .query(async ({ ctx }) => {
       const session = await getKsSession(ctx.req);
+      await ensureEmpresaSegmentoColumn();
       const rows = await querySql<{
         CRT: number | null;
         REGIMEPISCOFINS: number | null;
         ALIQUOTAPIS: number | null;
         ALIQUOTACOFINS: number | null;
         CREDITOCSOSN: number | null;
+        SEGMENTO: string | null;
         NOME: string;
         DOCUMENTO: string;
       }>(
         `SELECT TOP 1
            e.CRT, e.REGIMEPISCOFINS,
            e.ALIQUOTAPIS, e.ALIQUOTACOFINS, e.CREDITOCSOSN,
+           ISNULL(e.SEGMENTO, 'GERAL') AS SEGMENTO,
            e.NOME, e.DOCUMENTO
          FROM KS0002.KS00001 e
          WHERE e.GUIDENTIDADE = '${session.guidEntidade}'
@@ -314,6 +352,7 @@ export const produtosRouter = router({
           isMEI: false,
           isSimples: true,
           isNormal: false,
+          segmento: "GERAL",
         };
       }
 
@@ -336,6 +375,7 @@ export const produtosRouter = router({
         isMEI: crt === 4,
         isSimples: crt === 1 || crt === 2 || crt === 4,
         isNormal: crt === 3,
+        segmento: empresa.SEGMENTO ?? "GERAL",
       };
     }),
 
@@ -350,6 +390,7 @@ export const produtosRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const session = await getKsSession(ctx.req);
+      await ensureProdutoMontagemSchema();
       const { busca, situacao, guidCategoria, pagina, porPagina } = input;
       const offset = (pagina - 1) * porPagina;
 
@@ -403,6 +444,7 @@ export const produtosRouter = router({
     .input(z.object({ guidProduto: z.string() }))
     .query(async ({ ctx, input }) => {
       const session = await getKsSession(ctx.req);
+      await ensureProdutoMontagemSchema();
       const rows = await querySql<ProdutoRow>(
         `SELECT ${SELECT_CAMPOS}
          FROM KS0000.KS00009 p
@@ -414,7 +456,8 @@ export const produtosRouter = router({
       if (!rows.length) throw new TRPCError({ code: "NOT_FOUND", message: "Produto não encontrado" });
       const produto = rows[0];
       const faixasPreco = await listarFaixasProduto(session.guidEntidade, String(produto.GUIDPRODUTO));
-      return { ...produto, faixasPreco };
+      const opcoesMontagem = await listarOpcoesMontagem(session.guidEntidade, String(produto.GUIDPRODUTO));
+      return { ...produto, faixasPreco, opcoesMontagem };
     }),
 
   // ── Validar nome ─────────────────────────────────────────────────────────────
@@ -435,6 +478,7 @@ export const produtosRouter = router({
     .input(z.object(produtoInputBase))
     .mutation(async ({ ctx, input }) => {
       const session = await getKsSession(ctx.req);
+      await ensureProdutoMontagemSchema();
 
       const maxRows = await querySql<{ MAXCOD: number | null }>(
         `SELECT ISNULL(MAX(CODPRODUTO), 0) AS MAXCOD FROM KS0000.KS00009`
@@ -457,10 +501,12 @@ export const produtosRouter = router({
             UNIDADE, ESTOQUE, ESTOQUEMINIMO, ORIGEMPRODUTO,
             PERCDESCONTO, PRECOPROMO, DTINICIOPROMO, DTFIMPROMO,
             BALANCA, SERVICO, ALTERADESCRICAO, FRACIONADO, CODBARRAS,
-            CODBARRACAIXA, QTDCAIXA,
-            REFERENCIA, DELIVERY,
-            ALIQICMSFORM, PERCREDUCAOFORM, PERCFRETEFORM, PERCJUROSFORM,
-            GUIDPRODUTO, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
+             CODBARRACAIXA, QTDCAIXA,
+             REFERENCIA, DELIVERY,
+             ALIQICMSFORM, PERCREDUCAOFORM, PERCFRETEFORM, PERCJUROSFORM,
+             PERMITEMONTAGEM, TIPOMONTAGEM, QTDMINOPCOES, QTDMAXOPCOES,
+             OBRIGASELECAOMONTAGEM, TIPOCALCULOPRECOMONTAGEM,
+             GUIDPRODUTO, GUIDENTIDADE, DATACADASTRO, ULTIMAALTERACAO)
          VALUES
            (${codProduto}, '${produto}', ${descricao ? `'${descricao}'` : "NULL"},
             ${input.codCategoria ?? "NULL"}, ${sqlStr(input.guidentidadeCat)},
@@ -484,9 +530,11 @@ export const produtosRouter = router({
             ${input.fracionado ? 1 : 0},
             ${sqlStr(input.codBarras)},
             ${sqlStr(input.codBarraCaixa)}, ${sqlNum(input.qtdCaixa ?? 1)},
-            ${sqlStr(input.referencia ? input.referencia.toUpperCase() : null)}, ${input.delivery ? 1 : 0},
-            ${sqlNum(input.aliqIcmsForm)}, ${sqlNum(input.percReducaoForm)}, ${sqlNum(input.percFreteForm)}, ${sqlNum(input.percJurosForm)},
-            NEWID(), '${session.guidEntidade}', '${now}', '${now}')`
+             ${sqlStr(input.referencia ? input.referencia.toUpperCase() : null)}, ${input.delivery ? 1 : 0},
+             ${sqlNum(input.aliqIcmsForm)}, ${sqlNum(input.percReducaoForm)}, ${sqlNum(input.percFreteForm)}, ${sqlNum(input.percJurosForm)},
+             ${input.permiteMontagem ? 1 : 0}, ${sqlStr(input.tipoMontagem)}, ${sqlNum(input.qtdMinOpcoes)}, ${sqlNum(input.qtdMaxOpcoes)},
+             ${input.obrigaSelecaoMontagem ? 1 : 0}, ${sqlStr(input.tipoCalculoPrecoMontagem)},
+             NEWID(), '${session.guidEntidade}', '${now}', '${now}')`
       );
 
       const produtoRows = await querySql<{ GUIDPRODUTO: string }>(
@@ -497,6 +545,7 @@ export const produtosRouter = router({
       const guidProdutoCriado = produtoRows[0]?.GUIDPRODUTO;
       if (guidProdutoCriado) {
         await salvarFaixasProduto(session.guidEntidade, guidProdutoCriado, codProduto, input.faixasPreco);
+        await salvarOpcoesMontagem(session.guidEntidade, guidProdutoCriado, input.opcoesMontagem);
       }
 
       return { codProduto, mensagem: "Produto criado com sucesso" };
@@ -507,6 +556,7 @@ export const produtosRouter = router({
     .input(z.object({ guidProduto: z.string(), ...produtoInputBase }))
     .mutation(async ({ ctx, input }) => {
       const session = await getKsSession(ctx.req);
+      await ensureProdutoMontagemSchema();
 
       const produto = toUpper(input.produto).replace(/'/g, "''");
       const descricao = input.descricao ? toUpper(input.descricao).replace(/'/g, "''") : null;
@@ -565,6 +615,12 @@ export const produtosRouter = router({
            PERCREDUCAOFORM = ${sqlNum(input.percReducaoForm)},
            PERCFRETEFORM = ${sqlNum(input.percFreteForm)},
            PERCJUROSFORM = ${sqlNum(input.percJurosForm)},
+           PERMITEMONTAGEM = ${input.permiteMontagem ? 1 : 0},
+           TIPOMONTAGEM = ${sqlStr(input.tipoMontagem)},
+           QTDMINOPCOES = ${sqlNum(input.qtdMinOpcoes)},
+           QTDMAXOPCOES = ${sqlNum(input.qtdMaxOpcoes)},
+           OBRIGASELECAOMONTAGEM = ${input.obrigaSelecaoMontagem ? 1 : 0},
+           TIPOCALCULOPRECOMONTAGEM = ${sqlStr(input.tipoCalculoPrecoMontagem)},
            ULTIMAALTERACAO = '${now}'
          WHERE GUIDPRODUTO = '${input.guidProduto}'
            AND GUIDENTIDADE = '${session.guidEntidade}'`
@@ -576,6 +632,7 @@ export const produtosRouter = router({
          WHERE GUIDPRODUTO = '${input.guidProduto}' AND GUIDENTIDADE = '${session.guidEntidade}'`
       );
       await salvarFaixasProduto(session.guidEntidade, input.guidProduto, produtoRows[0]?.CODPRODUTO ?? null, input.faixasPreco);
+      await salvarOpcoesMontagem(session.guidEntidade, input.guidProduto, input.opcoesMontagem);
 
       return { mensagem: "Produto atualizado com sucesso" };
     }),
@@ -766,6 +823,7 @@ export const produtosRouter = router({
     .query(async ({ ctx, input }) => {
       const session = await getKsSession(ctx.req);
       await ensureProdutosImeiTable();
+      await ensureProdutoMontagemSchema();
       const busca = input.q.trim().replace(/'/g, "''");
       const rows = await querySql<ProdutoRow & {
         GUIDIMEI: string;

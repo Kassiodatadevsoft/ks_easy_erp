@@ -12,8 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Ban, CheckCircle2, CalendarClock, Monitor, Pencil, Plus, Trash2 } from "lucide-react";
-
-const CNPJ_GERENCIADOR = "50303631000158";
+import { DATADEV_ADMIN_CNPJ, normalizeCnpj } from "@shared/datadev";
 
 type FormState = {
   cnpj: string;
@@ -43,7 +42,7 @@ const EMPTY: FormState = {
 };
 
 function onlyDigits(value: string) {
-  return value.replace(/\D/g, "");
+  return normalizeCnpj(value);
 }
 
 function dateInput(value: unknown) {
@@ -58,7 +57,7 @@ function formatDate(value: unknown) {
 
 export default function Licencas() {
   const { user } = useKsAuth();
-  const autorizado = onlyDigits(user?.entDocumento ?? "") === CNPJ_GERENCIADOR;
+  const autorizado = onlyDigits(user?.entDocumento ?? "") === DATADEV_ADMIN_CNPJ;
   const utils = trpc.useUtils();
   const { data: licencas = [], isLoading } = trpc.licencas.listar.useQuery(undefined, {
     enabled: autorizado,

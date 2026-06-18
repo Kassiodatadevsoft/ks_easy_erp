@@ -17,6 +17,7 @@ import Entidades from "./pages/Entidades";
 import Categorias from "./pages/Categorias";
 import Produtos from "./pages/Produtos";
 import Licencas from "./pages/Licencas";
+import SeriesNiveis from "./pages/SeriesNiveis";
 import KsDashboardLayout from "./components/KsDashboardLayout";
 import { useKsAuth } from "./hooks/useKsAuth";
 import { useEffect } from "react";
@@ -125,6 +126,9 @@ function Router() {
       </Route>
       <Route path="/cadastros/cargos">
         <ProtectedRoute><Cargos /></ProtectedRoute>
+      </Route>
+      <Route path="/cadastros/series-niveis">
+        <ProtectedRoute><SeriesNiveis /></ProtectedRoute>
       </Route>
 
       {/* Comercial */}

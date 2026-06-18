@@ -87,50 +87,42 @@ describe("empresas multiempresa/multitenancy", () => {
   it("permite que administrador DataDev liste todas as empresas", async () => {
     mockVerifyKsSession.mockResolvedValue(dataDevAdminSession);
     mockQuerySql
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ total: 2 }])
       .mockResolvedValueOnce([{ GUIDPESSOA: DATADEV_GUID }, { GUIDPESSOA: NOVA_EMPRESA_GUID }]);
 
     const result = await createCaller().listar({ pagina: 1, porPagina: 20 });
 
     expect(result.total).toBe(2);
-    const [countQuery, countParams] = mockQuerySql.mock.calls[0];
+    const [countQuery, countParams] = mockQuerySql.mock.calls[1];
     expect(countQuery).toContain("WHERE c.CADEMPRESA = 1");
     expect(countQuery).not.toContain("c.GUIDENTIDADE = @GUIDENTIDADE");
     expect(countParams).not.toHaveProperty("GUIDENTIDADE");
   });
 
-  it("filtra empresa cadastrada pela DataDev pelo seu proprio GUIDENTIDADE", async () => {
+  it("bloqueia listagem de empresas para usuarios fora da DataDev", async () => {
     mockVerifyKsSession.mockResolvedValue(empresaSession);
-    mockQuerySql
-      .mockResolvedValueOnce([{ total: 1 }])
-      .mockResolvedValueOnce([{ GUIDPESSOA: NOVA_EMPRESA_GUID, GUIDENTIDADE: NOVA_EMPRESA_GUID }]);
+    mockQuerySql.mockResolvedValueOnce([{ DOCUMENTO: "12.345.678/0001-90" }]);
 
-    const result = await createCaller().listar({ pagina: 1, porPagina: 20 });
-
-    expect(result.total).toBe(1);
-    const [countQuery, countParams] = mockQuerySql.mock.calls[0];
-    expect(countQuery).toContain("c.GUIDENTIDADE = @GUIDENTIDADE");
-    expect(countParams.GUIDENTIDADE.value).toBe(NOVA_EMPRESA_GUID);
+    await expect(createCaller().listar({ pagina: 1, porPagina: 20 })).rejects.toThrow(
+      "Acesso permitido somente para administracao DataDev."
+    );
   });
 
   it("nao permite que empresa cadastrada acesse dados da DataDev", async () => {
     mockVerifyKsSession.mockResolvedValue(empresaSession);
-    mockQuerySql.mockResolvedValueOnce([]);
+    mockQuerySql.mockResolvedValueOnce([{ DOCUMENTO: "12.345.678/0001-90" }]);
 
     await expect(
       createCaller().buscarPorGuid({ guidPessoa: DATADEV_GUID })
-    ).rejects.toThrow("Empresa");
-
-    const [query, params] = mockQuerySql.mock.calls[0];
-    expect(query).toContain("c.GUIDPESSOA = @GUID");
-    expect(query).toContain("c.GUIDENTIDADE = @GUIDENTIDADE");
-    expect(params.GUID.value).toBe(DATADEV_GUID);
-    expect(params.GUIDENTIDADE.value).toBe(NOVA_EMPRESA_GUID);
+    ).rejects.toThrow("Acesso permitido somente para administracao DataDev.");
   });
 
   it("cria empresa com GUIDENTIDADE igual ao seu proprio GUIDPESSOA", async () => {
     mockVerifyKsSession.mockResolvedValue(dataDevAdminSession);
     mockQuerySql
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ maxCod: 10 }])
       .mockResolvedValueOnce([{ GUID: NOVA_EMPRESA_GUID }])
       .mockResolvedValueOnce([])
@@ -150,6 +142,8 @@ describe("empresas multiempresa/multitenancy", () => {
   it("cria empresa com GUIDENTIDADE diferente do GUIDENTIDADE da DataDev", async () => {
     mockVerifyKsSession.mockResolvedValue(dataDevAdminSession);
     mockQuerySql
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ maxCod: 10 }])
       .mockResolvedValueOnce([{ GUID: NOVA_EMPRESA_GUID }])
       .mockResolvedValueOnce([])

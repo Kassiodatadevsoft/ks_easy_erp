@@ -11,6 +11,7 @@ import {
 import { toast } from "sonner";
 import { Loader2, X, Search, Building2, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { SISTEMA_SEGMENTOS, type SistemaSegmento } from "@shared/datadev";
 
 interface Props {
   guidPessoa: string | null;
@@ -30,6 +31,7 @@ interface EmpresaFormData {
   complemento: string; bairro: string;
   codCidade: number | null; descCidade: string;
   situacao: "A" | "I" | "B";
+  segmentoSistema: SistemaSegmento;
   // Contrato — visível só para master
   segmento: number; dataImplantacao: string; dataDemissao: string;
   valorNegociado: number; valorSalario: number;
@@ -55,6 +57,7 @@ const INITIAL: EmpresaFormData = {
   cep: "", endereco: "", numero: "", complemento: "", bairro: "",
   codCidade: null, descCidade: "",
   situacao: "A",
+  segmentoSistema: "GERAL",
   segmento: 0, dataImplantacao: "", dataDemissao: "",
   valorNegociado: 0, valorSalario: 0, mensalidade: 1,
   observacao: "",
@@ -197,6 +200,9 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
         codCidade: Number(d.CODCIDADE ?? null) || null,
         descCidade: d.DESCCIDADE ? String(d.DESCCIDADE) : "",
         situacao: (d.SITUACAO as "A" | "I" | "B") ?? "A",
+        segmentoSistema: SISTEMA_SEGMENTOS.includes(String(d.SEGMENTO ?? "GERAL") as SistemaSegmento)
+          ? (String(d.SEGMENTO ?? "GERAL") as SistemaSegmento)
+          : "GERAL",
         segmento: Number(d.COSEGMENTO ?? 0),
         dataImplantacao: d.DATAADMISSAO ? new Date(d.DATAADMISSAO as string).toISOString().slice(0, 10) : "",
         dataDemissao: d.DATADEMISSAO ? new Date(d.DATADEMISSAO as string).toISOString().slice(0, 10) : "",
@@ -335,6 +341,7 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
       complemento: form.complemento || undefined, bairro: form.bairro,
       codCidade: form.codCidade!,
       situacao: form.situacao,
+      segmentoSistema: form.segmentoSistema,
       segmento: form.segmento || undefined,
       dataImplantacao: form.dataImplantacao || undefined,
       dataDemissao: form.dataDemissao || undefined,
@@ -591,8 +598,6 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
                   <SelectContent>
                     <SelectItem value="1">Simples Nacional</SelectItem>
                     <SelectItem value="2">Simples Nacional — Excesso</SelectItem>
-                    <SelectItem value="3">Regime Normal</SelectItem>
-                    <SelectItem value="4">MEI</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -601,7 +606,6 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
                 <Select value={String(form.ambiente)} onValueChange={v => set("ambiente", Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="0">Produção</SelectItem>
                     <SelectItem value="1">Homologação (Teste)</SelectItem>
                   </SelectContent>
                 </Select>
@@ -623,12 +627,8 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
                 <Select value={String(form.banco)} onValueChange={v => set("banco", Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="0">Nenhum</SelectItem>
                     <SelectItem value="1">Banco do Brasil</SelectItem>
                     <SelectItem value="2">Bradesco</SelectItem>
-                    <SelectItem value="3">Caixa Econômica</SelectItem>
-                    <SelectItem value="4">Itaú</SelectItem>
-                    <SelectItem value="5">Santander</SelectItem>
                     <SelectItem value="6">Sicoob</SelectItem>
                     <SelectItem value="7">Sicredi</SelectItem>
                     <SelectItem value="8">Nubank</SelectItem>
@@ -648,16 +648,18 @@ export default function EmpresaForm({ guidPessoa, isMaster, onClose }: Props) {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Segmento</Label>
-                  <Select value={String(form.segmento)} onValueChange={v => set("segmento", Number(v))}>
+                  <Label>Segmento do sistema</Label>
+                  <Select
+                    value={form.segmentoSistema}
+                    onValueChange={v => set("segmentoSistema", SISTEMA_SEGMENTOS.includes(v as SistemaSegmento) ? v as SistemaSegmento : "GERAL")}
+                  >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="0">Não Definido</SelectItem>
-                      <SelectItem value="1">Varejo</SelectItem>
-                      <SelectItem value="2">Atacado</SelectItem>
-                      <SelectItem value="3">Serviços</SelectItem>
-                      <SelectItem value="4">Indústria</SelectItem>
-                      <SelectItem value="5">Agronegócio</SelectItem>
+                      <SelectItem value="GERAL">GERAL</SelectItem>
+                      <SelectItem value="FOOD_DELIVERY">FOOD_DELIVERY</SelectItem>
+                      <SelectItem value="LOJA_CELULAR">LOJA_CELULAR</SelectItem>
+                      <SelectItem value="ASSISTENCIA_TECNICA">ASSISTENCIA_TECNICA</SelectItem>
+                      <SelectItem value="OUTROS">OUTROS</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

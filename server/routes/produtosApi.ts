@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { getSqlPool, sql } from "../sqlserver";
+import { garantirTabelaProdutoUnidadePreco } from "../services/produtoUnidadePreco";
 
 const guidSchema = z.string().uuid();
 const nullableString = z.string().optional().nullable();
@@ -136,6 +137,258 @@ function maiorUltimaAlteracao(rows: Array<{ ULTIMAALTERACAO?: Date | string | nu
   return maior;
 }
 
+function maxDateValue(...values: unknown[]) {
+  let max: Date | string | null = null;
+  let maxTime = 0;
+  for (const value of values) {
+    if (!value) continue;
+    const time = new Date(value as string | Date).getTime();
+    if (!Number.isNaN(time) && time > maxTime) {
+      maxTime = time;
+      max = value as Date | string;
+    }
+  }
+  return max;
+}
+
+function asGuidString(value: unknown) {
+  return String(value ?? "").toLowerCase();
+}
+
+async function existeTabela(nome: string) {
+  const pool = await getSqlPool();
+  const r = await pool.request()
+    .input("nome", sql.NVarChar(160), nome)
+    .query("SELECT CASE WHEN OBJECT_ID(@nome, 'U') IS NULL THEN 0 ELSE 1 END AS existe");
+  return Boolean(r.recordset[0]?.existe);
+}
+
+async function listarProdutosOffline(input: {
+  guidEntidade: string;
+  ultimaAlteracao?: string;
+  situacao?: string;
+  limite?: number;
+}) {
+  const guidEntidade = guidSchema.parse(input.guidEntidade);
+  const ultimaAlteracao = ultimaAlteracaoSchema.parse(input.ultimaAlteracao);
+  const situacao = String(input.situacao ?? "A").toUpperCase();
+  const limite = Math.min(Math.max(Number(input.limite ?? 5000), 1), 20000);
+  const pool = await getSqlPool();
+
+  await garantirTabelaProdutoUnidadePreco();
+
+  const produtosResult = await pool.request()
+    .input("guidEntidade", sql.UniqueIdentifier, guidEntidade)
+    .input("ultimaAlteracao", sql.DateTime, ultimaAlteracao)
+    .input("situacao", sql.NVarChar(10), situacao)
+    .input("limite", sql.Int, limite)
+    .query(`
+      SELECT TOP (@limite)
+        p.*,
+        CAST(c.GUIDCATEGORIA AS NVARCHAR(36)) AS CATEGORIA_GUID,
+        c.CATEGORIA AS CATEGORIA_NOME,
+        c.DESCRICAO AS CATEGORIA_DESCRICAO,
+        c.SLUG AS CATEGORIA_SLUG,
+        c.ORDEMEXIBICAO AS CATEGORIA_ORDEMEXIBICAO,
+        c.SITUACAO AS CATEGORIA_SITUACAO,
+        c.ULTIMAALTERACAO AS CATEGORIA_ULTIMAALTERACAO
+      FROM KS0000.KS00009 p
+      LEFT JOIN KS0000.KS00008 c
+        ON c.CODCATEGORIA = p.CODCATEGORIA
+       AND c.GUIDENTIDADE = p.GUIDENTIDADE
+      WHERE p.GUIDENTIDADE = @guidEntidade
+        AND (@situacao = 'TODOS' OR p.SITUACAO = @situacao)
+        AND (
+          @ultimaAlteracao IS NULL
+          OR ISNULL(p.ULTIMAALTERACAO, p.DATACADASTRO) > @ultimaAlteracao
+          OR ISNULL(c.ULTIMAALTERACAO, c.DATACADASTRO) > @ultimaAlteracao
+        )
+      ORDER BY ISNULL(p.ULTIMAALTERACAO, p.DATACADASTRO), p.CODPRODUTO
+    `);
+
+  const categoriasResult = await pool.request()
+    .input("guidEntidade", sql.UniqueIdentifier, guidEntidade)
+    .input("ultimaAlteracao", sql.DateTime, ultimaAlteracao)
+    .query(`
+      SELECT *
+      FROM KS0000.KS00008
+      WHERE GUIDENTIDADE = @guidEntidade
+        AND (@ultimaAlteracao IS NULL OR ISNULL(ULTIMAALTERACAO, DATACADASTRO) > @ultimaAlteracao)
+      ORDER BY CATEGORIA
+    `);
+
+  const faixasResult = await pool.request()
+    .input("guidEntidade", sql.UniqueIdentifier, guidEntidade)
+    .input("ultimaAlteracao", sql.DateTime, ultimaAlteracao)
+    .input("situacao", sql.NVarChar(10), situacao)
+    .query(`
+      SELECT f.*
+      FROM KS0004.ProdutoUnidadePreco f
+      INNER JOIN KS0000.KS00009 p
+        ON p.GUIDPRODUTO = f.GUIDPRODUTO
+       AND p.GUIDENTIDADE = f.GUIDENTIDADE
+      WHERE f.GUIDENTIDADE = @guidEntidade
+        AND (@situacao = 'TODOS' OR p.SITUACAO = @situacao)
+        AND (
+          @ultimaAlteracao IS NULL
+          OR ISNULL(f.ULTIMAALTERACAO, f.DATACADASTRO) > @ultimaAlteracao
+          OR ISNULL(p.ULTIMAALTERACAO, p.DATACADASTRO) > @ultimaAlteracao
+        )
+      ORDER BY f.GUIDPRODUTO, f.UNIDADE, f.QUANTIDADEMINIMA
+    `);
+
+  let imeis: Record<string, unknown>[] = [];
+  if (await existeTabela("KS0005.KS_PRODUTOS_IMEI")) {
+    const imeisResult = await pool.request()
+      .input("guidEntidade", sql.UniqueIdentifier, guidEntidade)
+      .input("ultimaAlteracao", sql.DateTime, ultimaAlteracao)
+      .input("situacao", sql.NVarChar(10), situacao)
+      .query(`
+        SELECT i.*
+        FROM KS0005.KS_PRODUTOS_IMEI i
+        INNER JOIN KS0000.KS00009 p
+          ON p.GUIDPRODUTO = i.GUIDPRODUTO
+         AND p.GUIDENTIDADE = i.GUIDENTIDADE
+        WHERE i.GUIDENTIDADE = @guidEntidade
+          AND (@situacao = 'TODOS' OR p.SITUACAO = @situacao)
+          AND (
+            @ultimaAlteracao IS NULL
+            OR ISNULL(i.ULTIMAALTERACAO, i.DATAENTRADA) > @ultimaAlteracao
+            OR ISNULL(p.ULTIMAALTERACAO, p.DATACADASTRO) > @ultimaAlteracao
+          )
+        ORDER BY i.GUIDPRODUTO, i.IMEI1, i.NUMEROSERIE
+      `);
+    imeis = imeisResult.recordset;
+  }
+
+  const faixasPorProduto = new Map<string, Record<string, unknown>[]>();
+  for (const faixa of faixasResult.recordset) {
+    const key = asGuidString(faixa.GUIDPRODUTO);
+    if (!faixasPorProduto.has(key)) faixasPorProduto.set(key, []);
+    faixasPorProduto.get(key)?.push(faixa);
+  }
+
+  const imeisPorProduto = new Map<string, Record<string, unknown>[]>();
+  for (const imei of imeis) {
+    const key = asGuidString(imei.GUIDPRODUTO);
+    if (!imeisPorProduto.has(key)) imeisPorProduto.set(key, []);
+    imeisPorProduto.get(key)?.push(imei);
+  }
+
+  const produtos = produtosResult.recordset.map((produto) => ({
+    ...produto,
+    categoria: {
+      GUIDCATEGORIA: produto.CATEGORIA_GUID ?? produto.GUIDENTIDADECAT ?? null,
+      CODCATEGORIA: produto.CODCATEGORIA ?? null,
+      CATEGORIA: produto.CATEGORIA_NOME ?? null,
+      DESCRICAO: produto.CATEGORIA_DESCRICAO ?? null,
+      SLUG: produto.CATEGORIA_SLUG ?? null,
+      ORDEMEXIBICAO: produto.CATEGORIA_ORDEMEXIBICAO ?? null,
+      SITUACAO: produto.CATEGORIA_SITUACAO ?? null,
+      ULTIMAALTERACAO: produto.CATEGORIA_ULTIMAALTERACAO ?? null,
+    },
+    faixasPreco: faixasPorProduto.get(asGuidString(produto.GUIDPRODUTO)) ?? [],
+    imeis: imeisPorProduto.get(asGuidString(produto.GUIDPRODUTO)) ?? [],
+  }));
+
+  const ultima = maxDateValue(
+    maiorUltimaAlteracao(produtosResult.recordset),
+    maiorUltimaAlteracao(categoriasResult.recordset),
+    maiorUltimaAlteracao(faixasResult.recordset),
+    maiorUltimaAlteracao(imeis as Array<{ ULTIMAALTERACAO?: Date | string | null }>)
+  ) ?? await ultimaAlteracaoBanco(guidEntidade);
+
+  return {
+    success: true,
+    sincronizadoEm: new Date().toISOString(),
+    origem: {
+      produtos: "KS0000.KS00009",
+      categorias: "KS0000.KS00008",
+      faixasPreco: "KS0004.ProdutoUnidadePreco",
+      imeis: "KS0005.KS_PRODUTOS_IMEI",
+    },
+    filtros: {
+      guidEntidade,
+      ultimaAlteracao: ultimaAlteracao ? ultimaAlteracao.toISOString() : null,
+      situacao,
+      limite,
+    },
+    totais: {
+      produtos: produtos.length,
+      categorias: categoriasResult.recordset.length,
+      faixasPreco: faixasResult.recordset.length,
+      imeis: imeis.length,
+    },
+    ULTIMAALTERACAO: ultima,
+    dados: produtos,
+    categorias: categoriasResult.recordset,
+    faixasPreco: faixasResult.recordset,
+    imeis,
+  };
+}
+
+async function ultimaAlteracaoProdutosOffline(guidEntidadeInput: string) {
+  const guidEntidade = guidSchema.parse(guidEntidadeInput);
+  const pool = await getSqlPool();
+  await garantirTabelaProdutoUnidadePreco();
+
+  const produtos = await pool.request()
+    .input("guidEntidade", sql.UniqueIdentifier, guidEntidade)
+    .query(`
+      SELECT MAX(ISNULL(ULTIMAALTERACAO, DATACADASTRO)) AS ULTIMAALTERACAO
+      FROM KS0000.KS00009
+      WHERE GUIDENTIDADE = @guidEntidade
+    `);
+
+  const categorias = await pool.request()
+    .input("guidEntidade", sql.UniqueIdentifier, guidEntidade)
+    .query(`
+      SELECT MAX(ISNULL(ULTIMAALTERACAO, DATACADASTRO)) AS ULTIMAALTERACAO
+      FROM KS0000.KS00008
+      WHERE GUIDENTIDADE = @guidEntidade
+    `);
+
+  const faixasPreco = await pool.request()
+    .input("guidEntidade", sql.UniqueIdentifier, guidEntidade)
+    .query(`
+      SELECT MAX(ISNULL(ULTIMAALTERACAO, DATACADASTRO)) AS ULTIMAALTERACAO
+      FROM KS0004.ProdutoUnidadePreco
+      WHERE GUIDENTIDADE = @guidEntidade
+    `);
+
+  let imeisUltimaAlteracao: Date | string | null = null;
+  if (await existeTabela("KS0005.KS_PRODUTOS_IMEI")) {
+    const imeis = await pool.request()
+      .input("guidEntidade", sql.UniqueIdentifier, guidEntidade)
+      .query(`
+        SELECT MAX(ISNULL(ULTIMAALTERACAO, DATAENTRADA)) AS ULTIMAALTERACAO
+        FROM KS0005.KS_PRODUTOS_IMEI
+        WHERE GUIDENTIDADE = @guidEntidade
+      `);
+    imeisUltimaAlteracao = imeis.recordset[0]?.ULTIMAALTERACAO ?? null;
+  }
+
+  const ultima = maxDateValue(
+    produtos.recordset[0]?.ULTIMAALTERACAO,
+    categorias.recordset[0]?.ULTIMAALTERACAO,
+    faixasPreco.recordset[0]?.ULTIMAALTERACAO,
+    imeisUltimaAlteracao
+  );
+
+  return {
+    success: true,
+    guidEntidade,
+    consultadoEm: new Date().toISOString(),
+    ULTIMAALTERACAO: ultima,
+    tabelas: {
+      produtos: produtos.recordset[0]?.ULTIMAALTERACAO ?? null,
+      categorias: categorias.recordset[0]?.ULTIMAALTERACAO ?? null,
+      faixasPreco: faixasPreco.recordset[0]?.ULTIMAALTERACAO ?? null,
+      imeis: imeisUltimaAlteracao,
+    },
+  };
+}
+
 async function listarProdutos(input: { guidEntidade: string; ultimaAlteracao?: string }) {
   const guidEntidade = guidSchema.parse(input.guidEntidade);
   const ultimaAlteracao = ultimaAlteracaoSchema.parse(input.ultimaAlteracao);
@@ -229,6 +482,32 @@ export function registerProdutosApiRoutes(app: Express) {
         guidEntidade: String(guidEntidade ?? ""),
         ultimaAlteracao: ultimaAlteracao == null ? undefined : String(ultimaAlteracao),
       }));
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.get("/api/produtos/offline-sync", async (req, res) => {
+    try {
+      const guidEntidade = firstQueryValue(req.query.guidEntidade);
+      const ultimaAlteracao = firstQueryValue(req.query.ultimaAlteracao);
+      const situacao = firstQueryValue(req.query.situacao);
+      const limite = firstQueryValue(req.query.limite);
+      res.json(await listarProdutosOffline({
+        guidEntidade: String(guidEntidade ?? ""),
+        ultimaAlteracao: ultimaAlteracao == null ? undefined : String(ultimaAlteracao),
+        situacao: situacao == null ? undefined : String(situacao),
+        limite: limite == null ? undefined : Number(limite),
+      }));
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.get("/api/produtos/offline-sync/ultima-alteracao", async (req, res) => {
+    try {
+      const guidEntidade = firstQueryValue(req.query.guidEntidade);
+      res.json(await ultimaAlteracaoProdutosOffline(String(guidEntidade ?? "")));
     } catch (error) {
       sendError(res, error);
     }

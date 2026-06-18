@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Loader2, CheckCircle2, XCircle, Info, Barcode, Plus, Trash2, Package } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import type { SistemaSegmento } from "@shared/datadev";
 
 interface ProdutoFormProps {
   guidProduto?: string;
@@ -129,7 +130,24 @@ interface FormData {
   estoque: string; estoqueMinimo: string;
   // Delivery
   imageUrl: string; erpCode: string;
+  permiteMontagem: boolean;
+  tipoMontagem: typeof TIPOS_MONTAGEM[number];
+  qtdMinOpcoes: string;
+  qtdMaxOpcoes: string;
+  obrigaSelecaoMontagem: boolean;
+  tipoCalculoPrecoMontagem: typeof TIPOS_CALCULO_PRECO[number];
+  opcoesMontagem: MontagemOpcaoItem[];
 }
+interface MontagemOpcaoItem {
+  guidProdutoOpcao: string;
+  descricao: string;
+  valorAdicional: string;
+  ordem: number;
+  situacao: "A" | "I";
+}
+
+const TIPOS_MONTAGEM = ["PIZZA", "TREM", "BITREM", "SUSHI", "COMBO", "OUTROS"] as const;
+const TIPOS_CALCULO_PRECO = ["MAIOR_VALOR", "MEDIA_VALORES", "SOMAR_VALORES", "PRECO_FIXO_PRODUTO"] as const;
 
 interface ImeiFormData {
   guidImei: string;
@@ -185,6 +203,13 @@ const FORM_INICIAL: FormData = {
   balanca: false, servico: false, alteraDescricao: false,
   estoque: "0", estoqueMinimo: "0",
   imageUrl: "", erpCode: "",
+  permiteMontagem: false,
+  tipoMontagem: "PIZZA",
+  qtdMinOpcoes: "0",
+  qtdMaxOpcoes: "0",
+  obrigaSelecaoMontagem: false,
+  tipoCalculoPrecoMontagem: "MAIOR_VALOR",
+  opcoesMontagem: [],
 };
 
 function criarImeiForm(): ImeiFormData {
@@ -236,6 +261,14 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
 
   const { data: categorias } = trpc.categorias.listarTodas.useQuery();
   const { data: regime } = trpc.produtos.regimeEmpresa.useQuery();
+  const segmentoEmpresa = String((regime as { segmento?: string } | undefined)?.segmento ?? "GERAL") as SistemaSegmento;
+  const mostrarAbaImei = segmentoEmpresa === "LOJA_CELULAR" || segmentoEmpresa === "ASSISTENCIA_TECNICA";
+  const mostrarAbaFood = segmentoEmpresa === "FOOD_DELIVERY";
+  const { data: produtosOpcaoData } = trpc.produtos.listar.useQuery(
+    { situacao: "A", pagina: 1, porPagina: 100 },
+    { enabled: open && mostrarAbaFood }
+  );
+  const produtosOpcao = (produtosOpcaoData?.registros ?? []).filter((produto) => String(produto.GUIDPRODUTO) !== String(guidProduto ?? ""));
 
   const { data: produtoData } = trpc.produtos.buscarPorGuid.useQuery(
     { guidProduto: guidProduto! },
@@ -352,6 +385,25 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         estoqueMinimo: d.ESTOQUEMINIMO !== undefined ? String(d.ESTOQUEMINIMO) : "0",
         imageUrl: String(d.IMAGEURL ?? ""),
         erpCode: String(d.ERPCODE ?? ""),
+        permiteMontagem: Boolean(d.PERMITEMONTAGEM),
+        tipoMontagem: TIPOS_MONTAGEM.includes(String(d.TIPOMONTAGEM ?? "PIZZA") as typeof TIPOS_MONTAGEM[number])
+          ? String(d.TIPOMONTAGEM ?? "PIZZA") as typeof TIPOS_MONTAGEM[number]
+          : "PIZZA",
+        qtdMinOpcoes: String(d.QTDMINOPCOES ?? "0"),
+        qtdMaxOpcoes: String(d.QTDMAXOPCOES ?? "0"),
+        obrigaSelecaoMontagem: Boolean(d.OBRIGASELECAOMONTAGEM),
+        tipoCalculoPrecoMontagem: TIPOS_CALCULO_PRECO.includes(String(d.TIPOCALCULOPRECOMONTAGEM ?? "MAIOR_VALOR") as typeof TIPOS_CALCULO_PRECO[number])
+          ? String(d.TIPOCALCULOPRECOMONTAGEM ?? "MAIOR_VALOR") as typeof TIPOS_CALCULO_PRECO[number]
+          : "MAIOR_VALOR",
+        opcoesMontagem: Array.isArray(d.opcoesMontagem)
+          ? (d.opcoesMontagem as Record<string, unknown>[]).map((opcao, index) => ({
+              guidProdutoOpcao: String(opcao.GUIDPRODUTOOPCAO ?? ""),
+              descricao: String(opcao.DESCRICAO ?? ""),
+              valorAdicional: String(opcao.VALORADICIONAL ?? "0"),
+              ordem: Number(opcao.ORDEM ?? index + 1),
+              situacao: String(opcao.SITUACAO ?? "A") === "I" ? "I" : "A",
+            }))
+          : [],
       });
     } else if (!isEdicao) {
       setForm(FORM_INICIAL);
@@ -361,6 +413,11 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
   useEffect(() => {
     if (!open) { setForm(FORM_INICIAL); setErros({}); setAbaAtiva("dados"); }
   }, [open]);
+
+  useEffect(() => {
+    if (abaAtiva === "imei" && !mostrarAbaImei) setAbaAtiva("dados");
+    if (abaAtiva === "foodDelivery" && !mostrarAbaFood) setAbaAtiva("dados");
+  }, [abaAtiva, mostrarAbaFood, mostrarAbaImei]);
 
   const utils = trpc.useUtils();
   const criarMutation = trpc.produtos.criar.useMutation();
@@ -373,7 +430,7 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
       busca: buscaImei || undefined,
       situacao: situacaoImei,
     },
-    { enabled: isEdicao && open && Boolean(guidProduto) }
+    { enabled: isEdicao && open && Boolean(guidProduto) && mostrarAbaImei }
   );
 
   function setField<K extends keyof FormData>(key: K, value: FormData[K]) {
@@ -413,6 +470,31 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
       };
       return { ...f, faixasPreco: faixas };
     }), []);
+
+  const toggleOpcaoMontagem = useCallback((guidProdutoOpcao: string, descricao: string) => {
+    setForm(f => {
+      const existe = f.opcoesMontagem.some(opcao => opcao.guidProdutoOpcao === guidProdutoOpcao);
+      if (existe) {
+        return { ...f, opcoesMontagem: f.opcoesMontagem.filter(opcao => opcao.guidProdutoOpcao !== guidProdutoOpcao) };
+      }
+      return {
+        ...f,
+        opcoesMontagem: [
+          ...f.opcoesMontagem,
+          { guidProdutoOpcao, descricao, valorAdicional: "0", ordem: f.opcoesMontagem.length + 1, situacao: "A" },
+        ],
+      };
+    });
+  }, []);
+
+  const updateOpcaoMontagem = useCallback((guidProdutoOpcao: string, field: "valorAdicional" | "ordem", value: string | number) => {
+    setForm(f => ({
+      ...f,
+      opcoesMontagem: f.opcoesMontagem.map(opcao =>
+        opcao.guidProdutoOpcao === guidProdutoOpcao ? { ...opcao, [field]: value } : opcao
+      ),
+    }));
+  }, []);
 
   function buildPrecosPayload() {
     if (form.modoPreco === "simples") {
@@ -614,6 +696,19 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
         alteraDescricao: form.alteraDescricao,
         estoque: parseFloat(form.estoque || "0"),
         estoqueMinimo: parseFloat(form.estoqueMinimo || "0"),
+        permiteMontagem: form.permiteMontagem,
+        tipoMontagem: form.tipoMontagem,
+        qtdMinOpcoes: parseInt(form.qtdMinOpcoes || "0") || 0,
+        qtdMaxOpcoes: parseInt(form.qtdMaxOpcoes || "0") || 0,
+        obrigaSelecaoMontagem: form.obrigaSelecaoMontagem,
+        tipoCalculoPrecoMontagem: form.tipoCalculoPrecoMontagem,
+        opcoesMontagem: form.opcoesMontagem.map((opcao, index) => ({
+          guidProdutoOpcao: opcao.guidProdutoOpcao,
+          descricao: opcao.descricao || undefined,
+          valorAdicional: parseFloat(opcao.valorAdicional || "0") || 0,
+          ordem: Number(opcao.ordem || index + 1),
+          situacao: opcao.situacao,
+        })),
       };
 
       if (isEdicao) {
@@ -668,8 +763,12 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
               <TabsTrigger value="precos" className="flex-1 min-w-[70px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">Preços</TabsTrigger>
               <TabsTrigger value="fiscal" className="flex-1 min-w-[60px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">Fiscal</TabsTrigger>
               <TabsTrigger value="estoque" className="flex-1 min-w-[70px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">Estoque</TabsTrigger>
-              <TabsTrigger value="imei" className="flex-1 min-w-[100px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">Celular / IMEI</TabsTrigger>
-              <TabsTrigger value="delivery" className="flex-1 min-w-[90px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">Delivery / ERP</TabsTrigger>
+              {mostrarAbaImei && (
+                <TabsTrigger value="imei" className="flex-1 min-w-[100px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">Celular / IMEI</TabsTrigger>
+              )}
+              {mostrarAbaFood && (
+                <TabsTrigger value="foodDelivery" className="flex-1 min-w-[110px] rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs">Food / Delivery</TabsTrigger>
+              )}
             </TabsList>
           </div>
 
@@ -1498,7 +1597,94 @@ export function ProdutoForm({ guidProduto, open, onClose, onSalvo }: ProdutoForm
               )}
             </TabsContent>
 
-            <TabsContent value="delivery" className="space-y-4 p-4 lg:p-5 mt-0">
+            <TabsContent value="foodDelivery" className="space-y-4 p-4 lg:p-5 mt-0">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="flex items-center gap-3 rounded-md border p-3">
+                  <Switch id="permiteMontagem" checked={form.permiteMontagem} onCheckedChange={v => setField("permiteMontagem", v)} />
+                  <div>
+                    <Label htmlFor="permiteMontagem" className="cursor-pointer">Permite montagem</Label>
+                    <p className="text-xs text-muted-foreground">Habilita selecao de sabores ou opcoes</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-md border p-3">
+                  <Switch id="obrigaSelecaoMontagem" checked={form.obrigaSelecaoMontagem} onCheckedChange={v => setField("obrigaSelecaoMontagem", v)} />
+                  <div>
+                    <Label htmlFor="obrigaSelecaoMontagem" className="cursor-pointer">Obriga selecao</Label>
+                    <p className="text-xs text-muted-foreground">Exige escolha antes da venda</p>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label>Tipo de montagem</Label>
+                  <Select value={form.tipoMontagem} onValueChange={v => setField("tipoMontagem", v as FormData["tipoMontagem"])}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {TIPOS_MONTAGEM.map(tipo => <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Calculo do preco</Label>
+                  <Select value={form.tipoCalculoPrecoMontagem} onValueChange={v => setField("tipoCalculoPrecoMontagem", v as FormData["tipoCalculoPrecoMontagem"])}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {TIPOS_CALCULO_PRECO.map(tipo => <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Quantidade minima de opcoes</Label>
+                  <Input type="number" min={0} value={form.qtdMinOpcoes} onChange={e => setField("qtdMinOpcoes", e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Quantidade maxima de opcoes</Label>
+                  <Input type="number" min={0} value={form.qtdMaxOpcoes} onChange={e => setField("qtdMaxOpcoes", e.target.value)} />
+                </div>
+              </div>
+
+              <div className="rounded-md border">
+                <div className="border-b px-3 py-2">
+                  <p className="text-sm font-semibold">Sabores / opcoes permitidas</p>
+                </div>
+                <div className="max-h-80 overflow-auto">
+                  {produtosOpcao.length === 0 ? (
+                    <div className="px-3 py-6 text-sm text-muted-foreground">Nenhum produto ativo encontrado para selecionar.</div>
+                  ) : (
+                    produtosOpcao.map(produtoOpcao => {
+                      const guidOpcao = String(produtoOpcao.GUIDPRODUTO);
+                      const selecionada = form.opcoesMontagem.find(opcao => opcao.guidProdutoOpcao === guidOpcao);
+                      return (
+                        <div key={guidOpcao} className="grid grid-cols-1 gap-2 border-b px-3 py-2 md:grid-cols-[1fr_140px_100px] md:items-center">
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(selecionada)}
+                              onChange={() => toggleOpcaoMontagem(guidOpcao, String(produtoOpcao.PRODUTO ?? ""))}
+                            />
+                            <span className="font-medium">{String(produtoOpcao.PRODUTO ?? "")}</span>
+                          </label>
+                          <Input
+                            type="number"
+                            step={0.01}
+                            min={0}
+                            disabled={!selecionada}
+                            value={selecionada?.valorAdicional ?? "0"}
+                            onChange={e => updateOpcaoMontagem(guidOpcao, "valorAdicional", e.target.value)}
+                            placeholder="Valor adicional"
+                          />
+                          <Input
+                            type="number"
+                            min={1}
+                            disabled={!selecionada}
+                            value={selecionada?.ordem ?? ""}
+                            onChange={e => updateOpcaoMontagem(guidOpcao, "ordem", Number(e.target.value) || 1)}
+                            placeholder="Ordem"
+                          />
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
               <div className="space-y-1">
                 <Label htmlFor="erpCode">Código ERP</Label>
                 <Input id="erpCode" value={form.erpCode} onChange={e => setTexto("erpCode", e.target.value)} placeholder="EX: PROD-001" maxLength={100} />

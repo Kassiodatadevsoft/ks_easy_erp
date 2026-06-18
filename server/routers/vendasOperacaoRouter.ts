@@ -73,6 +73,10 @@ export async function ensureVendasTables() {
         DESCONTOVALOR numeric(18,4) NOT NULL DEFAULT 0,
         TOTALITEM numeric(18,4) NOT NULL DEFAULT 0,
         FAIXAPRECOAPLICADA varchar(100) NULL,
+        GUIDTAMANHO uniqueidentifier NULL,
+        DESCRICAOTAMANHO varchar(100) NULL,
+        GUIDFAIXAPRECO uniqueidentifier NULL,
+        DESCRICAOFAIXAPRECO varchar(100) NULL,
         OBSERVACAO varchar(max) NULL,
         ULTIMAALTERACAO datetime NOT NULL,
         SINCRONIZADO bit NOT NULL DEFAULT 0
@@ -197,6 +201,10 @@ export async function ensureVendasTables() {
       IF COL_LENGTH('KS0005.KS00017','DESCONTOVALOR') IS NULL ALTER TABLE KS0005.KS00017 ADD DESCONTOVALOR numeric(18,4) NOT NULL CONSTRAINT DF_KS00017_DESCONTOVALOR_FINAL DEFAULT 0;
       IF COL_LENGTH('KS0005.KS00017','TOTALITEM') IS NULL ALTER TABLE KS0005.KS00017 ADD TOTALITEM numeric(18,4) NOT NULL CONSTRAINT DF_KS00017_TOTALITEM_FINAL DEFAULT 0;
       IF COL_LENGTH('KS0005.KS00017','FAIXAPRECOAPLICADA') IS NULL ALTER TABLE KS0005.KS00017 ADD FAIXAPRECOAPLICADA varchar(100) NULL;
+      IF COL_LENGTH('KS0005.KS00017','GUIDTAMANHO') IS NULL ALTER TABLE KS0005.KS00017 ADD GUIDTAMANHO uniqueidentifier NULL;
+      IF COL_LENGTH('KS0005.KS00017','DESCRICAOTAMANHO') IS NULL ALTER TABLE KS0005.KS00017 ADD DESCRICAOTAMANHO varchar(100) NULL;
+      IF COL_LENGTH('KS0005.KS00017','GUIDFAIXAPRECO') IS NULL ALTER TABLE KS0005.KS00017 ADD GUIDFAIXAPRECO uniqueidentifier NULL;
+      IF COL_LENGTH('KS0005.KS00017','DESCRICAOFAIXAPRECO') IS NULL ALTER TABLE KS0005.KS00017 ADD DESCRICAOFAIXAPRECO varchar(100) NULL;
       IF COL_LENGTH('KS0005.KS00017','ULTIMAALTERACAO') IS NULL ALTER TABLE KS0005.KS00017 ADD ULTIMAALTERACAO datetime NULL;
       IF COL_LENGTH('KS0005.KS00017','SINCRONIZADO') IS NULL ALTER TABLE KS0005.KS00017 ADD SINCRONIZADO bit NOT NULL CONSTRAINT DF_KS00017_SINCRONIZADO_FINAL DEFAULT 0;
     END;
@@ -236,6 +244,10 @@ const finalizarInput = z.object({
     descontoValor: z.number(),
     totalItem: z.number(),
     faixaPrecoAplicada: z.string().optional(),
+    guidTamanho: z.string().uuid().optional(),
+    descricaoTamanho: z.string().optional(),
+    guidFaixaPreco: z.string().uuid().optional(),
+    descricaoFaixaPreco: z.string().optional(),
     guidImei: z.string().uuid().optional(),
     imeiLabel: z.string().optional(),
     permiteVendaSemEstoque: z.boolean(),
@@ -437,6 +449,10 @@ export const vendasOperacaoRouter = router({
           .input("comissaozero", sql.Decimal(18, 4), 0)
           .input("cfop", sql.VarChar(4), "5102")
           .input("faixa", sql.VarChar(100), item.faixaPrecoAplicada ?? null)
+          .input("guidtamanho", sql.UniqueIdentifier, item.guidTamanho ?? null)
+          .input("descricaotamanho", sql.VarChar(100), item.descricaoTamanho ?? null)
+          .input("guidfaixapreco", sql.UniqueIdentifier, item.guidFaixaPreco ?? null)
+          .input("descricaofaixapreco", sql.VarChar(100), item.descricaoFaixaPreco ?? null)
           .input("observacao", sql.VarChar(sql.MAX), item.imeiLabel ?? null)
           .query(`
             INSERT INTO KS0005.KS00017
@@ -446,7 +462,8 @@ export const vendasOperacaoRouter = router({
                DESCONTOPERCENTUAL,DESCONTOVALOR,TOTALITEM,VALORTOTAL,CFOP,
                BASEICMS,VALORICMS,PORCICMS,PORCIPI,VALORIPI,PORCPIS,VALORPIS,PORCPISST,VALORPISST,
                PORCCOFINS,VALORCOFINS,PORCMVA,REDBASEICMS,REDBASEICMSST,BASEICMSST,PORCICMSST,VALORICMSST,
-               FATURAR,DTEMISSAO,FAIXAPRECOAPLICADA,OBSERVACAO,ULTIMAALTERACAO,SINCRONIZADO)
+               FATURAR,DTEMISSAO,FAIXAPRECOAPLICADA,GUIDTAMANHO,DESCRICAOTAMANHO,GUIDFAIXAPRECO,DESCRICAOFAIXAPRECO,
+               OBSERVACAO,ULTIMAALTERACAO,SINCRONIZADO)
             VALUES
               (@codentidade,@codprevenda,@guiditem,@guidvenda,@guidentidade,@guidvendedor,
                @guidproduto,@codproduto,@guidimei,@item,@quantidade,@estoque,@precocusto,@precovenda,
@@ -454,7 +471,8 @@ export const vendasOperacaoRouter = router({
                @descontopercentual,@descontovalor,@totalitem,@totalitem,@cfop,
                0,0,0,0,0,0,0,0,0,
                0,0,0,0,0,0,0,0,
-               0,GETDATE(),@faixa,@observacao,GETDATE(),0)
+               0,GETDATE(),@faixa,@guidtamanho,@descricaotamanho,@guidfaixapreco,@descricaofaixapreco,
+               @observacao,GETDATE(),0)
           `);
 
         await request()

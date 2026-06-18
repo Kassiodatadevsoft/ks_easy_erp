@@ -3,8 +3,9 @@ import { TRPCError } from "@trpc/server";
 import type { ConnectionPool } from "mssql";
 import type { KsSessionUser } from "../../shared/ksTypes";
 import { getSqlPool, sql } from "../sqlserver";
+import { DATADEV_ADMIN_CNPJ, normalizeCnpj } from "@shared/datadev";
 
-export const LICENCAS_ADMIN_CNPJ = "50303631000158";
+export const LICENCAS_ADMIN_CNPJ = DATADEV_ADMIN_CNPJ;
 
 export type LicencaPayload = {
   idLicenca?: number;
@@ -49,10 +50,6 @@ export type LicencaAssinada = {
   modulos: string[];
   assinatura: string;
 };
-
-export function normalizeCnpj(value: string | null | undefined) {
-  return String(value ?? "").replace(/\D/g, "");
-}
 
 export function isLicencasAdmin(session: KsSessionUser | null | undefined) {
   return normalizeCnpj(session?.entDocumento) === LICENCAS_ADMIN_CNPJ;

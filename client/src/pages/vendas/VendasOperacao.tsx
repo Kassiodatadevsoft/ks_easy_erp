@@ -25,6 +25,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { imprimirVendaFinalizada } from "./vendaImpressao";
 import {
   AlertTriangle,
   BadgeCheck,
@@ -32,9 +33,11 @@ import {
   Barcode,
   Calculator,
   Check,
+  CircleEllipsis,
   ClipboardList,
   CreditCard,
   FileText,
+  Landmark,
   Lock,
   PackageCheck,
   Plus,
@@ -45,6 +48,7 @@ import {
   Trash2,
   Truck,
   UserPlus,
+  Wallet,
   Wrench,
 } from "lucide-react";
 
@@ -53,10 +57,29 @@ type DiscountStatus = "OK" | "AUTHORIZED" | "BLOCKED";
 type DiscountMode = "percent" | "value" | "final";
 
 type PriceRange = {
+  guidPreco?: string;
   min: number;
   max?: number;
   price: number;
   label: string;
+};
+
+type SizeOption = {
+  id: string;
+  nome: string;
+  descricao: string;
+  price: number;
+  active: boolean;
+};
+
+type SelectedPriceOption = {
+  source: "UNITARIO" | "PROMOCAO" | "IMEI" | "TAMANHO" | "FAIXA";
+  price: number;
+  label: string;
+  guidTamanho?: string;
+  descricaoTamanho?: string;
+  guidFaixaPreco?: string;
+  descricaoFaixaPreco?: string;
 };
 
 type Product = {
@@ -86,6 +109,7 @@ type Product = {
   controlaLote: boolean;
   controlaValidade: boolean;
   controlaImei?: boolean;
+  tamanhos: SizeOption[];
   faixas: PriceRange[];
 };
 
@@ -110,6 +134,11 @@ type SaleItem = {
   imeiLabel?: string;
   imeiCusto?: number;
   imeiPrecoVenda?: number;
+  priceOption: SelectedPriceOption;
+  guidTamanho?: string;
+  descricaoTamanho?: string;
+  guidFaixaPreco?: string;
+  descricaoFaixaPreco?: string;
 };
 
 type Payment = {
@@ -119,6 +148,7 @@ type Payment = {
   valor: number;
   parcelas: number;
   jurosPercentual: number;
+  nsuAutorizacao?: string;
 };
 
 type ImeiVenda = {
@@ -205,6 +235,10 @@ const products: Product[] = [
     controlaGrade: true,
     controlaLote: false,
     controlaValidade: false,
+    tamanhos: [
+      { id: "M", nome: "M", descricao: "M", price: 100, active: true },
+      { id: "G", nome: "G", descricao: "G", price: 110, active: true },
+    ],
     faixas: [
       { min: 1, max: 5, price: 100, label: "1 a 5 un." },
       { min: 6, max: 10, price: 95, label: "6 a 10 un." },
@@ -235,6 +269,7 @@ const products: Product[] = [
     controlaGrade: false,
     controlaLote: true,
     controlaValidade: true,
+    tamanhos: [],
     faixas: [
       { min: 1, max: 9, price: 42, label: "Varejo" },
       { min: 10, max: 29, price: 39.5, label: "Atacado 10+" },
@@ -264,6 +299,7 @@ const products: Product[] = [
     controlaGrade: false,
     controlaLote: true,
     controlaValidade: false,
+    tamanhos: [],
     faixas: [],
   },
   {
@@ -289,6 +325,7 @@ const products: Product[] = [
     controlaGrade: false,
     controlaLote: false,
     controlaValidade: false,
+    tamanhos: [],
     faixas: [],
   },
 ];
@@ -321,6 +358,7 @@ type ProdutoCadastro = {
   SERVICO: boolean;
   BALANCA: boolean;
   faixasPreco?: Array<{
+    GUIDPRECO?: string;
     ID?: number;
     UNIDADE?: string;
     FATORCONVERSAO?: number;
@@ -360,27 +398,81 @@ function formatDate(value: string | undefined) {
   return year && month && day ? `${day}/${month}/${year}` : value;
 }
 
-function dateTime(value: string | Date | null | undefined) {
-  if (!value) return "-";
-  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
-}
-
-function parseSizes(value: string | null | undefined) {
+function parseJson(value: string | null | undefined) {
   if (!value) return [];
   try {
-    const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) {
-      return parsed.map((item) => String(item)).filter(Boolean);
-    }
+    return JSON.parse(value);
   } catch {
     return value.split(/[;,|]/).map((item) => item.trim()).filter(Boolean);
   }
-  return [];
+}
+
+function sizeNameIsDefault(name: string) {
+  return ["unico", "único", "unitario", "unitário", "padrao", "padrão", "un"].includes(name.trim().toLowerCase());
+}
+
+function asUuid(value: string | undefined) {
+  return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : undefined;
+}
+
+function parseSizeOptions(precos: string | null | undefined, tamanhosDisp: string | null | undefined, defaultPrice: number) {
+  const fromPrecos = parseJson(precos);
+  const fromTamanhos = parseJson(tamanhosDisp);
+  const options: SizeOption[] = [];
+
+  if (Array.isArray(fromPrecos)) {
+    fromPrecos.forEach((item, index) => {
+      if (typeof item === "string") {
+        options.push({ id: item, nome: item, descricao: item, price: defaultPrice, active: true });
+        return;
+      }
+      if (item && typeof item === "object") {
+        const record = item as Record<string, unknown>;
+        const nome = String(record.nome ?? record.tamanho ?? record.descricao ?? record.label ?? "").trim();
+        if (!nome) return;
+        const price = Number(record.preco ?? record.precoVenda ?? record.valor ?? record.PRECOVENDA ?? defaultPrice);
+        options.push({
+          id: String(record.guid ?? record.id ?? record.GUIDTAMANHO ?? nome),
+          nome,
+          descricao: String(record.descricao ?? record.label ?? nome),
+          price: price > 0 ? price : defaultPrice,
+          active: record.ativo !== false && record.ATIVO !== false,
+        });
+      }
+    });
+  } else if (fromPrecos && typeof fromPrecos === "object") {
+    Object.entries(fromPrecos as Record<string, unknown>).forEach(([nome, value]) => {
+      const price = typeof value === "object" && value
+        ? Number((value as Record<string, unknown>).preco ?? (value as Record<string, unknown>).precoVenda ?? defaultPrice)
+        : Number(value ?? defaultPrice);
+      options.push({
+        id: nome,
+        nome,
+        descricao: nome,
+        price: price > 0 ? price : defaultPrice,
+        active: true,
+      });
+    });
+  }
+
+  if (!options.length) {
+    const tamanhos = Array.isArray(fromTamanhos) ? fromTamanhos : typeof fromTamanhos === "string" ? [fromTamanhos] : [];
+    tamanhos.forEach((item) => {
+      const nome = String(item).trim();
+      if (nome) options.push({ id: nome, nome, descricao: nome, price: defaultPrice, active: true });
+    });
+  }
+
+  const activeOptions = options.filter((option) => option.active && option.price > 0);
+  if (activeOptions.length === 1 && sizeNameIsDefault(activeOptions[0].nome)) return [];
+  return activeOptions.filter((option) => !sizeNameIsDefault(option.nome) || activeOptions.length > 1);
 }
 
 function mapProdutoCadastro(row: ProdutoCadastro): Product {
-  const tamanhos = parseSizes(row.TAMANHOSDISP);
   const precoVenda = Number(row.PRECOVENDA || row.PRECO || 0);
+  const tamanhos = parseSizeOptions(row.PRECOS, row.TAMANHOSDISP, precoVenda);
   const faixas = (row.faixasPreco ?? [])
     .filter((faixa) => faixa.ATIVO !== false && Number(faixa.PRECOVENDA ?? 0) > 0)
     .sort((a, b) => Number(a.QUANTIDADEMINIMA ?? 0) - Number(b.QUANTIDADEMINIMA ?? 0))
@@ -389,6 +481,7 @@ function mapProdutoCadastro(row: ProdutoCadastro): Product {
       const next = array[index + 1];
       const nextMin = next ? Number(next.QUANTIDADEMINIMA ?? 0) : 0;
       return {
+        guidPreco: faixa.GUIDPRECO,
         min,
         max: nextMin > min ? nextMin - 0.001 : undefined,
         price: Number(faixa.PRECOVENDA ?? precoVenda),
@@ -402,7 +495,7 @@ function mapProdutoCadastro(row: ProdutoCadastro): Product {
     barcode: row.CODBARRAS || row.CODBARRACAIXA || "",
     referencia: row.REFERENCIA || row.ERPCODE || "",
     descricao: row.PRODUTO || row.DESCRICAO || "Produto sem descricao",
-    tamanho: tamanhos[0] || row.UNIDADE || "UN",
+    tamanho: tamanhos[0]?.nome || row.UNIDADE || "UN",
     cor: "sem cor",
     marca: "sem marca",
     categoria: row.CATEGORIA || "sem categoria",
@@ -422,6 +515,7 @@ function mapProdutoCadastro(row: ProdutoCadastro): Product {
     controlaGrade: tamanhos.length > 1,
     controlaLote: false,
     controlaValidade: false,
+    tamanhos,
     faixas,
   };
 }
@@ -439,21 +533,62 @@ function isPromotionValid(product: Product) {
 
 function priceFor(product: Product, quantidade: number) {
   if (isPromotionValid(product)) {
-    return { price: product.precoPromocional ?? product.precoVenda, faixa: "Promocao valida" };
+    return { price: product.precoPromocional ?? product.precoVenda, faixa: "Promocao valida", source: "PROMOCAO" as const };
   }
 
   const range = product.faixas.find((f) => quantidade >= f.min && (f.max == null || quantidade <= f.max));
-  if (range) return { price: range.price, faixa: range.label };
+  if (range) return { price: range.price, faixa: range.label, source: "FAIXA" as const, guidFaixaPreco: range.guidPreco, descricaoFaixaPreco: range.label };
 
-  return { price: product.precoVenda, faixa: "Preco padrao" };
+  return { price: product.precoVenda, faixa: "Preco padrao", source: "UNITARIO" as const };
 }
 
 function priceForItem(product: Product, quantidade: number, imeiPrecoVenda?: number) {
   if (imeiPrecoVenda && imeiPrecoVenda > 0) {
-    return { price: imeiPrecoVenda, faixa: "Preco IMEI" };
+    return { price: imeiPrecoVenda, faixa: "Preco IMEI", source: "IMEI" as const };
   }
 
   return priceFor(product, quantidade);
+}
+
+function selectedFromPrice(product: Product, quantidade: number, imeiPrecoVenda?: number): SelectedPriceOption {
+  const priced = priceForItem(product, quantidade, imeiPrecoVenda);
+  return {
+    source: priced.source,
+    price: priced.price,
+    label: priced.faixa,
+    guidFaixaPreco: "guidFaixaPreco" in priced ? asUuid(priced.guidFaixaPreco) : undefined,
+    descricaoFaixaPreco: "descricaoFaixaPreco" in priced ? priced.descricaoFaixaPreco : undefined,
+  };
+}
+
+function selectedFromSize(size: SizeOption): SelectedPriceOption {
+  return {
+    source: "TAMANHO",
+    price: size.price,
+    label: `Tamanho ${size.descricao}`,
+    guidTamanho: asUuid(size.id),
+    descricaoTamanho: size.descricao,
+  };
+}
+
+function selectedFromRange(range: PriceRange): SelectedPriceOption {
+  return {
+    source: "FAIXA",
+    price: range.price,
+    label: range.label,
+    guidFaixaPreco: asUuid(range.guidPreco),
+    descricaoFaixaPreco: range.label,
+  };
+}
+
+function priceForSaleItem(item: SaleItem, quantity: number) {
+  if (item.imeiPrecoVenda && item.imeiPrecoVenda > 0) {
+    return selectedFromPrice(item.product, quantity, item.imeiPrecoVenda);
+  }
+  if (["TAMANHO", "FAIXA"].includes(item.priceOption.source)) {
+    return item.priceOption;
+  }
+  return selectedFromPrice(item.product, quantity);
 }
 
 function costForItem(product: Product, imeiCusto?: number) {
@@ -475,35 +610,56 @@ function imeiLabel(imei: ImeiVenda) {
   return [imei.imei1, imei.imei2, imei.numeroSerie].filter(Boolean).join(" / ");
 }
 
-function makeItem(guidVenda: string, product: Product, quantidade = 1, imei?: ImeiVenda): SaleItem {
+function paymentVisual(name: string) {
+  const normalized = name.toLowerCase();
+  if (normalized.includes("dinheiro")) return { icon: <Banknote className="h-5 w-5" />, tone: "text-emerald-700 bg-emerald-50" };
+  if (normalized.includes("pix")) return { icon: <Wallet className="h-5 w-5" />, tone: "text-teal-700 bg-teal-50" };
+  if (normalized.includes("transfer")) return { icon: <Landmark className="h-5 w-5" />, tone: "text-sky-700 bg-sky-50" };
+  if (normalized.includes("debito") || normalized.includes("débito")) return { icon: <CreditCard className="h-5 w-5" />, tone: "text-blue-700 bg-blue-50" };
+  if (normalized.includes("credito") || normalized.includes("crédito")) return { icon: <CreditCard className="h-5 w-5" />, tone: "text-violet-700 bg-violet-50" };
+  return { icon: <CircleEllipsis className="h-5 w-5" />, tone: "text-slate-700 bg-slate-100" };
+}
+
+function makeItem(
+  guidVenda: string,
+  product: Product,
+  quantidade = 1,
+  imei?: ImeiVenda,
+  priceOption?: SelectedPriceOption,
+): SaleItem {
   const normalizedQuantity = normalizeQuantity(product, quantidade);
   const imeiCusto = Number(imei?.custo ?? 0);
   const imeiPrecoVenda = Number(imei?.precoVenda ?? 0);
-  const priced = priceForItem(product, normalizedQuantity, imeiPrecoVenda);
+  const selectedPrice = imei ? selectedFromPrice(product, normalizedQuantity, imeiPrecoVenda) : priceOption ?? selectedFromPrice(product, normalizedQuantity);
   return recalcItem({
     id: `${product.id}-${Date.now()}`,
     guidVenda,
     product,
     quantidade: normalizedQuantity,
     custoUnitario: costForItem(product, imeiCusto),
-    precoBase: priced.price,
-    precoUnitario: priced.price,
-    faixa: priced.faixa,
+    precoBase: selectedPrice.price,
+    precoUnitario: selectedPrice.price,
+    faixa: selectedPrice.label,
     descontoPercentual: 0,
     descontoValor: 0,
-    precoFinal: priced.price,
-    total: priced.price * normalizedQuantity,
+    precoFinal: selectedPrice.price,
+    total: selectedPrice.price * normalizedQuantity,
     status: "OK",
     guidImei: imei?.guidImei,
     imeiLabel: imei ? imeiLabel(imei) : undefined,
     imeiCusto: imeiCusto > 0 ? imeiCusto : undefined,
     imeiPrecoVenda: imeiPrecoVenda > 0 ? imeiPrecoVenda : undefined,
+    priceOption: selectedPrice,
+    guidTamanho: selectedPrice.guidTamanho,
+    descricaoTamanho: selectedPrice.descricaoTamanho,
+    guidFaixaPreco: selectedPrice.guidFaixaPreco,
+    descricaoFaixaPreco: selectedPrice.descricaoFaixaPreco,
   });
 }
 
 function recalcItem(item: SaleItem, mode?: DiscountMode, rawValue?: number): SaleItem {
   const quantity = normalizeQuantity(item.product, item.quantidade);
-  const priced = priceForItem(item.product, quantity, item.imeiPrecoVenda);
+  const priced = priceForSaleItem(item, quantity);
   let discountValue = item.descontoValor;
   let discountPercent = item.descontoPercentual;
 
@@ -532,12 +688,17 @@ function recalcItem(item: SaleItem, mode?: DiscountMode, rawValue?: number): Sal
     custoUnitario: costForItem(item.product, item.imeiCusto),
     precoBase: priced.price,
     precoUnitario: priced.price,
-    faixa: priced.faixa,
+    faixa: priced.label,
     descontoPercentual: discountPercent,
     descontoValor: discountValue,
     precoFinal: finalPrice,
     total: finalPrice * quantity,
     status,
+    guidTamanho: priced.guidTamanho,
+    descricaoTamanho: priced.descricaoTamanho,
+    guidFaixaPreco: priced.guidFaixaPreco,
+    descricaoFaixaPreco: priced.descricaoFaixaPreco,
+    priceOption: priced,
   };
 }
 
@@ -569,6 +730,11 @@ export default function VendasOperacao() {
   const [imeiCor, setImeiCor] = useState("TODAS");
   const [imeiCapacidade, setImeiCapacidade] = useState("TODAS");
   const [imeiOrdenacao, setImeiOrdenacao] = useState<ImeiOrdenacao>("PRECO_ASC");
+  const [pendingQuantity, setPendingQuantity] = useState(1);
+  const [sizeSelectionProduct, setSizeSelectionProduct] = useState<Product | null>(null);
+  const [selectedSizeId, setSelectedSizeId] = useState("");
+  const [rangeSelectionProduct, setRangeSelectionProduct] = useState<Product | null>(null);
+  const [selectedRangeId, setSelectedRangeId] = useState("");
   const utils = trpc.useUtils();
   const atualizarSituacaoImei = trpc.produtos.atualizarSituacaoImei.useMutation();
   const [finalizandoVenda, setFinalizandoVenda] = useState(false);
@@ -785,7 +951,12 @@ export default function VendasOperacao() {
     };
   }
 
-  async function reserveAndAddProduct(product: Product, quantidade: number, imei?: ImeiVenda) {
+  async function reserveAndAddProduct(
+    product: Product,
+    quantidade: number,
+    imei?: ImeiVenda,
+    priceOption?: SelectedPriceOption,
+  ) {
     if (!caixaAberto || caixaAberto.SITUACAO !== "ABERTO") {
       toast.error("Caixa invalido ou fechado. Abra um caixa antes de finalizar a venda.");
       return;
@@ -811,11 +982,30 @@ export default function VendasOperacao() {
       await atualizarSituacaoImei.mutateAsync({ guidImei: imei.guidImei, situacao: "RESERVADO" });
       product = { ...product, controlaImei: true };
     }
-    if (product.controlaGrade) {
+    if (priceOption?.source === "TAMANHO") {
+      toast.info(`Tamanho selecionado: ${priceOption.descricaoTamanho} - ${money(priceOption.price)}`);
+    } else if (priceOption?.source === "FAIXA") {
+      toast.info(`Faixa selecionada: ${priceOption.descricaoFaixaPreco} - ${money(priceOption.price)}`);
+    } else if (product.controlaGrade) {
       toast.info(`Grade identificada: ${product.tamanho} / ${product.cor}`);
     }
-    setItems((current) => [...current, makeItem(guidVenda, product, normalizedQuantity, imei)]);
+    setItems((current) => [...current, makeItem(guidVenda, product, normalizedQuantity, imei, priceOption)]);
     setSearch("");
+  }
+
+  function openSizeSelection(product: Product, quantidade: number) {
+    const normalizedQuantity = normalizeQuantity(product, quantidade);
+    setPendingQuantity(normalizedQuantity);
+    setSelectedSizeId(product.tamanhos[0]?.id ?? "");
+    setSizeSelectionProduct(product);
+  }
+
+  function openRangeSelection(product: Product, quantidade: number) {
+    const normalizedQuantity = normalizeQuantity(product, quantidade);
+    const suggested = product.faixas.find((faixa) => normalizedQuantity >= faixa.min && (faixa.max == null || normalizedQuantity <= faixa.max));
+    setPendingQuantity(normalizedQuantity);
+    setSelectedRangeId(suggested?.guidPreco ?? suggested?.label ?? product.faixas[0]?.guidPreco ?? product.faixas[0]?.label ?? "");
+    setRangeSelectionProduct(product);
   }
 
   async function addProduct(product: Product, quantidade = 1, imei?: ImeiVenda) {
@@ -852,6 +1042,16 @@ export default function VendasOperacao() {
       setImeiCor("TODAS");
       setImeiCapacidade("TODAS");
       setImeiOrdenacao("PRECO_ASC");
+      return;
+    }
+
+    if (product.tamanhos.length > 0) {
+      openSizeSelection(product, quantidade);
+      return;
+    }
+
+    if (product.faixas.length > 0) {
+      openRangeSelection(product, quantidade);
       return;
     }
 
@@ -960,106 +1160,6 @@ export default function VendasOperacao() {
     }
   }
 
-  function imprimirVenda(numeroVenda: number, dataHora: string, empresa: { nomeFantasia?: string; razaoSocial?: string; cnpj?: string }) {
-    const pagamentosComValor = payments
-      .filter((payment) => payment.valor > 0)
-      .map((payment) => ({
-        ...payment,
-        forma: formasPagamentoMap.get(payment.guidFormaPagamento)?.PAGAMENTO ?? "Forma de pagamento",
-      }));
-    const html = `
-      <html>
-        <head>
-          <title>Venda ${numeroVenda}</title>
-          <style>
-            body { font-family: Arial, sans-serif; color: #111827; padding: 18px; max-width: 820px; margin: auto; }
-            .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border-bottom: 2px solid #111827; padding-bottom: 12px; }
-            .logo { font-size: 28px; font-weight: 800; color: #0f172a; letter-spacing: .5px; }
-            .muted { color: #64748b; font-size: 12px; }
-            h1 { font-size: 18px; margin: 14px 0 6px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-            th, td { padding: 7px 5px; border-bottom: 1px solid #e5e7eb; font-size: 12px; text-align: left; }
-            .right { text-align: right; }
-            .totals { margin-left: auto; width: 320px; margin-top: 12px; }
-            .line { display: flex; justify-content: space-between; padding: 4px 0; }
-            .total { font-size: 18px; font-weight: 700; border-top: 1px solid #111827; margin-top: 4px; padding-top: 8px; }
-            .footer { margin-top: 28px; border-top: 1px solid #cbd5e1; padding-top: 12px; font-size: 12px; display: flex; justify-content: space-between; gap: 12px; }
-          </style>
-        </head>
-        <body>
-          <div class="top">
-            <div>
-              <div class="logo">DataDev</div>
-              <div>${empresa.nomeFantasia || empresa.razaoSocial || ""}</div>
-              <div class="muted">${empresa.razaoSocial || ""}</div>
-              <div class="muted">CNPJ: ${empresa.cnpj || ""}</div>
-            </div>
-            <div class="right">
-              <strong>VENDA / CUPOM NAO FISCAL</strong><br/>
-              Venda: ${numeroVenda}<br/>
-              Data: ${dateTime(dataHora)}<br/>
-              Operador: ${caixaAberto?.GUIDUSUARIO ?? "-"}<br/>
-              Vendedor: ${vendedorSelecionado?.NOME ?? "-"}<br/>
-              Caixa: ${caixaAberto?.NUMEROCAIXA ?? "-"}
-            </div>
-          </div>
-
-          <h1>Cliente</h1>
-          <div>${vendaCliente.clientePadrao ? "Cliente: CONSUMIDOR FINAL" : `Cliente: ${vendaCliente.nome} - ${vendaCliente.documento}`}</div>
-
-          <h1>Itens</h1>
-          <table>
-            <thead><tr><th>Item</th><th>Descricao</th><th>IMEI/Serie</th><th class="right">Qtd</th><th class="right">Unit.</th><th class="right">Desc.</th><th class="right">Total</th></tr></thead>
-            <tbody>
-              ${items.map((item, index) => `
-                <tr>
-                  <td>${index + 1}</td>
-                  <td>${item.product.descricao}</td>
-                  <td>${item.imeiLabel || "-"}</td>
-                  <td class="right">${item.quantidade.toLocaleString("pt-BR")}</td>
-                  <td class="right">${money(item.precoUnitario)}</td>
-                  <td class="right">${money(item.descontoValor * item.quantidade)}</td>
-                  <td class="right">${money(item.total)}</td>
-                </tr>
-              `).join("")}
-            </tbody>
-          </table>
-
-          <h1>Pagamentos</h1>
-          <table>
-            ${pagamentosComValor.map((payment) => `<tr><td>${payment.forma}</td><td class="right">${money(payment.valor)}</td></tr>`).join("")}
-          </table>
-
-          <div class="totals">
-            <div class="line"><span>Subtotal</span><strong>${money(totals.bruto)}</strong></div>
-            <div class="line"><span>Desconto</span><strong>${money(totals.descontoTotal)}</strong></div>
-            <div class="line"><span>Acrescimo</span><strong>${money(totals.acrescimos)}</strong></div>
-            <div class="line total"><span>Total</span><span>${money(totals.totalLiquido)}</span></div>
-            <div class="line"><span>Valor pago</span><strong>${money(totals.pago)}</strong></div>
-            <div class="line"><span>Troco</span><strong>${money(totals.troco)}</strong></div>
-          </div>
-
-          <div class="footer">
-            <div>
-              Gerado pela empresa Data Consultoria e desenvolvimento de software<br/>
-              datadevsoft.com.br<br/>
-              Tim (94) 98146-9059
-            </div>
-            <div class="logo">DataDev</div>
-          </div>
-          <script>window.print()</script>
-        </body>
-      </html>
-    `;
-    const printWindow = window.open("", "_blank", "width=900,height=700");
-    if (!printWindow) {
-      toast.error("Venda salva, mas nao foi possivel abrir a impressao.");
-      return;
-    }
-    printWindow.document.write(html);
-    printWindow.document.close();
-  }
-
   async function finishDocument() {
     if (finalizandoVenda) return;
     const blocked = items.some((item) => item.status === "BLOCKED");
@@ -1158,6 +1258,10 @@ export default function VendasOperacao() {
           descontoValor: item.descontoValor,
           totalItem: item.total,
           faixaPrecoAplicada: item.faixa,
+          guidTamanho: item.guidTamanho,
+          descricaoTamanho: item.descricaoTamanho,
+          guidFaixaPreco: item.guidFaixaPreco,
+          descricaoFaixaPreco: item.descricaoFaixaPreco,
           guidImei: item.guidImei,
           imeiLabel: item.imeiLabel,
           permiteVendaSemEstoque: item.product.permiteVendaSemEstoque,
@@ -1186,10 +1290,14 @@ export default function VendasOperacao() {
       }
       const numeroFinalizado = result.CODPREVENDA ?? result.codPreVenda ?? result.numeroVenda;
       toast.success("Venda finalizada com sucesso.");
-      imprimirVenda(numeroFinalizado, result.dataHora, result.empresa);
+      try {
+        await imprimirVendaFinalizada(result.guidVenda ?? result.GUIDVENDA ?? guidVenda, "bobina");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Venda salva, mas nao foi possivel abrir a impressao.");
+      }
       setItems([]);
       setGeneralDiscount(0);
-      setPayments([{ id: `pay-${Date.now()}`, guidFormaPagamento: formasPagamentoAtivas[0]?.guidPagamento ?? "", valor: 0, parcelas: 1, jurosPercentual: 0 }]);
+      setPayments([{ id: `pay-${Date.now()}`, guidFormaPagamento: formasPagamentoAtivas[0]?.guidPagamento ?? "", valor: 0, parcelas: 1, jurosPercentual: 0, nsuAutorizacao: "" }]);
       setGuidVenda(crypto.randomUUID());
       await utils.caixaMovimento.atual.invalidate();
       await utils.produtos.listar.invalidate();
@@ -1218,6 +1326,30 @@ export default function VendasOperacao() {
     setImeiOptions([]);
   }
 
+  async function selectSizeAndAdd() {
+    if (!sizeSelectionProduct) return;
+    const size = sizeSelectionProduct.tamanhos.find((option) => option.id === selectedSizeId);
+    if (!size) {
+      toast.error("Selecione um tamanho para continuar.");
+      return;
+    }
+    await reserveAndAddProduct(sizeSelectionProduct, pendingQuantity, undefined, selectedFromSize(size));
+    setSizeSelectionProduct(null);
+    setSelectedSizeId("");
+  }
+
+  async function selectRangeAndAdd() {
+    if (!rangeSelectionProduct) return;
+    const range = rangeSelectionProduct.faixas.find((option) => (option.guidPreco ?? option.label) === selectedRangeId);
+    if (!range) {
+      toast.error("Selecione uma faixa de preco para continuar.");
+      return;
+    }
+    await reserveAndAddProduct(rangeSelectionProduct, pendingQuantity, undefined, selectedFromRange(range));
+    setRangeSelectionProduct(null);
+    setSelectedRangeId("");
+  }
+
   async function cancelDocument() {
     for (const item of items) {
       if (item.guidImei) {
@@ -1227,7 +1359,7 @@ export default function VendasOperacao() {
     setItems([]);
     setGeneralDiscount(0);
     setClienteId("");
-    setPayments([{ id: `pay-${Date.now()}`, guidFormaPagamento: formasPagamentoAtivas[0]?.guidPagamento ?? "", valor: 0, parcelas: 1, jurosPercentual: 0 }]);
+    setPayments([{ id: `pay-${Date.now()}`, guidFormaPagamento: formasPagamentoAtivas[0]?.guidPagamento ?? "", valor: 0, parcelas: 1, jurosPercentual: 0, nsuAutorizacao: "" }]);
     setGuidVenda(crypto.randomUUID());
     setImeiSelectionProduct(null);
     setImeiOptions([]);
@@ -1263,18 +1395,10 @@ export default function VendasOperacao() {
               <Trash2 className="h-4 w-4" />
               Cancelar
             </Button>
-            <Button
-              onClick={() => void finishDocument()}
-              disabled={finalizandoVenda}
-              className="gap-2 bg-slate-900 hover:bg-slate-800"
-            >
-              <PackageCheck className="h-4 w-4" />
-              {finalizandoVenda ? "Finalizando..." : "Finalizar"}
-            </Button>
           </div>
         </div>
 
-        <div className="grid gap-3 xl:grid-cols-[1fr_420px]">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="space-y-3">
             <Card className="rounded-md border-slate-200 shadow-sm">
               <CardContent className="p-3">
@@ -1354,7 +1478,7 @@ export default function VendasOperacao() {
               </CardContent>
             </Card>
 
-            <div className={`grid gap-3 ${showProductResults ? "lg:grid-cols-[minmax(280px,360px)_1fr]" : "lg:grid-cols-1"}`}>
+            <div className={`grid gap-3 ${showProductResults ? "lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]" : "lg:grid-cols-1"}`}>
               {showProductResults && (
                 <Card className="rounded-md border-slate-200 shadow-sm">
                   <CardHeader className="p-3 pb-2">
@@ -1386,7 +1510,11 @@ export default function VendasOperacao() {
                             <p className="truncate text-sm font-semibold text-slate-900">{product.descricao}</p>
                             <p className="text-xs text-slate-500">{product.codigo} / {product.barcode}</p>
                           </div>
-                          <span className="text-sm font-bold text-slate-950">{money(priceFor(product, 1).price)}</span>
+                          <span className="text-sm font-bold text-slate-950">
+                            {product.tamanhos.length > 0
+                              ? `A partir de ${money(Math.min(...product.tamanhos.map((size) => size.price)))}`
+                              : money(priceFor(product, 1).price)}
+                          </span>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-1">
                           <Badge variant="outline">{product.tamanho}</Badge>
@@ -1395,6 +1523,8 @@ export default function VendasOperacao() {
                             Estoque {stockAvailable(product)}
                           </Badge>
                           {isPromotionValid(product) && <Badge className="bg-sky-100 text-sky-800">Promocao</Badge>}
+                          {product.tamanhos.length > 0 && <Badge variant="outline">Tamanhos {product.tamanhos.length}</Badge>}
+                          {product.faixas.length > 0 && <Badge variant="outline">Faixas {product.faixas.length}</Badge>}
                         </div>
                       </button>
                     ))}
@@ -1447,7 +1577,7 @@ export default function VendasOperacao() {
                                 <p className="text-xs text-slate-500">{item.product.codigo} / {item.product.barcode} / {item.product.referencia}</p>
                               </TableCell>
                               <TableCell className="font-mono text-xs">{item.imeiLabel || "-"}</TableCell>
-                              <TableCell className="text-xs">{item.product.tamanho} / {item.product.cor}</TableCell>
+                              <TableCell className="text-xs">{item.descricaoTamanho || `${item.product.tamanho} / ${item.product.cor}`}</TableCell>
                               <TableCell>
                                 <Input
                                   type="number"
@@ -1462,7 +1592,7 @@ export default function VendasOperacao() {
                               </TableCell>
                               <TableCell className={stockAvailable(item.product) <= 0 ? "text-red-600" : "text-slate-700"}>{stockAvailable(item.product)}</TableCell>
                               <TableCell>{money(item.precoUnitario)}</TableCell>
-                              <TableCell><Badge variant="outline">{item.faixa}</Badge></TableCell>
+                              <TableCell><Badge variant="outline">{item.descricaoFaixaPreco || item.faixa}</Badge></TableCell>
                               <TableCell>
                                 <Input
                                   type="number"
@@ -1514,6 +1644,173 @@ export default function VendasOperacao() {
                 </CardContent>
               </Card>
             </div>
+
+            <Card className="rounded-md border-blue-200 shadow-sm">
+              <CardHeader className="flex-row items-center justify-between p-3 pb-2">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-sm"><CreditCard className="h-4 w-4" />Forma de pagamento</CardTitle>
+                  <p className="mt-1 text-xs text-slate-500">Selecione ou combine as formas de pagamento</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  disabled={!formasPagamentoAtivas.length}
+                  onClick={() => setPayments((current) => [...current, {
+                    id: `pay-${Date.now()}`,
+                    guidFormaPagamento: formasPagamentoAtivas[0]?.guidPagamento ?? "",
+                    codFormaPagamento: formasPagamentoAtivas[0]?.CODFORMAPAGAMENTO ?? null,
+                    valor: 0,
+                    parcelas: 1,
+                    jurosPercentual: 0,
+                    nsuAutorizacao: "",
+                  }])}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-3 p-3 pt-0">
+                {!carregandoFormasPagamento && formasPagamentoAtivas.length === 0 && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
+                    Nenhuma forma de pagamento ativa cadastrada para esta empresa.
+                  </div>
+                )}
+
+                {payments.map((payment, index) => {
+                  const selectedForma = formasPagamentoMap.get(payment.guidFormaPagamento);
+                  const selectedVisual = paymentVisual(selectedForma?.PAGAMENTO ?? "");
+                  return (
+                    <div key={payment.id} className="rounded-md border border-slate-200 bg-white p-3">
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[11px] uppercase text-slate-500">Pagamento {index + 1}</p>
+                          <p className="truncate text-sm font-semibold text-slate-900">
+                            {selectedForma?.PAGAMENTO ?? "Selecione a forma"}
+                          </p>
+                        </div>
+                        {payments.length > 1 && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0 text-red-600"
+                            onClick={() => setPayments((current) => current.filter((row) => row.id !== payment.id))}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 2xl:grid-cols-6">
+                        {formasPagamentoAtivas.map((forma) => {
+                          const active = payment.guidFormaPagamento === forma.guidPagamento;
+                          const visual = paymentVisual(forma.PAGAMENTO);
+                          return (
+                            <button
+                              key={forma.guidPagamento}
+                              type="button"
+                              disabled={carregandoFormasPagamento || !formasPagamentoAtivas.length}
+                              onClick={() => setPayment(payment.id, {
+                                guidFormaPagamento: forma.guidPagamento,
+                                codFormaPagamento: forma.CODFORMAPAGAMENTO ?? null,
+                              })}
+                              className={`flex min-h-[72px] flex-col items-center justify-center gap-2 rounded-md border p-3 text-center transition ${
+                                active
+                                  ? "border-blue-500 bg-blue-50 shadow-sm"
+                                  : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
+                              }`}
+                            >
+                              <span className={`flex h-9 w-9 items-center justify-center rounded-md ${visual.tone}`}>
+                                {visual.icon}
+                              </span>
+                              <span className="line-clamp-2 text-xs font-semibold leading-tight text-slate-900">
+                                {forma.PAGAMENTO}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
+                        <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                          <div className="flex items-center gap-3">
+                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${selectedVisual.tone}`}>
+                              {selectedVisual.icon}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-[11px] uppercase text-slate-500">Forma selecionada</p>
+                              <p className="truncate text-base font-semibold text-slate-950">
+                                {selectedForma?.PAGAMENTO ?? "Nenhuma forma selecionada"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(180px,1fr)_120px_minmax(180px,1fr)]">
+                            <div className="space-y-1">
+                              <Label>Valor</Label>
+                              <Input
+                                type="number"
+                                value={payment.valor}
+                                onChange={(event) => setPayment(payment.id, { valor: Number(event.target.value) || 0 })}
+                                className="h-10 bg-white text-base"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label>Parcelas</Label>
+                              <Input
+                                type="number"
+                                value={payment.parcelas}
+                                onChange={(event) => setPayment(payment.id, { parcelas: Number(event.target.value) || 1 })}
+                                className="h-10 bg-white"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label>NSU / Autorizacao</Label>
+                              <Input
+                                value={payment.nsuAutorizacao ?? ""}
+                                onChange={(event) => setPayment(payment.id, { nsuAutorizacao: event.target.value })}
+                                placeholder="Informe o NSU"
+                                className="h-10 bg-white"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="mt-3 space-y-1">
+                            <Label>Observacao</Label>
+                            <Textarea
+                              value={observacao}
+                              onChange={(event) => setObservacao(event.target.value)}
+                              placeholder="Digite uma observacao..."
+                              rows={3}
+                              className="bg-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                          <p className="mb-2 text-sm font-semibold text-slate-900">Resumo do pagamento</p>
+                          <div className="space-y-2 text-sm">
+                            <TotalLine label="Total da venda" value={money(totals.totalLiquido)} />
+                            <TotalLine label="Valor pago" value={money(totals.pago)} tone="text-emerald-700" />
+                            <TotalLine label="Valor restante" value={money(totals.falta)} tone={totals.falta > 0 ? "text-amber-700" : "text-emerald-700"} />
+                            <Separator />
+                            <TotalLine label="Troco" value={money(totals.troco)} tone="text-blue-700" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <Button
+                  onClick={() => void finishDocument()}
+                  disabled={finalizandoVenda}
+                  className="h-12 w-full gap-2 bg-emerald-600 text-base font-semibold hover:bg-emerald-700"
+                >
+                  <PackageCheck className="h-5 w-5" />
+                  {finalizandoVenda ? "Finalizando venda..." : "Finalizar venda"}
+                </Button>
+              </CardContent>
+            </Card>
           </div>
 
           <div className="space-y-3">
@@ -1580,70 +1877,6 @@ export default function VendasOperacao() {
             </Card>
 
             <Card className="rounded-md border-slate-200 shadow-sm">
-              <CardHeader className="flex-row items-center justify-between p-3 pb-2">
-                <CardTitle className="flex items-center gap-2 text-sm"><CreditCard className="h-4 w-4" />Formas de pagamento</CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  disabled={!formasPagamentoAtivas.length}
-                  onClick={() => setPayments((current) => [...current, {
-                    id: `pay-${Date.now()}`,
-                    guidFormaPagamento: formasPagamentoAtivas[0]?.guidPagamento ?? "",
-                    codFormaPagamento: formasPagamentoAtivas[0]?.CODFORMAPAGAMENTO ?? null,
-                    valor: 0,
-                    parcelas: 1,
-                    jurosPercentual: 0,
-                  }])}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-2 p-3 pt-0">
-                {!carregandoFormasPagamento && formasPagamentoAtivas.length === 0 && (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
-                    Nenhuma forma de pagamento ativa cadastrada para esta empresa.
-                  </div>
-                )}
-                {payments.map((payment) => (
-                  <div key={payment.id} className="grid grid-cols-[1fr_95px_64px_52px_32px] gap-2">
-                    <Select
-                      value={payment.guidFormaPagamento}
-                      disabled={carregandoFormasPagamento || !formasPagamentoAtivas.length}
-                      onValueChange={(value) => {
-                        const forma = formasPagamentoMap.get(value);
-                        setPayment(payment.id, {
-                          guidFormaPagamento: value,
-                          codFormaPagamento: forma?.CODFORMAPAGAMENTO ?? null,
-                        });
-                      }}
-                    >
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione a forma" /></SelectTrigger>
-                      <SelectContent>
-                        {formasPagamentoAtivas.map((forma) => (
-                          <SelectItem key={forma.guidPagamento} value={forma.guidPagamento}>
-                            {forma.PAGAMENTO}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input type="number" value={payment.valor} onChange={(event) => setPayment(payment.id, { valor: Number(event.target.value) || 0 })} className="h-9" />
-                    <Input type="number" value={payment.parcelas} onChange={(event) => setPayment(payment.id, { parcelas: Number(event.target.value) || 1 })} className="h-9" />
-                    <Input type="number" value={payment.jurosPercentual} onChange={(event) => setPayment(payment.id, { jurosPercentual: Number(event.target.value) || 0 })} className="h-9" />
-                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setPayments((current) => current.filter((row) => row.id !== payment.id))}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                <div className="grid grid-cols-3 gap-2 text-sm">
-                  <Info label="Pago" value={money(totals.pago)} />
-                  <Info label="Falta" value={money(totals.falta)} />
-                  <Info label="Troco" value={money(totals.troco)} />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-md border-slate-200 shadow-sm">
               <CardHeader className="p-3 pb-2">
                 <CardTitle className="flex items-center gap-2 text-sm"><ShieldCheck className="h-4 w-4" />Auditoria e indicadores</CardTitle>
               </CardHeader>
@@ -1655,7 +1888,6 @@ export default function VendasOperacao() {
                   <Legend icon={<Smartphone className="h-4 w-4 text-sky-600" />} text="Layout responsivo para computador, tablet e celular." />
                   <Legend icon={<Truck className="h-4 w-4 text-slate-600" />} text="Venda, atacado, distribuicao, materiais, autopecas e servicos." />
                 </div>
-                <Textarea value={observacao} onChange={(event) => setObservacao(event.target.value)} placeholder="Observacoes do documento" rows={3} />
               </CardContent>
             </Card>
           </div>
@@ -1705,6 +1937,117 @@ export default function VendasOperacao() {
           onClose={(salvo, guidPessoa) => void fecharClienteForm(salvo, guidPessoa)}
         />
       )}
+
+      <Dialog open={Boolean(sizeSelectionProduct)} onOpenChange={(open) => {
+        if (!open) {
+          setSizeSelectionProduct(null);
+          setSelectedSizeId("");
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Selecione o tamanho</DialogTitle>
+          </DialogHeader>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tamanho</TableHead>
+                  <TableHead>Descricao</TableHead>
+                  <TableHead className="text-right">Preco</TableHead>
+                  <TableHead className="w-28 text-right">Acao</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(sizeSelectionProduct?.tamanhos ?? []).map((size) => (
+                  <TableRow key={size.id} className={selectedSizeId === size.id ? "bg-emerald-50" : undefined}>
+                    <TableCell className="font-semibold">{size.nome}</TableCell>
+                    <TableCell>{size.descricao}</TableCell>
+                    <TableCell className="text-right font-bold text-emerald-700">{money(size.price)}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        variant={selectedSizeId === size.id ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelectedSizeId(size.id)}
+                      >
+                        Selecionar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setSizeSelectionProduct(null);
+              setSelectedSizeId("");
+            }}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void selectSizeAndAdd()}>Confirmar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(rangeSelectionProduct)} onOpenChange={(open) => {
+        if (!open) {
+          setRangeSelectionProduct(null);
+          setSelectedRangeId("");
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Selecione a faixa de preco</DialogTitle>
+          </DialogHeader>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Faixa</TableHead>
+                  <TableHead className="text-right">Qtd inicial</TableHead>
+                  <TableHead className="text-right">Qtd final</TableHead>
+                  <TableHead className="text-right">Preco</TableHead>
+                  <TableHead className="w-28 text-right">Acao</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(rangeSelectionProduct?.faixas ?? []).map((range) => {
+                  const id = range.guidPreco ?? range.label;
+                  return (
+                    <TableRow key={id} className={selectedRangeId === id ? "bg-emerald-50" : undefined}>
+                      <TableCell className="font-semibold">{range.label}</TableCell>
+                      <TableCell className="text-right">{range.min.toLocaleString("pt-BR")}</TableCell>
+                      <TableCell className="text-right">{range.max == null ? "Acima" : range.max.toLocaleString("pt-BR")}</TableCell>
+                      <TableCell className="text-right font-bold text-emerald-700">{money(range.price)}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          type="button"
+                          variant={selectedRangeId === id ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setSelectedRangeId(id)}
+                        >
+                          Selecionar
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setRangeSelectionProduct(null);
+              setSelectedRangeId("");
+            }}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void selectRangeAndAdd()}>Confirmar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(imeiSelectionProduct)} onOpenChange={(open) => {
         if (!open) {

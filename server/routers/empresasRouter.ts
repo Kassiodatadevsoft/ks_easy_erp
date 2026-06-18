@@ -4,21 +4,15 @@ import { publicProcedure, router } from "../_core/trpc";
 import { querySql, sql } from "../sqlserver";
 import { verifyKsSession } from "./ksAuthRouter";
 import { COOKIE_NAME } from "@shared/const";
+import { SISTEMA_SEGMENTOS } from "@shared/datadev";
+import {
+  assertDataDevAdminSession,
+  ensureEmpresaSegmentoColumn,
+  isDataDevAdminBySession,
+  normalizeCnpj,
+} from "../services/dataDevAdmin";
 
 // CNPJ da empresa master DataDev — oculta campos de contrato para outros
-const CNPJ_MASTER = "50303631000158";
-
-function onlyDigits(value: string | null | undefined) {
-  return (value ?? "").replace(/\D/g, "");
-}
-
-function isDataDevAdmin(session: Awaited<ReturnType<typeof verifyKsSession>>) {
-  return Boolean(
-    onlyDigits(session?.entDocumento) === CNPJ_MASTER ||
-    onlyDigits(session?.documento) === CNPJ_MASTER
-  );
-}
-
 async function getKsSession(req: { headers: { cookie?: string } }) {
   const cookies = req.headers.cookie ?? "";
   const match = cookies.match(
@@ -41,19 +35,8 @@ export const empresasRouter = router({
   verificarMaster: publicProcedure
     .query(async ({ ctx }) => {
       const session = await getKsSession(ctx.req);
-
-      const rows = await querySql<{ DOCUMENTO: string }>(
-        `SELECT TOP 1 REPLACE(REPLACE(REPLACE(DOCUMENTO,'.',''),'-',''),'/','') AS DOCUMENTO
-         FROM KS0002.KS00001
-         WHERE GUIDPESSOA = @GUIDPESSOA`,
-        { GUIDPESSOA: { type: sql.UniqueIdentifier, value: session.guidEntidade } }
-      );
-
-      const docLimpo = onlyDigits(rows[0]?.DOCUMENTO);
       return {
-        isMaster:
-          isDataDevAdmin(session) ||
-          docLimpo === CNPJ_MASTER,
+        isMaster: await isDataDevAdminBySession(session),
       };
     }),
 
@@ -69,20 +52,16 @@ export const empresasRouter = router({
     }))
     .query(async ({ input, ctx }) => {
       const session = await getKsSession(ctx.req);
+      await assertDataDevAdminSession(session);
+      await ensureEmpresaSegmentoColumn();
       const { busca, situacao, pagina, porPagina } = input;
       const offset = (pagina - 1) * porPagina;
-      const dataDevAdmin = isDataDevAdmin(session);
 
       let where = `WHERE c.CADEMPRESA = 1`;
       const params: Record<string, { type: unknown; value: unknown }> = {
         OFFSET: { type: sql.Int, value: offset },
         LIMIT: { type: sql.Int, value: porPagina },
       };
-
-      if (!dataDevAdmin) {
-        where += ` AND c.GUIDENTIDADE = @GUIDENTIDADE`;
-        params.GUIDENTIDADE = { type: sql.UniqueIdentifier, value: session.guidEntidade };
-      }
 
       if (situacao) {
         where += ` AND c.SITUACAO = @SITUACAO`;
@@ -116,7 +95,7 @@ export const empresasRouter = router({
             SELECT
               c.GUIDPESSOA, c.CODIGO, c.CODENTIDADE, c.NOME, c.FANTASIA, c.DOCUMENTO,
               c.CODTIPODOCUMENTO, c.TELEFONE, c.CELULAR, c.EMAIL,
-              c.SITUACAO, c.DATACADASTRO, c.ULTIMAALTERACAO,
+              c.SEGMENTO, c.SITUACAO, c.DATACADASTRO, c.ULTIMAALTERACAO,
               c.CADEMPRESA, c.CADCLIENTE, c.CADFORNECEDOR, c.CODCIDADE,
               ROW_NUMBER() OVER (
                 PARTITION BY REPLACE(REPLACE(REPLACE(c.DOCUMENTO,'.',''),'-',''),'/','')
@@ -127,7 +106,7 @@ export const empresasRouter = router({
            )
            SELECT c.GUIDPESSOA, c.CODIGO, c.CODENTIDADE, c.NOME, c.FANTASIA, c.DOCUMENTO,
              c.CODTIPODOCUMENTO, c.TELEFONE, c.CELULAR, c.EMAIL,
-             c.SITUACAO, c.DATACADASTRO, c.ULTIMAALTERACAO,
+             c.SEGMENTO, c.SITUACAO, c.DATACADASTRO, c.ULTIMAALTERACAO,
              c.CADEMPRESA, c.CADCLIENTE, c.CADFORNECEDOR,
              cid.CIDADE, cid.UF
            FROM empresas_unicas c
@@ -160,17 +139,13 @@ export const empresasRouter = router({
     .input(z.object({ guidPessoa: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
       const session = await getKsSession(ctx.req);
-      const dataDevAdmin = isDataDevAdmin(session);
+      await assertDataDevAdminSession(session);
+      await ensureEmpresaSegmentoColumn();
 
       let where = `WHERE c.GUIDPESSOA = @GUID`;
       const params: Record<string, { type: unknown; value: unknown }> = {
         GUID: { type: sql.UniqueIdentifier, value: input.guidPessoa },
       };
-
-      if (!dataDevAdmin) {
-        where += ` AND c.GUIDENTIDADE = @GUIDENTIDADE`;
-        params.GUIDENTIDADE = { type: sql.UniqueIdentifier, value: session.guidEntidade };
-      }
 
       const rows = await querySql(
         `SELECT c.*, cid.CIDADE, cid.UF, cid.CIDADE + '-' + cid.UF AS DESCCIDADE
@@ -230,18 +205,13 @@ export const empresasRouter = router({
     }))
     .query(async ({ input, ctx }) => {
       const session = await getKsSession(ctx.req);
-      const docLimpo = input.documento.replace(/\D/g, "");
-      const dataDevAdmin = isDataDevAdmin(session);
+      await assertDataDevAdminSession(session);
+      const docLimpo = normalizeCnpj(input.documento);
 
       let where = `WHERE REPLACE(REPLACE(REPLACE(DOCUMENTO,'.',''),'-',''),'/','') = @DOC`;
       const params: Record<string, { type: unknown; value: unknown }> = {
         DOC: { type: sql.VarChar(20), value: docLimpo },
       };
-
-      if (!dataDevAdmin) {
-        where += ` AND GUIDENTIDADE = @GUIDENTIDADE`;
-        params.GUIDENTIDADE = { type: sql.UniqueIdentifier, value: session.guidEntidade };
-      }
 
       const rows = await querySql<{ GUIDPESSOA: string; CODIGO: number; NOME: string }>(
         `SELECT TOP 1 GUIDPESSOA, CODIGO, NOME
@@ -288,6 +258,7 @@ export const empresasRouter = router({
       bairro: z.string().min(1),
       codCidade: z.number(),
       situacao: z.enum(["A", "I", "B"]).default("A"),
+      segmentoSistema: z.enum(SISTEMA_SEGMENTOS).default("GERAL"),
       // Campos de contrato (visíveis apenas para empresa master)
       segmento: z.number().optional(),
       dataImplantacao: z.string().optional(),
@@ -309,18 +280,17 @@ export const empresasRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const session = await getKsSession(ctx.req);
-      const dataDevAdmin = isDataDevAdmin(session);
-      const documentoLimpo = onlyDigits(input.documento);
+      await assertDataDevAdminSession(session);
+      await ensureEmpresaSegmentoColumn();
+      const documentoLimpo = normalizeCnpj(input.documento);
 
       const existente = await querySql<{ GUIDPESSOA: string; CODIGO: number; NOME: string }>(
         `SELECT TOP 1 GUIDPESSOA, CODIGO, NOME
          FROM KS0002.KS00001
          WHERE CADEMPRESA = 1
-           AND REPLACE(REPLACE(REPLACE(DOCUMENTO,'.',''),'-',''),'/','') = @DOCUMENTO
-           ${dataDevAdmin ? "" : "AND GUIDENTIDADE = @GUIDENTIDADE"}`,
+           AND REPLACE(REPLACE(REPLACE(DOCUMENTO,'.',''),'-',''),'/','') = @DOCUMENTO`,
         {
           DOCUMENTO: { type: sql.VarChar(20), value: documentoLimpo },
-          ...(dataDevAdmin ? {} : { GUIDENTIDADE: { type: sql.UniqueIdentifier, value: session.guidEntidade } }),
         }
       );
 
@@ -332,12 +302,8 @@ export const empresasRouter = router({
       }
 
       const maxCod = await querySql<{ maxCod: number }>(
-        dataDevAdmin
-          ? `SELECT ISNULL(MAX(CODIGO), 0) + 1 AS maxCod FROM KS0002.KS00001 WHERE CADEMPRESA = 1`
-          : `SELECT ISNULL(MAX(CODIGO), 0) + 1 AS maxCod FROM KS0002.KS00001 WHERE GUIDENTIDADE = @GUIDENTIDADE`,
-        dataDevAdmin
-          ? {}
-          : { GUIDENTIDADE: { type: sql.UniqueIdentifier, value: session.guidEntidade } }
+        `SELECT ISNULL(MAX(CODIGO), 0) + 1 AS maxCod FROM KS0002.KS00001 WHERE CADEMPRESA = 1`,
+        {}
       );
       const novoCodigo = maxCod[0]?.maxCod ?? 1;
 
@@ -355,6 +321,7 @@ export const empresasRouter = router({
           BANCO,
           CEP, ENDERECO, NUMERO, COMPLEMENTO, BAIRRO, CODCIDADE,
           SITUACAO, CADEMPRESA,
+          SEGMENTO,
           CADCLIENTE, CADFORNECEDOR, CADUSUARIO, CADTRANSPORTADORA,
           MANTERPROMOCOES, CONSTASPC,
           LIMITECOMPRA, DIAVENCIMENTO, CODLOCALIDADE,
@@ -377,6 +344,7 @@ export const empresasRouter = router({
           @BANCO,
           @CEP, @ENDERECO, @NUMERO, @COMPLEMENTO, @BAIRRO, @CODCIDADE,
           @SITUACAO, 1,
+          @SEGMENTO,
           0, 0, 0, 0,
           1, 0,
           0, 0, 0,
@@ -418,6 +386,7 @@ export const empresasRouter = router({
           BAIRRO: { type: sql.VarChar(40), value: input.bairro },
           CODCIDADE: { type: sql.Int, value: input.codCidade },
           SITUACAO: { type: sql.Char(1), value: input.situacao },
+          SEGMENTO: { type: sql.VarChar(30), value: input.segmentoSistema },
           COSEGMENTO: { type: sql.Int, value: input.segmento ?? null },
           DATAADMISSAO: { type: sql.Date, value: input.dataImplantacao ?? null },
           DATADEMISSAO: { type: sql.Date, value: input.dataDemissao ?? null },
@@ -478,6 +447,7 @@ export const empresasRouter = router({
       bairro: z.string().min(1),
       codCidade: z.number(),
       situacao: z.enum(["A", "I", "B"]).default("A"),
+      segmentoSistema: z.enum(SISTEMA_SEGMENTOS).default("GERAL"),
       segmento: z.number().optional(),
       dataImplantacao: z.string().optional(),
       dataDemissao: z.string().optional(),
@@ -500,11 +470,12 @@ export const empresasRouter = router({
       const session = await getKsSession(ctx.req);
 
       // Se certificadoBase64 for vazio string, não atualizar o campo CERTIFICADO
+      await assertDataDevAdminSession(session);
+      await ensureEmpresaSegmentoColumn();
+
       const certUpdate = input.certificadoBase64 !== undefined
         ? `, CERTIFICADO = @CERTIFICADO`
         : ``;
-      const dataDevAdmin = isDataDevAdmin(session);
-      const tenantUpdateWhere = dataDevAdmin ? `` : ` AND GUIDENTIDADE = @GUIDENTIDADE`;
 
       await querySql(
         `UPDATE KS0002.KS00001 SET
@@ -518,6 +489,7 @@ export const empresasRouter = router({
           CEP = @CEP, ENDERECO = @ENDERECO, NUMERO = @NUMERO,
           COMPLEMENTO = @COMPLEMENTO, BAIRRO = @BAIRRO, CODCIDADE = @CODCIDADE,
           SITUACAO = @SITUACAO,
+          SEGMENTO = @SEGMENTO,
           COSEGMENTO = @COSEGMENTO, DATAADMISSAO = @DATAADMISSAO, DATADEMISSAO = @DATADEMISSAO,
           VALORNEGOCIADO = @VALORNEGOCIADO, VALORSALARIO = @VALORSALARIO, MENSALIDADE = @MENSALIDADE,
           OBSERVACAO = @OBSERVACAO,
@@ -527,12 +499,9 @@ export const empresasRouter = router({
           USUARIO = @USUARIO, SENHAPRAZO = @SENHAPRAZO
           ${certUpdate},
           ULTIMAALTERACAO = GETDATE()
-        WHERE GUIDPESSOA = @GUID${tenantUpdateWhere}`,
+        WHERE GUIDPESSOA = @GUID`,
         {
           GUID: { type: sql.UniqueIdentifier, value: input.guidPessoa },
-          ...(dataDevAdmin
-            ? {}
-            : { GUIDENTIDADE: { type: sql.UniqueIdentifier, value: session.guidEntidade } }),
           NOME: { type: sql.VarChar(100), value: input.nome },
           FANTASIA: { type: sql.VarChar(60), value: input.fantasia ?? null },
           DOCUMENTO: { type: sql.VarChar(20), value: input.documento },
@@ -556,6 +525,7 @@ export const empresasRouter = router({
           BAIRRO: { type: sql.VarChar(40), value: input.bairro },
           CODCIDADE: { type: sql.Int, value: input.codCidade },
           SITUACAO: { type: sql.Char(1), value: input.situacao },
+          SEGMENTO: { type: sql.VarChar(30), value: input.segmentoSistema },
           COSEGMENTO: { type: sql.Int, value: input.segmento ?? null },
           DATAADMISSAO: { type: sql.Date, value: input.dataImplantacao ?? null },
           DATADEMISSAO: { type: sql.Date, value: input.dataDemissao ?? null },
@@ -591,7 +561,8 @@ export const empresasRouter = router({
     }))
     .query(async ({ input, ctx }) => {
       // Garante que o chamador tem sessão válida
-      await getKsSession(ctx.req);
+      const session = await getKsSession(ctx.req);
+      await assertDataDevAdminSession(session);
 
       const usuarioLimpo = input.usuario.trim().toUpperCase();
       if (!usuarioLimpo) return { disponivel: true };
