@@ -67,6 +67,7 @@ import NaturezaOperacao from "./pages/fiscal/NaturezaOperacao";
 import EstoqueDashboard from "./pages/estoque/EstoqueDashboard";
 import MovimentacoesEstoque from "./pages/estoque/MovimentacoesEstoque";
 import SugestaoCompra from "./pages/estoque/SugestaoCompra";
+import ImportacaoLinx from "./pages/configuracoes/ImportacaoLinx";
 
 /**
  * Rota protegida: redireciona para /login se não houver sessão KS válida.
@@ -277,6 +278,9 @@ function Router() {
       {/* Configurações */}
       <Route path="/licencas">
         <ProtectedRoute><Licencas /></ProtectedRoute>
+      </Route>
+      <Route path="/configuracoes/importacao-linx">
+        <ProtectedRoute><ImportacaoLinx /></ProtectedRoute>
       </Route>
       <Route path="/configuracoes">
         <ProtectedRoute><ComingSoon title="Configurações do Sistema" /></ProtectedRoute>

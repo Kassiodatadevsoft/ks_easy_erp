@@ -35,7 +35,7 @@ async function autenticarApiKey(req: { headers: Record<string, string | string[]
     .query(`
       SELECT TOP 1
         CAST(GUIDENTIDADE AS NVARCHAR(36)) AS guidEntidade,
-        RAZAOSOCIAL, FANTASIA, CNPJ, SITUACAO
+        NOME AS RAZAOSOCIAL, FANTASIA, DOCUMENTO AS CNPJ, SITUACAO
       FROM KS0002.KS00001
       WHERE APIKEY = @apikey AND SITUACAO = 'A'
     `);

@@ -27,6 +27,7 @@ import { registerComprovantesCaixaApiRoutes } from "../routes/comprovantesCaixaA
 import { registerFinanceiroAnexosApiRoutes } from "../routes/financeiroAnexosApi";
 import { registerFinanceiroRelatoriosApiRoutes } from "../routes/financeiroRelatoriosApi";
 import { registerSeriesApiRoutes } from "../routes/seriesApi";
+import { registerConfiguracoesImportacaoLinxApiRoutes } from "../routes/configuracoesImportacaoLinxApi";
 // import { registerStorageProxy } from "./storageProxy";
 
 import { serveStatic, setupVite } from "./vite";
@@ -120,6 +121,7 @@ app.use(
   registerFinanceiroAnexosApiRoutes(app);
   registerFinanceiroRelatoriosApiRoutes(app);
   registerSeriesApiRoutes(app);
+  registerConfiguracoesImportacaoLinxApiRoutes(app);
 
   // =====================================================
   // Frontend

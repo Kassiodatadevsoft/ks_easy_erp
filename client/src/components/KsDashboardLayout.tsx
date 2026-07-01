@@ -260,6 +260,7 @@ const MENU_GROUPS: MenuGroup[] = [
     label: "Sistema",
     items: [
       { icon: KeyRound, label: "Gerenciador de Licenças", path: "/licencas" },
+      { icon: FileUp, label: "Importação Linx", path: "/configuracoes/importacao-linx" },
       { icon: Settings, label: "Configurações", path: "/configuracoes" },
     ],
   },

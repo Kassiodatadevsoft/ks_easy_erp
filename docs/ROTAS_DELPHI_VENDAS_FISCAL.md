@@ -1,11 +1,13 @@
 # Rotas Delphi - vendas, fiscal e caixa
 
-Autenticacao em todas as chamadas:
+Autenticacao nas rotas tRPC de sincronizacao geral:
 
 ```http
 Authorization: Bearer <API_KEY_DA_EMPRESA>
 Content-Type: application/json
 ```
+
+Excecao: `POST /api/vendas/sincronizar-pdv` nao usa `Authorization` nem API Key. A empresa e identificada exclusivamente pelo campo `GUIDENTIDADE` enviado no corpo JSON.
 
 ## API Key da empresa
 
@@ -30,6 +32,80 @@ Ou seja: se a empresa nao estiver ativa (`SITUACAO <> 'A'`), o Delphi nao deve c
 | POST | `/api/trpc/syncDelphi.push` | Delphi envia vendas, itens, pagamentos, notas, eventos e fechamento |
 | GET | `/api/trpc/syncDelphi.pull` | Delphi recebe dados/deltas do ERP |
 | POST | `/api/trpc/syncDelphi.ack` | Delphi confirma que processou o pull |
+| POST | `/api/vendas/sincronizar-pdv` | PDV Delphi envia uma venda completa sem Bearer Token, usando `GUIDENTIDADE` no JSON |
+
+## Sincronizacao de venda do PDV sem token
+
+```http
+POST /api/vendas/sincronizar-pdv
+Content-Type: application/json
+```
+
+Campos obrigatorios:
+
+- `GUIDENTIDADE`
+- `venda`
+- `ITENS`
+- `PAGAMENTOS`
+
+Exemplo:
+
+```json
+{
+  "GUIDENTIDADE": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "venda": {
+    "GUIDVENDA": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "GUIDCAIXA": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    "NUMEROCAIXA": 1,
+    "GUIDVENDEDOR": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    "CLIENTEPADRAO": true,
+    "TOTALPRODUTOS": 100,
+    "DESCONTOVALOR": 0,
+    "ACRESCIMOVALOR": 0,
+    "TOTALVENDA": 100,
+    "VALORPAGO": 100,
+    "TROCO": 0
+  },
+  "CAIXA_MOVIMENTO": {
+    "GUIDCAIXA": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    "GUIDUSUARIO": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+    "NUMEROCAIXA": 1
+  },
+  "ITENS": [
+    {
+      "GUIDPRODUTO": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+      "CODPRODUTO": 123,
+      "PRODUTO": "Produto exemplo",
+      "QUANTIDADE": 2,
+      "PRECOVENDA": 50,
+      "PRECOFINAL": 50,
+      "TOTALITEM": 100,
+      "PERMITEVENDASEMESTOQUE": false
+    }
+  ],
+  "PAGAMENTOS": [
+    {
+      "GUIDFORMAPAGAMENTO": "ffffffff-ffff-ffff-ffff-ffffffffffff",
+      "CODFORMAPAGAMENTO": 1,
+      "FORMAPAGAMENTO": "DINHEIRO",
+      "VALORPAGO": 100,
+      "TROCO": 0,
+      "PARCELAS": 1
+    }
+  ]
+}
+```
+
+Resposta de sucesso:
+
+```json
+{
+  "sucesso": true,
+  "mensagem": "Venda sincronizada com sucesso",
+  "guidVenda": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  "guidEntidade": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+}
+```
 
 ## Formato tRPC
 
