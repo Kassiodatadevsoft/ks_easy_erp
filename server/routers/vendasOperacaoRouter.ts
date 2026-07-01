@@ -420,25 +420,53 @@ export async function finalizarVendaCompleta(input: FinalizarVendaInput, session
         guidCentro: string | null;
         guidContaBancaria: string | null;
       }>();
+      const formasPagamentoResolvidas = new Map<string, string>();
       for (const pagamento of input.pagamentos) {
         etapaSql = `validar forma de pagamento em KS0003.KS00006 (${pagamento.descricaoFormaPagamento})`;
+        const descricaoForma = pagamento.descricaoFormaPagamento.trim().toUpperCase();
+        const codFormaSefaz = pagamento.codFormaPagamento == null ? null : String(pagamento.codFormaPagamento).padStart(2, "0");
         const forma = await request()
           .input("guidforma", sql.UniqueIdentifier, pagamento.guidFormaPagamento)
           .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
+          .input("codformasefaz", sql.VarChar(10), codFormaSefaz)
+          .input("descricaoforma", sql.NVarChar(100), descricaoForma)
           .query(`
             SELECT TOP 1
               GUIDPAGAMENTO, PAGAMENTO, SITUACAO,
               GUIDCONTA, GUIDNATUREZA, GUIDCENTRO, GUIDCONTABANCARIA
             FROM KS0003.KS00006
-            WHERE GUIDPAGAMENTO=@guidforma AND GUIDENTIDADE=@guidentidade
+            WHERE GUIDENTIDADE=@guidentidade
+              AND (
+                GUIDPAGAMENTO=@guidforma
+                OR (@codformasefaz IS NOT NULL AND (CODIGOSEFAZ=@codformasefaz OR CODFISCAL=@codformasefaz))
+                OR UPPER(LTRIM(RTRIM(PAGAMENTO)))=@descricaoforma
+                OR UPPER(LTRIM(RTRIM(ISNULL(DESCRICAO, ''))))=@descricaoforma
+                OR UPPER(LTRIM(RTRIM(ISNULL(DESCRICAOFISCAL, ''))))=@descricaoforma
+              )
+            ORDER BY
+              CASE
+                WHEN GUIDPAGAMENTO=@guidforma THEN 0
+                WHEN @codformasefaz IS NOT NULL AND (CODIGOSEFAZ=@codformasefaz OR CODFISCAL=@codformasefaz) THEN 1
+                WHEN UPPER(LTRIM(RTRIM(PAGAMENTO)))=@descricaoforma THEN 3
+                ELSE 4
+              END
           `);
-        const formaRow = forma.recordset[0];
+        const formaRow = forma.recordset[0] as {
+          GUIDPAGAMENTO: string;
+          SITUACAO: string;
+          GUIDCONTA: string | null;
+          GUIDNATUREZA: string | null;
+          GUIDCENTRO: string | null;
+          GUIDCONTABANCARIA: string | null;
+        } | undefined;
         if (!formaRow) throw new Error("Forma de pagamento nao vinculada a empresa atual.");
         if (formaRow.SITUACAO !== "A") throw new Error("Forma de pagamento inativa.");
         if (!formaRow.GUIDCONTABANCARIA || !formaRow.GUIDNATUREZA || !formaRow.GUIDCENTRO) {
           throw new Error(`Forma de pagamento sem conta, natureza ou centro de custo configurado: ${pagamento.descricaoFormaPagamento}.`);
         }
-        formasFinanceiras.set(pagamento.guidFormaPagamento, {
+        const guidFormaPagamento = String(formaRow.GUIDPAGAMENTO);
+        formasPagamentoResolvidas.set(pagamento.guidFormaPagamento, guidFormaPagamento);
+        formasFinanceiras.set(guidFormaPagamento, {
           guidConta: formaRow.GUIDCONTA ?? null,
           guidNatureza: formaRow.GUIDNATUREZA ?? null,
           guidCentro: formaRow.GUIDCENTRO ?? null,
@@ -626,7 +654,8 @@ export async function finalizarVendaCompleta(input: FinalizarVendaInput, session
         trocoRestante -= trocoPagamento;
         const guidPagamento = crypto.randomUUID();
         const guidLancamentoCaixa = crypto.randomUUID();
-        const formaFinanceira = formasFinanceiras.get(pagamento.guidFormaPagamento);
+        const guidFormaPagamento = formasPagamentoResolvidas.get(pagamento.guidFormaPagamento) ?? pagamento.guidFormaPagamento;
+        const formaFinanceira = formasFinanceiras.get(guidFormaPagamento);
         if (!formaFinanceira?.guidContaBancaria || !formaFinanceira.guidNatureza || !formaFinanceira.guidCentro) {
           throw new Error(`Forma de pagamento sem conta, natureza ou centro de custo configurado: ${pagamento.descricaoFormaPagamento}.`);
         }
@@ -637,7 +666,7 @@ export async function finalizarVendaCompleta(input: FinalizarVendaInput, session
           .input("guidvenda", sql.UniqueIdentifier, input.guidVenda)
           .input("guidcaixa", sql.UniqueIdentifier, input.guidCaixa)
           .input("guidentidade", sql.UniqueIdentifier, session.guidEntidade)
-          .input("guidforma", sql.UniqueIdentifier, pagamento.guidFormaPagamento)
+          .input("guidforma", sql.UniqueIdentifier, guidFormaPagamento)
           .input("codforma", sql.Int, pagamento.codFormaPagamento ?? null)
           .input("descricao", sql.VarChar(100), pagamento.descricaoFormaPagamento)
           .input("valorpago", sql.Decimal(18, 4), pagamento.valorPago)
@@ -657,7 +686,7 @@ export async function finalizarVendaCompleta(input: FinalizarVendaInput, session
           .input("guidlancamento", sql.UniqueIdentifier, guidLancamentoCaixa)
           .input("guidvenda", sql.UniqueIdentifier, input.guidVenda)
           .input("guidcaixa", sql.UniqueIdentifier, input.guidCaixa)
-          .input("guidforma", sql.UniqueIdentifier, pagamento.guidFormaPagamento)
+          .input("guidforma", sql.UniqueIdentifier, guidFormaPagamento)
           .input("dtlancamento", sql.DateTime, dataVenda)
           .input("tipo", sql.Char(1), "E")
           .input("valor", sql.Decimal(15, 2), valorMovimento)
